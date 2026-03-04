@@ -25,11 +25,11 @@ function initializeSheets() {
       "Department",
       "Name",
     ]);
-    // Add default admin user
+    // Add default admin user (password is base64 for 'pass123')
     usersSheet.appendRow([
       "1",
       "admin1",
-      "pass123",
+      "cGFzczEyMw==",
       "Admin",
       "Management",
       "Super Admin",
@@ -37,7 +37,7 @@ function initializeSheets() {
     usersSheet.appendRow([
       "2",
       "staff_it",
-      "pass123",
+      "cGFzczEyMw==",
       "Staff",
       "IT",
       "พนักงาน ไอที",

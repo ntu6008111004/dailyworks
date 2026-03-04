@@ -13,7 +13,7 @@ export const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      await login(username, password);
+      await login(username, btoa(password));
       toast.success('เข้าสู่ระบบสำเร็จ');
       navigate('/');
     } catch (error) {
