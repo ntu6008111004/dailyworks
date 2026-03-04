@@ -211,7 +211,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
                   required
                   value={formData.Detail}
                   onChange={e => setFormData({ ...formData, Detail: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none h-24"
+                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-y min-h-[120px]"
                   placeholder="รายละเอียดงานที่ต้องทำ..."
                 />
               </div>

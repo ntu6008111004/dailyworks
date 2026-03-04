@@ -9,8 +9,8 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user }) => {
 
   // Filter tasks that belong to this date
   const activeTasks = tasks.filter(t => {
-    const isOwner = user?.Role === 'Staff' ? t.StaffName === (user?.Name || user?.name) : true;
-    if (!isOwner) return false;
+    const userName = user?.Name || user?.name;
+    if (t.StaffName !== userName) return false;
 
     try {
       // Use local date string for comparison to avoid timezone shifts from toISOString

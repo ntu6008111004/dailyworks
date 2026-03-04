@@ -11,6 +11,9 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
   const [filterUser, setFilterUser] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [overduePage, setOverduePage] = useState(1);
 
   const userRole = user?.Role || user?.role;
   const userName = user?.Name || user?.name;
@@ -48,7 +51,10 @@ export const Dashboard = () => {
 
 
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(allUsers.filter(u => filterDepartment === 'All' || u.Department === filterDepartment).map(u => u.Name))].filter(Boolean);
+  const uniqueUsers = [...new Set(allUsers.filter(u => {
+    if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
+    return filterDepartment === 'All' || u.Department === filterDepartment;
+  }).map(u => u.Name))].filter(Boolean);
 
   const filteredTasks = tasks.filter(t => {
     if (!canSeeAll) {
@@ -61,6 +67,8 @@ export const Dashboard = () => {
       if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
       if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
     }
+    if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
+    if (endDate && new Date(t.StartDate) > new Date(endDate)) return false;
     return true;
   });
 
@@ -91,6 +99,21 @@ export const Dashboard = () => {
         
         {(canSeeAll || userRole === 'Head') && (
           <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            />
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            />
+            <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
             <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรอง:</span>
             {canSeeAll && (
               <select
@@ -208,16 +231,25 @@ export const Dashboard = () => {
         </div>
 
         {/* Overdue Alerts */}
-        <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60">
-          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-            <Clock className="text-red-500" size={20} />
-            แจ้งเตือนงานเกินกำหนดเวลา
-          </h3>
-          <div className="space-y-4">
+        <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Clock className="text-red-500" size={20} />
+              แจ้งเตือนงานเกินกำหนด
+            </h3>
+            {overdueTasks.length > 5 && (
+              <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+                 <button disabled={overduePage === 1} onClick={() => setOverduePage(p => p - 1)} className="px-2 py-1 bg-white rounded shadow-sm text-xs disabled:opacity-50 text-slate-700 font-medium transition-opacity">ก่อนหน้า</button>
+                 <span className="px-2 py-1 text-xs font-medium text-slate-600">หน้า {overduePage}</span>
+                 <button disabled={overduePage * 5 >= overdueTasks.length} onClick={() => setOverduePage(p => p + 1)} className="px-2 py-1 bg-white rounded shadow-sm text-xs disabled:opacity-50 text-slate-700 font-medium transition-opacity">ถัดไป</button>
+              </div>
+            )}
+          </div>
+          <div className="space-y-4 flex-1">
             {overdueTasks.length === 0 ? (
               <p className="text-slate-500 text-center py-8">เยี่ยมมาก! ไม่มีงานที่เกินกำหนด</p>
             ) : (
-              overdueTasks.map(task => (
+              overdueTasks.slice((overduePage - 1) * 5, overduePage * 5).map(task => (
                 <div key={task.ID} className="p-4 rounded-xl border border-red-200 bg-red-50 flex justify-between items-center">
                   <div>
                     <h4 className="font-bold text-red-900 line-clamp-1">{task.Detail}</h4>

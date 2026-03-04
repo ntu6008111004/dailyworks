@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Filter, Search, Edit2, Trash2, Calendar, LayoutList } from 'lucide-react';
+import { Plus, Filter, Search, Edit2, Trash2, Calendar, LayoutList, PieChart } from 'lucide-react';
 import { TaskModal } from '../components/TaskModal';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingModal } from '../components/LoadingModal';
 import { DailySummaryModal } from '../components/DailySummaryModal';
+import { MonthlySummaryModal } from '../components/MonthlySummaryModal';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export const Tasks = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isMonthlySummaryOpen, setIsMonthlySummaryOpen] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
 
   useEffect(() => {
@@ -106,7 +108,10 @@ export const Tasks = () => {
   const canSeeAll = isAdmin || isHRHead;
 
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(allUsers.filter(u => filterDepartment === 'All' || u.Department === filterDepartment).map(u => u.Name))].filter(Boolean);
+  const uniqueUsers = [...new Set(allUsers.filter(u => {
+    if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
+    return filterDepartment === 'All' || u.Department === filterDepartment;
+  }).map(u => u.Name))].filter(Boolean);
 
   const filteredTasks = tasks.filter(t => {
     if (filterStatus !== 'All' && t.Status !== filterStatus) return false;
@@ -147,7 +152,14 @@ export const Tasks = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-indigo-100"
           >
             <Calendar size={20} />
-            <span>สรุปงานวันนี้</span>
+            <span className="hidden sm:inline">สรุปงานวันนี้</span>
+          </button>
+          <button
+            onClick={() => setIsMonthlySummaryOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-sky-100"
+          >
+            <PieChart size={20} />
+            <span className="hidden sm:inline">สรุปรายเดือน</span>
           </button>
           <button
             onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
@@ -320,6 +332,13 @@ export const Tasks = () => {
       <DailySummaryModal
         isOpen={isSummaryOpen}
         onClose={() => setIsSummaryOpen(false)}
+        tasks={tasks}
+        user={user}
+      />
+
+      <MonthlySummaryModal
+        isOpen={isMonthlySummaryOpen}
+        onClose={() => setIsMonthlySummaryOpen(false)}
         tasks={tasks}
         user={user}
       />
