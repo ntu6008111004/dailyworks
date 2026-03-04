@@ -111,6 +111,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
   };
 
   const executeSubmit = async () => {
+    setShowSaveConfirm(false);
     setIsUploading(true);
 
     try {
@@ -136,7 +137,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
         delete finalCustomFields.Images;
       }
 
-      onSave({
+      await onSave({
         ...task,
         ...formData,
         Image1: uploadedImageUrls[0] || '',
