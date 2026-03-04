@@ -19,25 +19,36 @@ export const Dashboard = () => {
   const isAdmin = userRole === 'Admin';
   const isHRHead = userRole === 'Head' && userDept === 'HR';
   const canSeeAll = isAdmin || isHRHead;
+  
+  const [allUsers, setAllUsers] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
-    apiService.getTasks()
-      .then(data => {
-        if (isMounted) {
-          setTasks(data);
+    
+    const fetchData = async () => {
+      try {
+        const data = await apiService.getTasks();
+        if (isMounted) setTasks(data);
+        
+        if (canSeeAll || userRole === 'Head') {
+          const usersData = await apiService.getUsers();
+          if (isMounted) setAllUsers(usersData);
         }
-      })
-      .catch(err => console.error(err))
-      .finally(() => {
+      } catch (err) {
+        console.error(err);
+      } finally {
         if (isMounted) setLoading(false);
-      });
-      
+      }
+    };
+    
+    fetchData();
     return () => { isMounted = false; };
-  }, [user]);
+  }, [user, canSeeAll, userRole]);
 
-  const uniqueDepartments = [...new Set(tasks.map(t => t.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(tasks.filter(t => filterDepartment === 'All' || t.Department === filterDepartment).map(t => t.StaffName))].filter(Boolean);
+
+
+  const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
+  const uniqueUsers = [...new Set(allUsers.filter(u => filterDepartment === 'All' || u.Department === filterDepartment).map(u => u.Name))].filter(Boolean);
 
   const filteredTasks = tasks.filter(t => {
     if (!canSeeAll) {

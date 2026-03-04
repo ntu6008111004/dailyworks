@@ -23,20 +23,30 @@ export const Tasks = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
 
   useEffect(() => {
     fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchTasks = async () => {
     setLoading(true);
     try {
       const data = await apiService.getTasks();
-      // Sort tasks by latest first if assuming added sequentially or by Date
       setTasks(data.reverse());
+      
+      const role = user?.Role || user?.role;
+      const dept = user?.Department || user?.department;
+      const isAdminOrHRHead = role === 'Admin' || (role === 'Head' && dept === 'HR');
+      
+      if (isAdminOrHRHead || role === 'Head') {
+        const usersData = await apiService.getUsers();
+        setAllUsers(usersData);
+      }
     } catch (error) {
       console.error(error);
-      toast.error('ไม่สามารถดึงข้อมูลงานได้');
+      toast.error('ไม่สามารถดึงข้อมูลได้');
     } finally {
       setLoading(false);
     }
@@ -95,8 +105,8 @@ export const Tasks = () => {
   const isHRHead = userRole === 'Head' && userDept === 'HR';
   const canSeeAll = isAdmin || isHRHead;
 
-  const uniqueDepartments = [...new Set(tasks.map(t => t.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(tasks.filter(t => filterDepartment === 'All' || t.Department === filterDepartment).map(t => t.StaffName))].filter(Boolean);
+  const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
+  const uniqueUsers = [...new Set(allUsers.filter(u => filterDepartment === 'All' || u.Department === filterDepartment).map(u => u.Name))].filter(Boolean);
 
   const filteredTasks = tasks.filter(t => {
     if (filterStatus !== 'All' && t.Status !== filterStatus) return false;
