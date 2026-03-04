@@ -67,6 +67,10 @@ function initializeSheets() {
       "Department",
       "Note",
       "CustomFields",
+      "Image1",
+      "Image2",
+      "Image3",
+      "Image4",
       "CreatedAt",
       "UpdatedAt",
     ]);

@@ -9,23 +9,23 @@ export const Dashboard = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filterDepartment, setFilterDepartment] = useState('All');
+  const [filterUser, setFilterUser] = useState('All');
+
+  const userRole = user?.Role || user?.role;
+  const userName = user?.Name || user?.name;
+  const userDept = user?.Department || user?.department;
+
+  const isAdmin = userRole === 'Admin';
+  const isHRHead = userRole === 'Head' && userDept === 'HR';
+  const canSeeAll = isAdmin || isHRHead;
 
   useEffect(() => {
     let isMounted = true;
     apiService.getTasks()
       .then(data => {
         if (isMounted) {
-          // Role based filtering logic same as Tasks.jsx
-          const userRole = user?.Role || user?.role;
-          const userName = user?.Name || user?.name;
-          
-          const filtered = data.filter(t => {
-            if (userRole === 'Staff' && t.StaffName !== userName) return false;
-            if (userRole === 'Head' && t.Department !== user?.Department) return false;
-            return true;
-          });
-          
-          setTasks(filtered);
+          setTasks(data);
         }
       })
       .catch(err => console.error(err))
@@ -36,12 +36,29 @@ export const Dashboard = () => {
     return () => { isMounted = false; };
   }, [user]);
 
+  const uniqueDepartments = [...new Set(tasks.map(t => t.Department))].filter(Boolean);
+  const uniqueUsers = [...new Set(tasks.filter(t => filterDepartment === 'All' || t.Department === filterDepartment).map(t => t.StaffName))].filter(Boolean);
+
+  const filteredTasks = tasks.filter(t => {
+    if (!canSeeAll) {
+      if (userRole === 'Staff' && t.StaffName !== userName) return false;
+      if (userRole === 'Head') {
+        if (t.Department !== userDept) return false;
+        if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+      }
+    } else {
+      if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
+      if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+    }
+    return true;
+  });
+
   // Calculate stats
-  const overdueTasks = tasks.filter(t => new Date(t.DueDate) < new Date() && t.Status !== 'เสร็จสิ้น');
-  const doneTasks = tasks.filter(t => t.Status === 'เสร็จสิ้น');
+  const overdueTasks = filteredTasks.filter(t => new Date(t.DueDate) < new Date() && t.Status !== 'เสร็จสิ้น');
+  const doneTasks = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
 
   // Prepare heatmap data
-  const workload = tasks.reduce((acc, task) => {
+  const workload = filteredTasks.reduce((acc, task) => {
     if (!acc[task.StaffName]) acc[task.StaffName] = 0;
     acc[task.StaffName]++;
     return acc;
@@ -55,11 +72,40 @@ export const Dashboard = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูล..." />
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">แผงควบคุม</h2>
-          <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.name || 'User'}</p>
+          <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.Name || user?.name || 'User'}</p>
         </div>
+        
+        {(canSeeAll || userRole === 'Head') && (
+          <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรอง:</span>
+            {canSeeAll && (
+              <select
+                value={filterDepartment}
+                onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
+                className="w-32 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+              >
+                <option value="All">ทุกแผนก</option>
+                {uniqueDepartments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+            )}
+            
+            <select
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              className="w-36 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            >
+              <option value="All">พนง.ทั้งหมด</option>
+              {uniqueUsers.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -70,7 +116,7 @@ export const Dashboard = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-500">งานทั้งหมด</p>
-            <p className="text-2xl font-bold text-slate-900">{tasks.length}</p>
+            <p className="text-2xl font-bold text-slate-900">{filteredTasks.length}</p>
           </div>
         </div>
         

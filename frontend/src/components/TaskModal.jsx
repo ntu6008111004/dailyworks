@@ -18,7 +18,18 @@ export const TaskModal = ({ task, onClose, onSave }) => {
   const [project, setProject] = useState(() => task?.CustomFields?.Project || '');
   const [images, setImages] = useState(() => {
     try {
-      return task?.CustomFields?.Images ? JSON.parse(task.CustomFields.Images) : [];
+      if (!task) return [];
+      const imgs = [];
+      if (task.Image1) imgs.push(task.Image1);
+      if (task.Image2) imgs.push(task.Image2);
+      if (task.Image3) imgs.push(task.Image3);
+      if (task.Image4) imgs.push(task.Image4);
+      
+      if (task.CustomFields && task.CustomFields.Images) {
+        const oldImgs = JSON.parse(task.CustomFields.Images);
+        imgs.push(...oldImgs);
+      }
+      return imgs.slice(0, 4); // Max 4 images
     } catch {
       return [];
     }
@@ -120,15 +131,18 @@ export const TaskModal = ({ task, onClose, onSave }) => {
         uploadedImageUrls.push(img.preview);
       }
 
-      if (uploadedImageUrls.length > 0) {
-        finalCustomFields.Images = JSON.stringify(uploadedImageUrls);
-      } else {
+      // Cleanup old custom fields to avoid duplicate data storage size
+      if (finalCustomFields.Images) {
         delete finalCustomFields.Images;
       }
 
       onSave({
         ...task,
         ...formData,
+        Image1: uploadedImageUrls[0] || '',
+        Image2: uploadedImageUrls[1] || '',
+        Image3: uploadedImageUrls[2] || '',
+        Image4: uploadedImageUrls[3] || '',
         CustomFields: finalCustomFields
       });
     } catch (error) {

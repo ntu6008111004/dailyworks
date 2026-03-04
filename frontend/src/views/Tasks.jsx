@@ -16,6 +16,8 @@ export const Tasks = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All');
+  const [filterDepartment, setFilterDepartment] = useState('All');
+  const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [startDate, setStartDate] = useState('');
@@ -85,17 +87,35 @@ export const Tasks = () => {
     'เสร็จสิ้น': 'bg-green-100 text-green-800 border-2 border-green-500 shadow-sm font-bold',
   };
 
+  const userRole = user?.Role || user?.role;
+  const userName = user?.Name || user?.name;
+  const userDept = user?.Department || user?.department;
+
+  const isAdmin = userRole === 'Admin';
+  const isHRHead = userRole === 'Head' && userDept === 'HR';
+  const canSeeAll = isAdmin || isHRHead;
+
+  const uniqueDepartments = [...new Set(tasks.map(t => t.Department))].filter(Boolean);
+  const uniqueUsers = [...new Set(tasks.filter(t => filterDepartment === 'All' || t.Department === filterDepartment).map(t => t.StaffName))].filter(Boolean);
+
   const filteredTasks = tasks.filter(t => {
     if (filterStatus !== 'All' && t.Status !== filterStatus) return false;
     if (searchQuery && !t.Detail.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     
-    // Role based filtering
-    const userRole = user?.Role || user?.role;
-    const userName = user?.Name || user?.name;
-    
-    if (userRole === 'Staff' && t.StaffName !== userName) return false;
-    if (userRole === 'Head' && t.Department !== user?.Department) return false;
-    // Admin sees all
+    // RBAC logic
+    if (!canSeeAll) {
+      if (userRole === 'Staff' && t.StaffName !== userName) return false;
+      // Head (non-HR) sees their own department
+      if (userRole === 'Head') {
+        if (t.Department !== userDept) return false;
+        // Option to filter users within department
+        if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+      }
+    } else {
+      // Admin or HR Head can filter by everything
+      if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
+      if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+    }
     
     // Date Filtering
     if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
@@ -160,6 +180,39 @@ export const Tasks = () => {
               className="w-full sm:w-36 px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
             />
           </div>
+          
+          {(canSeeAll || userRole === 'Head') && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {canSeeAll && (
+                <div className="w-full sm:w-32 relative">
+                  <select
+                    value={filterDepartment}
+                    onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
+                  >
+                    <option value="All">ทุกแผนก</option>
+                    {uniqueDepartments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              <div className="w-full sm:w-36 relative">
+                <select
+                  value={filterUser}
+                  onChange={(e) => setFilterUser(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
+                >
+                  <option value="All">พนง.ทั้งหมด</option>
+                  {uniqueUsers.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div className="w-full sm:w-48 relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <select
@@ -209,11 +262,19 @@ export const Tasks = () => {
 
                 {task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
                   <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-                    {Object.entries(task.CustomFields).map(([key, value]) => (
+                    {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images').map(([key, value]) => (
                       <div key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-blue-800">
                         <span className="font-semibold">{key}:</span> {value}
                       </div>
                     ))}
+                  </div>
+                )}
+                
+                {/* Image Indicator */}
+                {(task.Image1 || task.Image2 || task.Image3 || task.Image4) && (
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-md max-w-max border border-green-100 mt-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    มีรูปภาพแนบ
                   </div>
                 )}
               </div>
