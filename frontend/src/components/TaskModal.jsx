@@ -64,7 +64,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            const MAX_DIM = 800; // Resize to ensure it fits within Google Sheets cell limits
+            const MAX_DIM = 600; // Reduced from 800 to stay under 50k char limit
             
             if (width > height) {
               if (width > MAX_DIM) {
@@ -83,8 +83,20 @@ export const TaskModal = ({ task, onClose, onSave }) => {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            const compressedBase64 = canvas.toDataURL('image/webp', 0.6); // Compress to 60% WebP
-            resolve({ file, preview: compressedBase64 });
+            // Reduced quality to 0.4 to ensure base64 string < 50,000 chars
+            const compressedBase64 = canvas.toDataURL('image/webp', 0.4); 
+            
+            if (compressedBase64.length > 49000) {
+              // Fallback to even smaller if still too big
+              const smallCanvas = document.createElement('canvas');
+              smallCanvas.width = width * 0.7;
+              smallCanvas.height = height * 0.7;
+              const sctx = smallCanvas.getContext('2d');
+              sctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+              resolve({ file, preview: smallCanvas.toDataURL('image/webp', 0.3) });
+            } else {
+              resolve({ file, preview: compressedBase64 });
+            }
           };
           img.src = reader.result;
         };
