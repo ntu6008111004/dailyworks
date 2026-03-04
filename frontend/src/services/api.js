@@ -20,6 +20,10 @@ export const apiService = {
     }
   },
 
+  login(username, password) {
+    return this.request('login', { username, password });
+  },
+
   getTasks() {
     return this.request('getTasks');
   },

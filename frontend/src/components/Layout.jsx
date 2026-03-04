@@ -8,8 +8,8 @@ export const Layout = () => {
   const location = useLocation();
 
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> },
-    { name: 'Tasks', path: '/tasks', icon: <CheckSquare size={20} /> },
+    { name: 'หน้าภาพรวม', path: '/', icon: <LayoutDashboard size={20} /> },
+    { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
   ];
 
   return (
@@ -56,7 +56,7 @@ export const Layout = () => {
             className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors"
           >
             <LogOut size={18} />
-            Logout
+            ออกจากระบบ
           </button>
         </div>
       </aside>

@@ -3,6 +3,8 @@ import { Plus, Filter, Search, Edit2, Trash2, Calendar, LayoutList } from 'lucid
 import { TaskModal } from '../components/TaskModal';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
+import { apiService } from '../services/api';
+import toast from 'react-hot-toast';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -13,39 +15,75 @@ export const Tasks = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mock
   useEffect(() => {
-    setTasks([
-      {
-        ID: '12345', Detail: 'Design new landing page',
-        StartDate: new Date().toISOString(), DueDate: new Date(Date.now() + 86400000).toISOString(),
-        Priority: 'High', Status: 'In Progress', StaffName: 'John Doe', CustomFields: { "color": "blue", "refUrl": "https://example.com" }
-      }
-    ]);
-    setLoading(false);
+    fetchTasks();
   }, []);
 
-  const handleSaveTask = (taskData) => {
-    if (editingTask) {
-      setTasks(tasks.map(t => t.ID === taskData.ID ? taskData : t));
-    } else {
-      setTasks([{ ...taskData, ID: Math.random().toString(), StaffName: user?.name || 'Self' }, ...tasks]);
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const data = await apiService.getTasks();
+      // Sort tasks by latest first if assuming added sequentially or by Date
+      setTasks(data.reverse());
+    } catch (error) {
+      console.error(error);
+      toast.error('ไม่สามารถดึงข้อมูลงานได้');
+    } finally {
+      setLoading(false);
     }
-    setIsModalOpen(false);
+  };
+
+  const handleSaveTask = async (taskData) => {
+    try {
+      if (editingTask) {
+        await apiService.updateTask(taskData);
+        toast.success('อัปเดตงานเรียบร้อย');
+      } else {
+        await apiService.addTask({ 
+          ...taskData, 
+          StaffName: user?.Name || user?.name || 'Unknown',
+          Department: user?.Department || 'Unknown' 
+        });
+        toast.success('เพิ่มงานเรียบร้อย');
+      }
+      setIsModalOpen(false);
+      fetchTasks();
+    } catch (error) {
+      toast.error('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    if(!window.confirm('คุณต้องการลบงานนี้ใช่หรือไม่?')) return;
+    try {
+      await apiService.deleteTask(id);
+      toast.success('ลบงานเรียบร้อย');
+      fetchTasks();
+    } catch (error) {
+      toast.error('เกิดข้อผิดพลาดในการลบ: ' + error.message);
+    }
   };
 
   const statusColors = {
-    'Not Started': 'bg-slate-100 text-slate-800',
-    'In Progress': 'bg-blue-100 text-blue-800',
-    'Review': 'bg-purple-100 text-purple-800',
-    'Edit': 'bg-amber-100 text-amber-800',
-    'Done': 'bg-green-100 text-green-800',
+    'ยังไม่เริ่ม': 'bg-slate-100 text-slate-800',
+    'กำลังทำ': 'bg-blue-100 text-blue-800',
+    'รอตรวจ': 'bg-purple-100 text-purple-800',
+    'รอแก้ไข': 'bg-amber-100 text-amber-800',
+    'เสร็จสิ้น': 'bg-green-100 text-green-800',
   };
 
   const filteredTasks = tasks.filter(t => {
     if (filterStatus !== 'All' && t.Status !== filterStatus) return false;
     if (searchQuery && !t.Detail.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (user?.role === 'Staff' && t.StaffName !== user?.name) return false;
+    
+    // Role based filtering
+    const userRole = user?.Role || user?.role;
+    const userName = user?.Name || user?.name;
+    
+    if (userRole === 'Staff' && t.StaffName !== userName) return false;
+    if (userRole === 'Head' && t.Department !== user?.Department) return false;
+    // Admin sees all
+    
     return true;
   });
 
@@ -53,15 +91,15 @@ export const Tasks = () => {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Task Management</h2>
-          <p className="text-slate-500">Manage your daily work logs</p>
+          <h2 className="text-2xl font-bold text-slate-900">จัดการงาน</h2>
+          <p className="text-slate-500">จัดการข้อมูลบันทึกงานประจำวันของคุณ</p>
         </div>
         <button
           onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-blue-100"
         >
           <Plus size={20} />
-          <span>New Task</span>
+          <span>เพิ่มงานใหม่</span>
         </button>
       </div>
 
@@ -70,7 +108,7 @@ export const Tasks = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
             type="text"
-            placeholder="Search tasks..."
+            placeholder="ค้นหางาน..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -83,7 +121,7 @@ export const Tasks = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="w-full pl-10 pr-8 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
           >
-            <option value="All">All Status</option>
+            <option value="All">งานทั้งหมด</option>
             {Object.keys(statusColors).map(status => (
               <option key={status} value={status}>{status}</option>
             ))}
@@ -91,12 +129,17 @@ export const Tasks = () => {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {filteredTasks.length === 0 ? (
-          <div className="glass p-12 text-center rounded-2xl">
+      {loading ? (
+        <div className="flex justify-center p-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredTasks.length === 0 ? (
+            <div className="glass p-12 text-center rounded-2xl">
             <LayoutList className="mx-auto h-12 w-12 text-slate-300" />
-            <h3 className="mt-2 text-sm font-semibold text-slate-900">No tasks found</h3>
-            <p className="mt-1 text-sm text-slate-500">Get started by creating a new task.</p>
+            <h3 className="mt-2 text-sm font-semibold text-slate-900">ไม่พบข้อมูลงาน</h3>
+            <p className="mt-1 text-sm text-slate-500">เริ่มจดบันทึกงานโดยการกดปุ่มเพิ่มงานใหม่</p>
           </div>
         ) : (
           filteredTasks.map(task => (
@@ -112,7 +155,7 @@ export const Tasks = () => {
                 <div className="flex flex-wrap gap-4 text-sm text-slate-500">
                   <div className="flex items-center gap-1.5">
                     <Calendar size={16} />
-                    <span>Due: {format(new Date(task.DueDate), 'MMM d, yyyy')}</span>
+                    <span>กำหนดส่ง: {format(new Date(task.DueDate), 'MMM d, yyyy')}</span>
                   </div>
                   <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 rounded-md">
                     <span className="font-medium text-slate-700">{task.StaffName}</span>
@@ -138,16 +181,17 @@ export const Tasks = () => {
                   <Edit2 size={18} />
                 </button>
                 <button
-                  onClick={() => setTasks(tasks.filter(t => t.ID !== task.ID))}
+                  onClick={() => handleDeleteTask(task.ID)}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <Trash2 size={18} />
                 </button>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {isModalOpen && (
         <TaskModal

@@ -9,23 +9,35 @@ export const Dashboard = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Mock data for initial render or fallback
-  const mockTasks = [
-    { ID: 1, StaffName: 'John Doe', Status: 'In Progress', Priority: 'High', DueDate: new Date(Date.now() - 86400000).toISOString() },
-    { ID: 2, StaffName: 'Jane Smith', Status: 'Done', Priority: 'Medium', DueDate: new Date().toISOString() },
-    { ID: 3, StaffName: 'John Doe', Status: 'Review', Priority: 'High', DueDate: new Date().toISOString() },
-    { ID: 4, StaffName: 'Alice', Status: 'Not Started', Priority: 'Low', DueDate: new Date(Date.now() - 86400000 * 2).toISOString() },
-  ];
-
   useEffect(() => {
-    // In a real app, we'd fetch actual tasks. Using mock for UI demonstration.
-    setTasks(mockTasks);
-    setLoading(false);
-  }, []);
+    let isMounted = true;
+    apiService.getTasks()
+      .then(data => {
+        if (isMounted) {
+          // Role based filtering logic same as Tasks.jsx
+          const userRole = user?.Role || user?.role;
+          const userName = user?.Name || user?.name;
+          
+          const filtered = data.filter(t => {
+            if (userRole === 'Staff' && t.StaffName !== userName) return false;
+            if (userRole === 'Head' && t.Department !== user?.Department) return false;
+            return true;
+          });
+          
+          setTasks(filtered);
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+      
+    return () => { isMounted = false; };
+  }, [user]);
 
   // Calculate stats
-  const overdueTasks = tasks.filter(t => new Date(t.DueDate) < new Date() && t.Status !== 'Done');
-  const doneTasks = tasks.filter(t => t.Status === 'Done');
+  const overdueTasks = tasks.filter(t => new Date(t.DueDate) < new Date() && t.Status !== 'เสร็จสิ้น');
+  const doneTasks = tasks.filter(t => t.Status === 'เสร็จสิ้น');
 
   // Prepare heatmap data
   const workload = tasks.reduce((acc, task) => {
@@ -45,8 +57,8 @@ export const Dashboard = () => {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Dashboard</h2>
-          <p className="text-slate-500">Welcome back, {user?.name || 'User'}</p>
+          <h2 className="text-2xl font-bold text-slate-900">แผงควบคุม</h2>
+          <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.name || 'User'}</p>
         </div>
       </div>
 
@@ -57,7 +69,7 @@ export const Dashboard = () => {
             <Activity size={24} />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Total Tasks</p>
+            <p className="text-sm font-medium text-slate-500">งานทั้งหมด</p>
             <p className="text-2xl font-bold text-slate-900">{tasks.length}</p>
           </div>
         </div>
@@ -67,7 +79,7 @@ export const Dashboard = () => {
             <AlertCircle size={24} />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Overdue Tasks</p>
+            <p className="text-sm font-medium text-slate-500">งานที่เกินกำหนด</p>
             <p className="text-2xl font-bold text-red-600">{overdueTasks.length}</p>
           </div>
         </div>
@@ -77,7 +89,7 @@ export const Dashboard = () => {
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Completed</p>
+            <p className="text-sm font-medium text-slate-500">เสร็จสิ้น</p>
             <p className="text-2xl font-bold text-slate-900">{doneTasks.length}</p>
           </div>
         </div>
@@ -86,7 +98,7 @@ export const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Workload Heatmap */}
         <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">Workload Heatmap</h3>
+          <h3 className="text-lg font-bold text-slate-900 mb-6">ความหนาแน่นของงานแต่ละบุคคล</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={heatmapData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
@@ -107,21 +119,21 @@ export const Dashboard = () => {
         <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60">
           <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
             <Clock className="text-red-500" size={20} />
-            Overdue Alerts
+            แจ้งเตือนงานเกินกำหนดเวลา
           </h3>
           <div className="space-y-4">
             {overdueTasks.length === 0 ? (
-              <p className="text-slate-500 text-center py-8">Great job! No overdue tasks.</p>
+              <p className="text-slate-500 text-center py-8">เยี่ยมมาก! ไม่มีงานที่เกินกำหนด</p>
             ) : (
               overdueTasks.map(task => (
                 <div key={task.ID} className="p-4 rounded-xl border border-red-200 bg-red-50 flex justify-between items-center">
                   <div>
-                    <h4 className="font-bold text-red-900">Task #{task.ID}</h4>
-                    <p className="text-sm text-red-700">Assigned to: {task.StaffName}</p>
+                    <h4 className="font-bold text-red-900">งาน #{task.ID} {task.Detail}</h4>
+                    <p className="text-sm text-red-700">ผู้รับผิดชอบ: {task.StaffName}</p>
                   </div>
                   <div className="text-right">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Late
+                      ล่าช้า
                     </span>
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { apiService } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -10,11 +11,18 @@ export const AuthProvider = ({ children }) => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const login = (userData) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const login = async (username, password) => {
+    setLoading(true);
+    try {
+      const userData = await apiService.login(username, password);
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+      return userData;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
