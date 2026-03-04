@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Filter, Search, Edit2, Trash2, Calendar, LayoutList, PieChart } from 'lucide-react';
-import { TaskModal } from '../components/TaskModal';
+import { Plus, Filter, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { apiService } from '../services/api';
@@ -248,6 +247,24 @@ export const Tasks = () => {
               ))}
             </select>
           </div>
+
+          {(searchQuery || startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All' || filterStatus !== 'All') && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setStartDate('');
+                setEndDate('');
+                setFilterDepartment('All');
+                setFilterUser('All');
+                setFilterStatus('All');
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors shrink-0"
+              title="ล้างตัวกรองทั้งหมด"
+            >
+              <X size={16} />
+              <span className="hidden sm:inline">ล้างตัวกรอง</span>
+            </button>
+          )}
         </div>
       </div>
 

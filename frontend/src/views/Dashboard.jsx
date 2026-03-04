@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList } from 'lucide-react';
+import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
@@ -97,49 +97,69 @@ export const Dashboard = () => {
           <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.Name || user?.name || 'User'}</p>
         </div>
         
-        {(canSeeAll || userRole === 'Head') && (
-          <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
-            <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-            />
-            <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-            />
-            <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
-            <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรอง:</span>
-            {canSeeAll && (
+        <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
+          <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
+          <input 
+            type="date" 
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+          />
+          <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
+          <input 
+            type="date" 
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+          />
+          
+          {(canSeeAll || userRole === 'Head') && (
+            <>
+              <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
+              <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรองพนักงาน:</span>
+              
+              {canSeeAll && (
+                <select
+                  value={filterDepartment}
+                  onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
+                  className="w-32 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+                >
+                  <option value="All">ทุกแผนก</option>
+                  {uniqueDepartments.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              )}
+              
               <select
-                value={filterDepartment}
-                onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
-                className="w-32 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+                value={filterUser}
+                onChange={(e) => setFilterUser(e.target.value)}
+                className="w-36 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
               >
-                <option value="All">ทุกแผนก</option>
-                {uniqueDepartments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
+                <option value="All">พนง.ทั้งหมด</option>
+                {uniqueUsers.map(name => (
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
-            )}
-            
-            <select
-              value={filterUser}
-              onChange={(e) => setFilterUser(e.target.value)}
-              className="w-36 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            </>
+          )}
+
+          {(startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All') && (
+            <button
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setFilterDepartment('All');
+                setFilterUser('All');
+              }}
+              className="flex items-center gap-1 px-2 py-1.5 ml-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+              title="ล้างตัวกรอง"
             >
-              <option value="All">พนง.ทั้งหมด</option>
-              {uniqueUsers.map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </div>
-        )}
+              <X size={14} />
+              <span className="hidden sm:inline">ล้าง</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
