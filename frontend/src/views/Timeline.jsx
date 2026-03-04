@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
-import { format, addDays, subDays, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, addDays, subDays, eachDayOfInterval, isSameDay, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import th from 'date-fns/locale/th';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Filter, X } from 'lucide-react';
 
@@ -13,6 +13,7 @@ export const Timeline = () => {
   
   // Timeline viewport configuration
   const [baseDate, setBaseDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('week'); // 'day', 'week', 'month'
   
   useEffect(() => {
     fetchTasks();
@@ -44,16 +45,34 @@ export const Timeline = () => {
     })).sort((a, b) => a.start - b.start);
   }, [tasks, user]);
 
-  // Generate an array of 14 days centered around baseDate
+  // Generate days based on view mode
   const timelineDays = useMemo(() => {
-    const start = subDays(baseDate, 3); // 3 days before
-    const end = addDays(baseDate, 10);  // 10 days after (14 days total view)
+    let start, end;
+    if (viewMode === 'day') {
+      start = subDays(baseDate, 1);
+      end = addDays(baseDate, 1);
+    } else if (viewMode === 'month') {
+      start = startOfMonth(baseDate);
+      end = endOfMonth(baseDate);
+    } else {
+      // week
+      start = subDays(baseDate, 3);
+      end = addDays(baseDate, 10);
+    }
     return eachDayOfInterval({ start, end });
-  }, [baseDate]);
+  }, [baseDate, viewMode]);
 
   const goToToday = () => setBaseDate(new Date());
-  const prevWeek = () => setBaseDate(prev => subDays(prev, 7));
-  const nextWeek = () => setBaseDate(prev => addDays(prev, 7));
+  const prevPeriod = () => {
+    if (viewMode === 'day') setBaseDate(prev => subDays(prev, 1));
+    else if (viewMode === 'month') setBaseDate(prev => subMonths(prev, 1));
+    else setBaseDate(prev => subDays(prev, 7));
+  };
+  const nextPeriod = () => {
+    if (viewMode === 'day') setBaseDate(prev => addDays(prev, 1));
+    else if (viewMode === 'month') setBaseDate(prev => addMonths(prev, 1));
+    else setBaseDate(prev => addDays(prev, 7));
+  };
 
   const statusColors = {
     'ยังไม่เริ่ม': 'bg-slate-200 border-slate-300 text-slate-800',
@@ -75,16 +94,24 @@ export const Timeline = () => {
           <p className="text-slate-500">ดูภาพรวมของระยะเวลาการทำงาน (เฉพาะงานของคุณ)</p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border border-slate-200">
-          <button onClick={prevWeek} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
-            <ChevronLeft size={20} />
-          </button>
-          <button onClick={goToToday} className="px-4 py-2 font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-            วันนี้
-          </button>
-          <button onClick={nextWeek} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
-            <ChevronRight size={20} />
-          </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button onClick={() => setViewMode('day')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${viewMode === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>วัน</button>
+            <button onClick={() => setViewMode('week')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${viewMode === 'week' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>สัปดาห์</button>
+            <button onClick={() => setViewMode('month')} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>เดือน</button>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+            <button onClick={prevPeriod} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <button onClick={goToToday} className="px-4 py-2 font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+              วันนี้
+            </button>
+            <button onClick={nextPeriod} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+              <ChevronRight size={20} />
+            </button>
+          </div>
         </div>
       </div>
 
