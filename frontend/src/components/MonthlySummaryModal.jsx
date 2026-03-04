@@ -51,6 +51,8 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
         return text + "- ไม่มีข้อมูลงานในเดือนนี้ -";
       }
 
+      text += `📊 มีงานทั้งหมดจำนวน ${activeTasks.length} งาน\n\n`;
+
       const grouped = {};
       activeTasks.forEach(t => {
         if (!grouped[t.Status]) grouped[t.Status] = [];
