@@ -10,6 +10,79 @@ function setup() {
   SCRIPT_PROP.setProperty("key", doc.getId());
 }
 
+function initializeSheets() {
+  const doc = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. Setup Users Sheet
+  let usersSheet = doc.getSheetByName("Users");
+  if (!usersSheet) {
+    usersSheet = doc.insertSheet("Users");
+    usersSheet.appendRow([
+      "ID",
+      "Username",
+      "Password",
+      "Role",
+      "Department",
+      "Name",
+    ]);
+    // Add default admin user
+    usersSheet.appendRow([
+      "1",
+      "admin1",
+      "pass123",
+      "Admin",
+      "Management",
+      "Super Admin",
+    ]);
+    usersSheet.appendRow([
+      "2",
+      "staff_it",
+      "pass123",
+      "Staff",
+      "IT",
+      "พนักงาน ไอที",
+    ]);
+  }
+
+  // 2. Setup Tasks Sheet
+  let tasksSheet = doc.getSheetByName("Tasks");
+  if (!tasksSheet) {
+    tasksSheet = doc.insertSheet("Tasks");
+    tasksSheet.appendRow([
+      "ID",
+      "Detail",
+      "Status",
+      "Priority",
+      "StartDate",
+      "DueDate",
+      "StaffName",
+      "Department",
+      "Note",
+      "CustomFields",
+      "CreatedAt",
+      "UpdatedAt",
+    ]);
+  }
+
+  // 3. Setup ActivityLogs Sheet
+  let logsSheet = doc.getSheetByName("ActivityLogs");
+  if (!logsSheet) {
+    logsSheet = doc.insertSheet("ActivityLogs");
+    logsSheet.appendRow(["Timestamp", "UserID", "Action", "Details"]);
+  }
+
+  // Delete default sheets if they exist
+  const defaultSheetTh = doc.getSheetByName("ชีต1");
+  if (defaultSheetTh && doc.getSheets().length > 1)
+    doc.deleteSheet(defaultSheetTh);
+  const defaultSheetEn = doc.getSheetByName("Sheet1");
+  if (defaultSheetEn && doc.getSheets().length > 1)
+    doc.deleteSheet(defaultSheetEn);
+
+  SCRIPT_PROP.setProperty("key", doc.getId());
+  return "บันทึกและสร้างหน้าตารางเรียบร้อยแล้ว!";
+}
+
 function doPost(e) {
   return handleResponse(e);
 }
