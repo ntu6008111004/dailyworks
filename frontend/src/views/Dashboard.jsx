@@ -328,6 +328,7 @@ export const Dashboard = () => {
         </div>
       </div>
       <StatusTasksModal 
+        key={selectedStatus || 'none'}
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
         status={selectedStatus}

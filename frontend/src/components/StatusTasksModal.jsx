@@ -1,20 +1,31 @@
-import React, { useMemo } from 'react';
-import { X, Calendar } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { X, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
 
 export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const totalPages = Math.ceil((tasks?.length || 0) / itemsPerPage);
+  
+  const paginatedTasks = useMemo(() => {
+    if (!tasks) return [];
+    const start = (currentPage - 1) * itemsPerPage;
+    return tasks.slice(start, start + itemsPerPage);
+  }, [tasks, currentPage]);
+
   const groupedTasks = useMemo(() => {
-    if (!tasks || tasks.length === 0) return {};
+    if (!paginatedTasks || paginatedTasks.length === 0) return {};
 
     // For Staff, or if viewing a single user filter, don't group, just use 'งานของคุณ'
     if (userRole === 'Staff') {
-      return { 'งานของคุณ': tasks };
+      return { 'งานของคุณ': paginatedTasks };
     }
 
     // For Head / Admin / HR seeing multiple people, group by StaffName
     const groups = {};
-    tasks.forEach(t => {
+    paginatedTasks.forEach(t => {
       const name = t.StaffName || 'ไม่ระบุชื่อ';
       if (!groups[name]) groups[name] = [];
       groups[name].push(t);
@@ -25,7 +36,7 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
       acc[key] = groups[key];
       return acc;
     }, {});
-  }, [tasks, userRole]);
+  }, [paginatedTasks, userRole]);
 
   if (!isOpen) return null;
 
@@ -74,9 +85,9 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                       <div key={task.ID} className="p-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex-1">
                           <h4 className="font-bold text-slate-900">{task.Detail}</h4>
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5 line-clamp-1">
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5 ">
                             {task.CustomFields?.Project && (
-                              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-sm line-clamp-1 uppercase tracking-wider font-semibold">
+                              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-semibold">
                                 {task.CustomFields.Project}
                               </span>
                             )}
@@ -94,6 +105,30 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                   </div>
                 </div>
               ))}
+              
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-2 pt-2 pb-1">
+                  <p className="text-sm text-slate-500">
+                    แสดงหน้า <span className="font-bold text-slate-900">{currentPage}</span> จาก <span className="font-bold text-slate-900">{totalPages}</span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -110,3 +145,4 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
     </div>
   );
 };
+
