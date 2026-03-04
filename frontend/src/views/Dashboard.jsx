@@ -11,6 +11,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
   const [filterUser, setFilterUser] = useState('All');
+  const [filterYear, setFilterYear] = useState('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [overduePage, setOverduePage] = useState(1);
@@ -55,6 +56,7 @@ export const Dashboard = () => {
     if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
     return filterDepartment === 'All' || u.Department === filterDepartment;
   }).map(u => u.Name))].filter(Boolean);
+  const uniqueYears = [...new Set(tasks.map(t => new Date(t.StartDate).getFullYear()))].filter(Boolean).sort((a,b) => b - a);
 
   const filteredTasks = tasks.filter(t => {
     if (!canSeeAll) {
@@ -67,6 +69,7 @@ export const Dashboard = () => {
       if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
       if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
     }
+    if (filterYear !== 'All' && new Date(t.StartDate).getFullYear().toString() !== filterYear.toString()) return false;
     if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
     if (endDate && new Date(t.StartDate) > new Date(endDate)) return false;
     return true;
@@ -98,18 +101,34 @@ export const Dashboard = () => {
         </div>
         
         <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
+          <span className="text-sm font-medium text-slate-500 hidden sm:block">ปี:</span>
+          <select
+            value={filterYear}
+            onChange={(e) => {
+              setFilterYear(e.target.value);
+              setStartDate('');
+              setEndDate('');
+            }}
+            className="w-full sm:w-24 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+          >
+            <option value="All">ทุกปี</option>
+            {uniqueYears.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+          <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
           <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
           <input 
             type="date" 
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => { setStartDate(e.target.value); setFilterYear('All'); }}
             className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
           />
           <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
           <input 
             type="date" 
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => { setEndDate(e.target.value); setFilterYear('All'); }}
             className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
           />
           
@@ -144,9 +163,10 @@ export const Dashboard = () => {
             </>
           )}
 
-          {(startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All') && (
+          {(filterYear !== 'All' || startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All') && (
             <button
               onClick={() => {
+                setFilterYear('All');
                 setStartDate('');
                 setEndDate('');
                 setFilterDepartment('All');
