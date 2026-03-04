@@ -16,6 +16,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
   }));
 
   const [link, setLink] = useState(() => task?.CustomFields?.Link || '');
+  const [project, setProject] = useState(() => task?.CustomFields?.Project || '');
   const [images, setImages] = useState(() => {
     try {
       return task?.CustomFields?.Images ? JSON.parse(task.CustomFields.Images) : [];
@@ -31,7 +32,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
   const [customFields, setCustomFields] = useState(() => {
     if (task?.CustomFields) {
       return Object.entries(task.CustomFields)
-        .filter(([key]) => key !== 'Link' && key !== 'Images')
+        .filter(([key]) => key !== 'Link' && key !== 'Images' && key !== 'Project')
         .map(([key, value]) => ({ key, value }));
     }
     return [];
@@ -84,6 +85,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
       }, {});
 
       if (link.trim()) finalCustomFields.Link = link.trim();
+      if (project.trim()) finalCustomFields.Project = project.trim();
 
       let uploadedImageUrls = [...images];
 
@@ -141,7 +143,18 @@ export const TaskModal = ({ task, onClose, onSave }) => {
           <form id="task-form" onSubmit={attemptSubmit} className="space-y-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียดงาน</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อโปรเจค / งานหลัก</label>
+                <input
+                  type="text"
+                  value={project}
+                  onChange={e => setProject(e.target.value)}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 font-medium"
+                  placeholder="เช่น ปรับปรุงระบบเครือข่าย ปี 2568, โครงการ X..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียดงานย่อย <span className="text-red-500">*</span></label>
                 <textarea
                   required
                   value={formData.Detail}

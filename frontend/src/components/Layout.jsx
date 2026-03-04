@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
@@ -11,6 +11,7 @@ export const Layout = () => {
   const navItems = [
     { name: 'หน้าภาพรวม', path: '/', icon: <LayoutDashboard size={20} /> },
     { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
+    { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> },
   ];
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

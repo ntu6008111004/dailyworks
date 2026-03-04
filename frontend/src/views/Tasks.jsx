@@ -7,6 +7,7 @@ import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingModal } from '../components/LoadingModal';
+import { DailySummaryModal } from '../components/DailySummaryModal';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -19,6 +20,7 @@ export const Tasks = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   useEffect(() => {
     fetchTasks();
@@ -109,13 +111,22 @@ export const Tasks = () => {
           <h2 className="text-2xl font-bold text-slate-900">จัดการงาน</h2>
           <p className="text-slate-500">จัดการข้อมูลบันทึกงานประจำวันของคุณ</p>
         </div>
-        <button
-          onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-blue-100"
-        >
-          <Plus size={20} />
-          <span>เพิ่มงานใหม่</span>
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setIsSummaryOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-indigo-100"
+          >
+            <Calendar size={20} />
+            <span>สรุปงานวันนี้</span>
+          </button>
+          <button
+            onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-blue-100"
+          >
+            <Plus size={20} />
+            <span>เพิ่มงานใหม่</span>
+          </button>
+        </div>
       </div>
 
       <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-end">
@@ -234,6 +245,13 @@ export const Tasks = () => {
           onSave={handleSaveTask}
         />
       )}
+
+      <DailySummaryModal
+        isOpen={isSummaryOpen}
+        onClose={() => setIsSummaryOpen(false)}
+        tasks={tasks}
+        user={user}
+      />
 
       <ConfirmModal
         isOpen={!!deleteConfirmId}
