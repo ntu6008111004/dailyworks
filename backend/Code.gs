@@ -42,6 +42,14 @@ function initializeSheets() {
       "IT",
       "พนักงาน ไอที",
     ]);
+    usersSheet.appendRow([
+      "3",
+      "head_it",
+      "cGFzczEyMw==",
+      "Head",
+      "IT",
+      "หัวหน้าแผนก ไอที",
+    ]);
   }
 
   // 2. Setup Tasks Sheet
