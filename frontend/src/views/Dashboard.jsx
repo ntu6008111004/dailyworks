@@ -4,6 +4,7 @@ import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, 
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
+import { StatusTasksModal } from '../components/StatusTasksModal';
 
 export const Dashboard = () => {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ export const Dashboard = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [overduePage, setOverduePage] = useState(1);
+  const [selectedStatus, setSelectedStatus] = useState(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
 
   const userRole = user?.Role || user?.role;
   const userName = user?.Name || user?.name;
@@ -183,7 +186,10 @@ export const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass p-6 rounded-2xl flex items-center gap-4">
+        <div 
+          onClick={() => { setSelectedStatus('ทั้งหมด'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 cursor-pointer hover:shadow-md transition-all border border-transparent hover:border-blue-200"
+        >
           <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
             <Activity size={24} />
           </div>
@@ -193,7 +199,10 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-slate-300">
+        <div 
+          onClick={() => { setSelectedStatus('ยังไม่เริ่ม'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-slate-300 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-slate-200"
+        >
           <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">
             <PlayCircle size={24} />
           </div>
@@ -205,7 +214,10 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-amber-400">
+        <div 
+          onClick={() => { setSelectedStatus('รอแก้ไข'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-amber-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-amber-200"
+        >
           <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
             <AlertTriangle size={24} />
           </div>
@@ -217,7 +229,10 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-purple-400">
+        <div 
+          onClick={() => { setSelectedStatus('รอตรวจ'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-purple-200"
+        >
           <div className="p-3 bg-purple-100 text-purple-600 rounded-xl">
             <ClipboardList size={24} />
           </div>
@@ -229,7 +244,10 @@ export const Dashboard = () => {
           </div>
         </div>
         
-        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-red-400">
+        <div 
+          onClick={() => { setSelectedStatus('เกินกำหนด'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-red-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-red-200"
+        >
           <div className="p-3 bg-red-100 text-red-600 rounded-xl">
             <AlertCircle size={24} />
           </div>
@@ -239,7 +257,10 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500">
+        <div 
+          onClick={() => { setSelectedStatus('เสร็จสิ้น'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-green-200"
+        >
           <div className="p-3 bg-green-100 text-green-600 rounded-xl">
             <CheckCircle2 size={24} />
           </div>
@@ -306,6 +327,18 @@ export const Dashboard = () => {
           </div>
         </div>
       </div>
+      <StatusTasksModal 
+        isOpen={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+        status={selectedStatus}
+        userRole={userRole}
+        tasks={
+          selectedStatus === 'ทั้งหมด' ? filteredTasks : 
+          selectedStatus === 'เกินกำหนด' ? overdueTasks :
+          selectedStatus === 'เสร็จสิ้น' ? doneTasks :
+          filteredTasks.filter(t => t.Status === selectedStatus)
+        }
+      />
     </div>
   );
 };
