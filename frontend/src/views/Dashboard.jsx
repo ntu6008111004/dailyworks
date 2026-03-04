@@ -185,8 +185,8 @@ export const Dashboard = () => {
               overdueTasks.map(task => (
                 <div key={task.ID} className="p-4 rounded-xl border border-red-200 bg-red-50 flex justify-between items-center">
                   <div>
-                    <h4 className="font-bold text-red-900">งาน #{task.ID} {task.Detail}</h4>
-                    <p className="text-sm text-red-700">ผู้รับผิดชอบ: {task.StaffName}</p>
+                    <h4 className="font-bold text-red-900 line-clamp-1">{task.Detail}</h4>
+                    <p className="text-xs text-red-700 bg-red-100/50 w-fit px-1.5 py-0.5 rounded mt-0.5">ID: #{String(task.ID).slice(-4)} | {task.StaffName}</p>
                   </div>
                   <div className="text-right">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
