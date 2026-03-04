@@ -1,0 +1,232 @@
+const SCRIPT_PROP = PropertiesService.getScriptProperties();
+
+// Define sheet names
+const SHEET_USERS = 'Users';
+const SHEET_TASKS = 'Tasks';
+const SHEET_LOGS = 'ActivityLogs';
+
+function setup() {
+  const doc = SpreadsheetApp.getActiveSpreadsheet();
+  SCRIPT_PROP.setProperty("key", doc.getId());
+}
+
+function doPost(e) {
+  return handleResponse(e);
+}
+
+function doGet(e) {
+  return handleResponse(e);
+}
+
+function handleResponse(e) {
+  // CORS setup
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  };
+
+  try {
+    const doc = SpreadsheetApp.openById(SCRIPT_PROP.getProperty("key"));
+    let action = e.parameter.action;
+    let data;
+
+    if (e.postData && e.postData.contents) {
+      const postData = JSON.parse(e.postData.contents);
+      action = postData.action || action;
+      data = postData.data;
+    }
+
+    let result = {};
+
+    switch (action) {
+      case 'getTasks':
+        result = getTasks(doc);
+        break;
+      case 'addTask':
+        result = addTask(doc, data);
+        break;
+      case 'updateTask':
+        result = updateTask(doc, data);
+        break;
+      case 'deleteTask':
+        result = deleteTask(doc, data.id);
+        break;
+      case 'uploadImage':
+        result = uploadImage(data.base64, data.filename, data.mimeType);
+        break;
+      case 'getUsers':
+        result = getUsers(doc);
+        break;
+      default:
+        throw new Error("Invalid action");
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'success', data: result }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: error.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getTasks(doc) {
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  return data.slice(1).map(row => {
+    let task = {};
+    headers.forEach((header, i) => {
+      task[header] = row[i];
+    });
+    // Parse JSON custom fields if exist
+    if (task.CustomFields) {
+      try {
+        task.CustomFields = JSON.parse(task.CustomFields);
+      } catch (e) {
+        task.CustomFields = {};
+      }
+    }
+    return task;
+  });
+}
+
+function addTask(doc, data) {
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const newRow = [];
+  
+  headers.forEach(header => {
+    if (header === 'ID') {
+      newRow.push(Utilities.getUuid());
+    } else if (header === 'CustomFields') {
+      newRow.push(data[header] ? JSON.stringify(data[header]) : '{}');
+    } else if (header === 'CreatedAt') {
+      newRow.push(new Date());
+    } else {
+      newRow.push(data[header] || '');
+    }
+  });
+  
+  sheet.appendRow(newRow);
+  checkAndExpandSheet(sheet);
+  
+  logActivity(doc, data.StaffID || 'System', 'ADD_TASK', `Task created`);
+  return { message: "Task added successfully" };
+}
+
+function updateTask(doc, data) {
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idIndex = headers.indexOf('ID');
+  
+  if (idIndex === -1) throw new Error("ID column not found");
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIndex] === data.ID) {
+      headers.forEach((header, j) => {
+        if (header === 'CustomFields' && data[header]) {
+          sheet.getRange(i + 1, j + 1).setValue(JSON.stringify(data[header]));
+        } else if (data[header] !== undefined && header !== 'ID') {
+          sheet.getRange(i + 1, j + 1).setValue(data[header]);
+        }
+        if (header === 'UpdatedAt') {
+          sheet.getRange(i + 1, j + 1).setValue(new Date());
+        }
+      });
+      logActivity(doc, data.StaffID || 'System', 'UPDATE_TASK', `Task ${data.ID} updated`);
+      return { message: "Task updated successfully" };
+    }
+  }
+  throw new Error("Task not found");
+}
+
+function deleteTask(doc, id) {
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  const rows = sheet.getDataRange().getValues();
+  const idIndex = rows[0].indexOf('ID');
+  
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIndex] === id) {
+      sheet.deleteRow(i + 1);
+      logActivity(doc, 'System', 'DELETE_TASK', `Task ${id} deleted`);
+      return { message: "Task deleted successfully" };
+    }
+  }
+  throw new Error("Task not found");
+}
+
+function getUsers(doc) {
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  
+  return data.slice(1).map(row => {
+    let user = {};
+    headers.forEach((header, i) => {
+      user[header] = row[i];
+    });
+    return user;
+  });
+}
+
+function uploadImage(base64Data, filename, mimeType) {
+  // Create or get folder
+  let folder;
+  const folderName = "DailyWorkLogs_Images";
+  const folders = DriveApp.getFoldersByName(folderName);
+  
+  if (folders.hasNext()) {
+    folder = folders.next();
+  } else {
+    folder = DriveApp.createFolder(folderName);
+  }
+  
+  // Decode base64
+  const decodedData = Utilities.base64Decode(base64Data.split(',')[1]);
+  const blob = Utilities.newBlob(decodedData, mimeType, filename);
+  
+  const file = folder.createFile(blob);
+  
+  return {
+    id: file.getId(),
+    url: file.getUrl(),
+    downloadUrl: file.getDownloadUrl()
+  };
+}
+
+function checkAndExpandSheet(sheet) {
+  const maxRows = sheet.getMaxRows();
+  const lastRow = sheet.getLastRow();
+  
+  // If approaching the limit within 50 rows
+  if (maxRows - lastRow < 50) {
+    sheet.insertRowsAfter(maxRows, 5000);
+  }
+}
+
+// Time-driven trigger wrapper for auto expand
+function scheduledCheckAndExpand() {
+  const doc = SpreadsheetApp.openById(SCRIPT_PROP.getProperty("key"));
+  const sheets = [SHEET_USERS, SHEET_TASKS, SHEET_LOGS];
+  
+  sheets.forEach(sheetName => {
+    const sheet = doc.getSheetByName(sheetName);
+    if (sheet) {
+      checkAndExpandSheet(sheet);
+    }
+  });
+}
+
+function logActivity(doc, userId, action, details) {
+  const sheet = doc.getSheetByName(SHEET_LOGS);
+  if (!sheet) return;
+  sheet.appendRow([new Date(), userId, action, details]);
+}
