@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Link as LinkIcon, Image as ImageIcon, UploadCloud } from 'lucide-react';
-import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
 import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -49,7 +48,34 @@ export const TaskModal = ({ task, onClose, onSave }) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-          resolve({ file, preview: reader.result });
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const MAX_DIM = 800; // Resize to ensure it fits within Google Sheets cell limits
+            
+            if (width > height) {
+              if (width > MAX_DIM) {
+                height = Math.round(height * (MAX_DIM / width));
+                width = MAX_DIM;
+              }
+            } else {
+              if (height > MAX_DIM) {
+                width = Math.round(width * (MAX_DIM / height));
+                height = MAX_DIM;
+              }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const compressedBase64 = canvas.toDataURL('image/webp', 0.6); // Compress to 60% WebP
+            resolve({ file, preview: compressedBase64 });
+          };
+          img.src = reader.result;
         };
         reader.readAsDataURL(file);
       });
@@ -89,10 +115,9 @@ export const TaskModal = ({ task, onClose, onSave }) => {
 
       let uploadedImageUrls = [...images];
 
+      // Save base64 directly instead of Drive upload
       for (const img of newImages) {
-        const base64Data = img.preview;
-        const res = await apiService.uploadImage(base64Data, img.file.name, img.file.type);
-        uploadedImageUrls.push(res.url);
+        uploadedImageUrls.push(img.preview);
       }
 
       if (uploadedImageUrls.length > 0) {
