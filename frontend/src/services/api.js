@@ -44,6 +44,20 @@ export const apiService = {
     return this.request('getUsers');
   },
 
+  addUser(user) {
+    if (user.Password) user.Password = btoa(user.Password);
+    return this.request('addUser', user);
+  },
+
+  updateUser(user) {
+    if (user.Password && !user.Password.endsWith('==')) user.Password = btoa(user.Password);
+    return this.request('updateUser', user);
+  },
+
+  deleteUser(id) {
+    return this.request('deleteUser', { id });
+  },
+
   uploadImage(base64, filename, mimeType) {
     return this.request('uploadImage', { base64, filename, mimeType });
   }

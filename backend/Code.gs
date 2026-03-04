@@ -142,6 +142,15 @@ function handleResponse(e) {
       case "getUsers":
         result = getUsers(doc);
         break;
+      case "addUser":
+        result = addUser(doc, data);
+        break;
+      case "updateUser":
+        result = updateUser(doc, data);
+        break;
+      case "deleteUser":
+        result = deleteUser(doc, data.id);
+        break;
       default:
         throw new Error("Invalid action");
     }
@@ -263,6 +272,73 @@ function getUsers(doc) {
     });
     return user;
   });
+}
+
+function addUser(doc, data) {
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const newRow = [];
+
+  headers.forEach((header) => {
+    if (header === "ID") {
+      newRow.push(Utilities.getUuid());
+    } else {
+      newRow.push(data[header] || "");
+    }
+  });
+
+  sheet.appendRow(newRow);
+  checkAndExpandSheet(sheet);
+
+  logActivity(
+    doc,
+    data.StaffID || "System",
+    "ADD_USER",
+    `User created: ${data.Username}`,
+  );
+  return { message: "User added successfully" };
+}
+
+function updateUser(doc, data) {
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0];
+  const idIndex = headers.indexOf("ID");
+
+  if (idIndex === -1) throw new Error("ID column not found");
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIndex] === data.ID) {
+      headers.forEach((header, j) => {
+        if (data[header] !== undefined && header !== "ID") {
+          sheet.getRange(i + 1, j + 1).setValue(data[header]);
+        }
+      });
+      logActivity(
+        doc,
+        data.StaffID || "System",
+        "UPDATE_USER",
+        `User ${data.ID} updated`,
+      );
+      return { message: "User updated successfully" };
+    }
+  }
+  throw new Error("User not found");
+}
+
+function deleteUser(doc, id) {
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  const rows = sheet.getDataRange().getValues();
+  const idIndex = rows[0].indexOf("ID");
+
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIndex] === id) {
+      sheet.deleteRow(i + 1);
+      logActivity(doc, "System", "DELETE_USER", `User ${id} deleted`);
+      return { message: "User deleted successfully" };
+    }
+  }
+  throw new Error("User not found");
 }
 
 function loginUser(doc, { username, password }) {

@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './views/Dashboard';
 import { Tasks } from './views/Tasks';
 import { Timeline } from './views/Timeline';
+import { AdminUsers } from './views/AdminUsers';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
@@ -28,6 +29,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="timeline" element={<Timeline />} />
+            <Route path="admin/users" element={<AdminUsers />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

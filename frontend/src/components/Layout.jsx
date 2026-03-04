@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
@@ -11,8 +11,12 @@ export const Layout = () => {
   const navItems = [
     { name: 'หน้าภาพรวม', path: '/', icon: <LayoutDashboard size={20} /> },
     { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
-    { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> },
+    { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> }
   ];
+
+  if (user?.Role === 'Admin' || user?.role === 'Admin') {
+    navItems.push({ name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: <Users size={20} /> });
+  }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -62,12 +66,14 @@ export const Layout = () => {
 
         <div className="p-4 border-t border-slate-200/50">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-              {user?.name?.charAt(0) || 'U'}
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
+              {(user?.Name || user?.name || user?.Username || 'U').charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">{user?.name}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.role}</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}</p>
+              <p className="text-xs font-medium px-2 py-0.5 mt-1 bg-slate-100 text-slate-600 rounded-md inline-block">
+                {user?.Role || user?.role || 'Guest'} {user?.Department ? `(${user?.Department})` : ''}
+              </p>
             </div>
           </div>
           <button
