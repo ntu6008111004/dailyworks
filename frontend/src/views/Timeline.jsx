@@ -126,7 +126,7 @@ export const Timeline = () => {
                   className="flex border-b border-slate-100 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                   onClick={() => setSelectedTask(task)}
                 >
-                  <div className="w-48 sm:w-64 shrink-0 border-r border-slate-200 p-3 flex flex-col justify-center sticky left-0 bg-white group-hover:bg-slate-50/95 z-10 shadow-[1px_0_0_0_#e2e8f0]">
+                  <div className="w-48 sm:w-64 shrink-0 border-r border-slate-200 p-3 flex flex-col justify-center sticky left-0 bg-white group-hover:bg-slate-50/95 z-20 shadow-[1px_0_0_0_#e2e8f0]">
                     <div className="text-sm font-bold text-slate-800 line-clamp-1 group-hover:text-blue-600 transition-colors" title={task.Detail}>
                       {task.Detail}
                     </div>
