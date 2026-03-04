@@ -1,7 +1,8 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useState } from 'react';
 
 export const Layout = () => {
   const { user, logout } = useAuth();
@@ -12,14 +13,30 @@ export const Layout = () => {
     { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
   ];
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 glass hidden md:flex flex-col border-r border-slate-200">
-        <div className="p-6 border-b border-slate-200/50">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 glass flex flex-col border-r border-slate-200 transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-slate-200/50 flex items-center justify-between">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">
             WorkLogs
           </h1>
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+          >
+            <X size={20} />
+          </button>
         </div>
         
         <div className="flex-1 overflow-y-auto py-4">
@@ -28,6 +45,7 @@ export const Layout = () => {
               <Link
                 key={item.name}
                 to={item.path}
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium ${
                   location.pathname === item.path
                     ? 'bg-blue-50 text-blue-600 shadow-sm'
@@ -64,9 +82,12 @@ export const Layout = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Header */}
-        <header className="glass md:hidden border-b border-slate-200 flex items-center justify-between p-4 z-10">
+        <header className="glass md:hidden border-b border-slate-200 flex items-center justify-between p-4 z-10 sticky top-0">
           <h1 className="text-xl font-bold text-blue-600">WorkLogs</h1>
-          <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+          <button 
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
             <Menu size={24} />
           </button>
         </header>

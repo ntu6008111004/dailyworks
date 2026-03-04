@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { AlertCircle, Activity, CheckCircle2, Clock } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { LoadingModal } from '../components/LoadingModal';
 
 export const Dashboard = () => {
   const { user } = useAuth();
@@ -51,10 +52,9 @@ export const Dashboard = () => {
     tasks: workload[name]
   })).sort((a, b) => b.tasks - a.tasks);
 
-  if (loading) return <div className="animate-pulse space-y-4 max-w-lg"><div className="h-8 bg-slate-200 rounded w-1/3"></div><div className="h-32 bg-slate-200 rounded"></div></div>;
-
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูล..." />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">แผงควบคุม</h2>

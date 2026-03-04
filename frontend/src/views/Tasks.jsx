@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { LoadingModal } from '../components/LoadingModal';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -14,6 +16,9 @@ export const Tasks = () => {
   const [editingTask, setEditingTask] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     fetchTasks();
@@ -53,23 +58,29 @@ export const Tasks = () => {
     }
   };
 
-  const handleDeleteTask = async (id) => {
-    if(!window.confirm('คุณต้องการลบงานนี้ใช่หรือไม่?')) return;
+  const requestDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!deleteConfirmId) return;
+    setLoading(true);
     try {
-      await apiService.deleteTask(id);
+      await apiService.deleteTask(deleteConfirmId);
       toast.success('ลบงานเรียบร้อย');
       fetchTasks();
     } catch (error) {
       toast.error('เกิดข้อผิดพลาดในการลบ: ' + error.message);
+      setLoading(false);
     }
   };
 
   const statusColors = {
-    'ยังไม่เริ่ม': 'bg-slate-100 text-slate-800',
-    'กำลังทำ': 'bg-blue-100 text-blue-800',
-    'รอตรวจ': 'bg-purple-100 text-purple-800',
-    'รอแก้ไข': 'bg-amber-100 text-amber-800',
-    'เสร็จสิ้น': 'bg-green-100 text-green-800',
+    'ยังไม่เริ่ม': 'bg-slate-100 text-slate-800 border border-slate-300',
+    'กำลังทำ': 'bg-blue-100 text-blue-800 border-2 border-blue-400',
+    'รอตรวจ': 'bg-purple-100 text-purple-800 border-2 border-purple-400',
+    'รอแก้ไข': 'bg-amber-100 text-amber-800 border-2 border-amber-400',
+    'เสร็จสิ้น': 'bg-green-100 text-green-800 border-2 border-green-500 shadow-sm font-bold',
   };
 
   const filteredTasks = tasks.filter(t => {
@@ -83,6 +94,10 @@ export const Tasks = () => {
     if (userRole === 'Staff' && t.StaffName !== userName) return false;
     if (userRole === 'Head' && t.Department !== user?.Department) return false;
     // Admin sees all
+    
+    // Date Filtering
+    if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
+    if (endDate && new Date(t.StartDate) > new Date(endDate)) return false;
     
     return true;
   });
@@ -103,8 +118,8 @@ export const Tasks = () => {
         </button>
       </div>
 
-      <div className="glass p-4 rounded-2xl flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-end">
+        <div className="flex-1 w-full relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
             type="text"
@@ -114,26 +129,45 @@ export const Tasks = () => {
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
-        <div className="sm:w-48 relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="w-full pl-10 pr-8 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer"
-          >
-            <option value="All">งานทั้งหมด</option>
-            {Object.keys(statusColors).map(status => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
+        
+        <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ตั้งแต่:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full sm:w-36 px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ถึง:</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full sm:w-36 px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+            />
+          </div>
+          <div className="w-full sm:w-48 relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full pl-10 pr-8 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
+            >
+              <option value="All">งานทั้งหมด</option>
+              {Object.keys(statusColors).map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center p-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      ) : (
+      <LoadingModal isOpen={loading} message="กำลังดึงข้อมูลงานรอบล่าสุด..." />
+      
+      {!loading && (
         <div className="space-y-4">
           {filteredTasks.length === 0 ? (
             <div className="glass p-12 text-center rounded-2xl">
@@ -181,7 +215,7 @@ export const Tasks = () => {
                   <Edit2 size={18} />
                 </button>
                 <button
-                  onClick={() => handleDeleteTask(task.ID)}
+                  onClick={() => requestDelete(task.ID)}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <Trash2 size={18} />
@@ -200,6 +234,15 @@ export const Tasks = () => {
           onSave={handleSaveTask}
         />
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteTask}
+        title="ยืนยันการลบข้อมูล"
+        message="คุณมั่นใจหรือไม่ว่าต้องการลบงานนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้"
+        type="danger"
+      />
     </div>
   );
 };

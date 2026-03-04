@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './views/Dashboard';
 import { Tasks } from './views/Tasks';
 import { Login } from './views/Login';
+import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
 
 const ProtectedRoute = ({ children }) => {
@@ -21,10 +22,12 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" />
