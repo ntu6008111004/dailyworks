@@ -12,10 +12,16 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user }) => {
     const isOwner = user?.Role === 'Staff' ? t.StaffName === (user?.Name || user?.name) : true;
     if (!isOwner) return false;
 
-    const tStart = new Date(t.StartDate).toISOString().split('T')[0];
-    const tDue = new Date(t.DueDate).toISOString().split('T')[0];
-    
-    return date >= tStart && date <= tDue;
+    try {
+      // Use local date string for comparison to avoid timezone shifts from toISOString
+      const tStart = format(new Date(t.StartDate), 'yyyy-MM-dd');
+      const tDue = format(new Date(t.DueDate), 'yyyy-MM-dd');
+      
+      return date >= tStart && date <= tDue;
+    } catch (e) {
+      console.error("Date parsing error for task:", t.ID, e);
+      return false;
+    }
   });
 
   let summaryText = `สรุปผลการปฏิบัติงาน\nวันที่ ${format(new Date(date), 'dd MMMM yyyy', { locale: th })}\n\n`;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { AlertCircle, Activity, CheckCircle2, Clock } from 'lucide-react';
+import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
@@ -120,7 +120,6 @@ export const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Stats Cards */}
         <div className="glass p-6 rounded-2xl flex items-center gap-4">
           <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
             <Activity size={24} />
@@ -130,18 +129,54 @@ export const Dashboard = () => {
             <p className="text-2xl font-bold text-slate-900">{filteredTasks.length}</p>
           </div>
         </div>
+
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-slate-300">
+          <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">
+            <PlayCircle size={24} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">ยังไม่เริ่ม</p>
+            <p className="text-2xl font-bold text-slate-900">
+              {filteredTasks.filter(t => t.Status === 'ยังไม่เริ่ม').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-amber-400">
+          <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">รอแก้ไข</p>
+            <p className="text-2xl font-bold text-amber-600">
+              {filteredTasks.filter(t => t.Status === 'รอแก้ไข').length}
+            </p>
+          </div>
+        </div>
+
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-purple-400">
+          <div className="p-3 bg-purple-100 text-purple-600 rounded-xl">
+            <ClipboardList size={24} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">รอตรวจ</p>
+            <p className="text-2xl font-bold text-purple-600">
+              {filteredTasks.filter(t => t.Status === 'รอตรวจ').length}
+            </p>
+          </div>
+        </div>
         
-        <div className="glass p-6 rounded-2xl flex items-center gap-4">
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-red-400">
           <div className="p-3 bg-red-100 text-red-600 rounded-xl">
             <AlertCircle size={24} />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">งานที่เกินกำหนด</p>
+            <p className="text-sm font-medium text-slate-500">เกินกำหนด</p>
             <p className="text-2xl font-bold text-red-600">{overdueTasks.length}</p>
           </div>
         </div>
 
-        <div className="glass p-6 rounded-2xl flex items-center gap-4">
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500">
           <div className="p-3 bg-green-100 text-green-600 rounded-xl">
             <CheckCircle2 size={24} />
           </div>
