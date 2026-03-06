@@ -6,6 +6,8 @@ import { Dashboard } from './views/Dashboard';
 import { Tasks } from './views/Tasks';
 import { Timeline } from './views/Timeline';
 import { AdminUsers } from './views/AdminUsers';
+import { MyProfile } from './views/MyProfile';
+import { MyTeam } from './views/MyTeam';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
@@ -29,6 +31,8 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="timeline" element={<Timeline />} />
+            <Route path="profile" element={<MyProfile />} />
+            <Route path="team" element={<MyTeam />} />
             <Route path="admin/users" element={<AdminUsers />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

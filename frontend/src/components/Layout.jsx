@@ -14,7 +14,12 @@ export const Layout = () => {
     { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> }
   ];
 
+  if (user?.Role === 'Admin' || user?.Role === 'Head' || user?.role === 'Admin' || user?.role === 'Head') {
+    navItems.push({ name: 'บุคคลในทีม', path: '/team', icon: <Users size={20} /> });
+  }
+
   if (user?.Role === 'Admin' || user?.role === 'Admin') {
+    // We already imported Users, let's just reuse it 
     navItems.push({ name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: <Users size={20} /> });
   }
 
@@ -65,23 +70,27 @@ export const Layout = () => {
         </div>
 
         <div className="p-4 border-t border-slate-200/50">
-          <div className="flex items-start gap-3 px-3 py-2 mb-2">
+          <Link 
+            to="/profile"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-start gap-3 px-3 py-2 mb-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer group"
+          >
             {user?.ProfileImage ? (
-              <img src={user.ProfileImage} alt={user.Name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+              <img src={user.ProfileImage} alt={user.Name} className="w-10 h-10 rounded-full object-cover border border-slate-200 group-hover:border-blue-300 transition-colors" />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg shrink-0">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg shrink-0 group-hover:bg-blue-200 transition-colors">
                 {(user?.Name || user?.name || user?.Username || 'U').charAt(0).toUpperCase()}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 whitespace-normal break-words">
+              <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 whitespace-normal break-words group-hover:text-blue-700 transition-colors">
                 {user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}
               </p>
-              <p className="text-[10px] font-medium px-2 py-0.5 mt-1 bg-slate-100 text-slate-600 rounded-md inline-block uppercase tracking-wider">
+              <p className="text-[10px] font-medium px-2 py-0.5 mt-1 bg-slate-100/80 text-slate-600 rounded-md inline-block uppercase tracking-wider group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                 {user?.Role || user?.role || 'Guest'} {user?.Department ? `(${user?.Department})` : ''}
               </p>
             </div>
-          </div>
+          </Link>
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors"
