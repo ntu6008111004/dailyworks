@@ -9,6 +9,7 @@ import { LoadingModal } from '../components/LoadingModal';
 import { DailySummaryModal } from '../components/DailySummaryModal';
 import { MonthlySummaryModal } from '../components/MonthlySummaryModal';
 import { CustomSelect } from '../components/CustomSelect';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { TaskModal } from '../components/TaskModal';
 
 export const Tasks = () => {
@@ -200,20 +201,18 @@ export const Tasks = () => {
         <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ตั้งแต่:</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full sm:w-36 px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+            <CustomDatePicker 
+              selectedDate={startDate}
+              onChange={(date) => setStartDate(date)}
+              className="sm:w-36"
             />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ถึง:</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full sm:w-36 px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+            <CustomDatePicker 
+              selectedDate={endDate}
+              onChange={(date) => setEndDate(date)}
+              className="sm:w-36"
             />
           </div>
           

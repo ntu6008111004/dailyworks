@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
 import { StatusTasksModal } from '../components/StatusTasksModal';
 import { CustomSelect } from '../components/CustomSelect';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 
 export const Dashboard = () => {
   const { user } = useAuth();
@@ -119,18 +120,16 @@ export const Dashboard = () => {
             />
             <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
             <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setFilterYear('All'); }}
-              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            <CustomDatePicker 
+              selectedDate={startDate}
+              onChange={(date) => { setStartDate(date); setFilterYear('All'); }}
+              className="sm:w-36"
             />
             <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setFilterYear('All'); }}
-              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            <CustomDatePicker 
+              selectedDate={endDate}
+              onChange={(date) => { setEndDate(date); setFilterYear('All'); }}
+              className="sm:w-36"
             />
             
             {(canSeeAll || userRole === 'Head') && canSeeAll && (

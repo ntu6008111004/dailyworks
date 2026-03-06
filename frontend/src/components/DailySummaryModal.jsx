@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
+import { CustomDatePicker } from './CustomDatePicker';
 
 export const DailySummaryModal = ({ isOpen, onClose, tasks, user }) => {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -55,15 +56,11 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user }) => {
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">เลือกวันที่ต้องการสรุป</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            />
-          </div>
+          <CustomDatePicker
+            label="เลือกวันที่ต้องการสรุป"
+            selectedDate={date}
+            onChange={(newDate) => setDate(newDate)}
+          />
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">ตัวอย่างข้อความ</label>
