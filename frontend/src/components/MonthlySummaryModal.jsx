@@ -15,8 +15,22 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
 
       // Ensure we catch any task that was active/started in this month
       try {
-        const taskStartStr = format(new Date(t.StartDate), 'yyyy-MM');
-        const taskDueStr = format(new Date(t.DueDate), 'yyyy-MM');
+        // Task.StartDate/DueDate are stored as ISO dates or 'YYYY-MM-DD' strings 
+        // We extract the 'YYYY-MM' prefix directly to avoid timezone shift issues from new Date()
+        let taskStartStr = '';
+        let taskDueStr = '';
+
+        if (typeof t.StartDate === 'string') {
+          taskStartStr = t.StartDate.substring(0, 7);
+        } else if (t.StartDate instanceof Date) {
+            taskStartStr = format(t.StartDate, 'yyyy-MM');
+        }
+
+        if (typeof t.DueDate === 'string') {
+          taskDueStr = t.DueDate.substring(0, 7);
+        } else if (t.DueDate instanceof Date) {
+            taskDueStr = format(t.DueDate, 'yyyy-MM');
+        }
         
         // Month string comparison works chronologically, e.g. "2024-01" <= "2024-02"
         return monthStr >= taskStartStr && monthStr <= taskDueStr;
