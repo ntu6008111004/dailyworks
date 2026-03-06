@@ -38,6 +38,14 @@ export const apiService = {
     return this.request('getTasks');
   },
 
+  getTasksSummary() {
+    return this.request('getTasksSummary');
+  },
+
+  getTaskById(id) {
+    return this.request('getTaskById', { id });
+  },
+
   addTask(task) {
     return this.request('addTask', task);
   },

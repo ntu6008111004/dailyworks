@@ -34,7 +34,7 @@ export const Tasks = () => {
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const data = await apiService.getTasks();
+      const data = await apiService.getTasksSummary();
       setTasks(data.reverse());
       
       const role = user?.Role || user?.role;
@@ -48,6 +48,19 @@ export const Tasks = () => {
     } catch (error) {
       console.error(error);
       toast.error('ไม่สามารถดึงข้อมูลได้');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditTask = async (taskSummary) => {
+    setLoading(true);
+    try {
+      const fullTask = await apiService.getTaskById(taskSummary.ID);
+      setEditingTask(fullTask);
+      setIsModalOpen(true);
+    } catch {
+      toast.error('ไม่สามารถโหลดข้อมูลงานฉบับเต็มได้');
     } finally {
       setLoading(false);
     }
@@ -310,7 +323,7 @@ export const Tasks = () => {
                 )}
                 
                 {/* Image Indicator */}
-                {(task.Image1 || task.Image2 || task.Image3 || task.Image4) && (
+                {task.HasImages && (
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-md max-w-max border border-green-100 mt-2">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                     มีรูปภาพแนบ
@@ -320,7 +333,7 @@ export const Tasks = () => {
 
               <div className="flex md:flex-col gap-2 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
+                  onClick={() => handleEditTask(task)}
                   className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <Edit2 size={18} />

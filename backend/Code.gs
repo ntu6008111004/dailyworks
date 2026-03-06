@@ -133,6 +133,12 @@ function handleResponse(e) {
       case "getTasks":
         result = getTasks(doc);
         break;
+      case "getTasksSummary":
+        result = getTasksSummary(doc);
+        break;
+      case "getTaskById":
+        result = getTaskById(doc, data.id);
+        break;
       case "addTask":
         result = addTask(doc, data, executorId);
         break;
@@ -172,12 +178,16 @@ function handleResponse(e) {
 }
 
 function getTasks(doc) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get("tasks_full");
+  if (cached) return JSON.parse(cached);
+
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
 
-  return data.slice(1).map((row) => {
+  const result = data.slice(1).map((row) => {
     let task = {};
     headers.forEach((header, i) => {
       task[header] = row[i];
@@ -192,6 +202,73 @@ function getTasks(doc) {
     }
     return task;
   });
+
+  try {
+    cache.put("tasks_full", JSON.stringify(result), 600); // 10 mins
+  } catch (e) {}
+  return result;
+}
+
+function getTasksSummary(doc) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get("tasks_summary");
+  if (cached) return JSON.parse(cached);
+
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // Only keep essential columns for summary
+  const summaryHeaders = [
+    "ID",
+    "Detail",
+    "Status",
+    "Priority",
+    "StartDate",
+    "DueDate",
+    "StaffName",
+    "Department",
+    "CreatedAt",
+  ];
+  const indices = summaryHeaders.map((h) => headers.indexOf(h));
+
+  // Find image indices to check for existence
+  const imgIndices = ["Image1", "Image2", "Image3", "Image4"].map((h) =>
+    headers.indexOf(h),
+  );
+
+  const result = data.slice(1).map((row) => {
+    let task = {};
+    summaryHeaders.forEach((header, i) => {
+      const colIdx = indices[i];
+      task[header] = colIdx !== -1 ? row[colIdx] : "";
+    });
+
+    // Add lightweight indicator for images
+    task.HasImages = imgIndices.some(
+      (idx) => idx !== -1 && row[idx] && row[idx].toString().length > 0,
+    );
+
+    return task;
+  });
+
+  try {
+    cache.put("tasks_summary", JSON.stringify(result), 600); // 10 mins
+  } catch (e) {}
+  return result;
+}
+
+function clearTasksCache() {
+  const cache = CacheService.getScriptCache();
+  cache.removeAll(["tasks_full", "tasks_summary"]);
+}
+
+function getTaskById(doc, id) {
+  const tasks = getTasks(doc); // This uses cache if available
+  const task = tasks.find((t) => t.ID === id);
+  if (!task) throw new Error("Task not found");
+  return task;
 }
 
 function addTask(doc, data, executorId) {
@@ -213,6 +290,7 @@ function addTask(doc, data, executorId) {
 
   sheet.appendRow(newRow);
   checkAndExpandSheet(sheet);
+  clearTasksCache();
 
   logActivity(doc, executorId || "System", "ADD_TASK", `Task created`);
   return { message: "Task added successfully" };
@@ -238,6 +316,7 @@ function updateTask(doc, data, executorId) {
           sheet.getRange(i + 1, j + 1).setValue(new Date());
         }
       });
+      clearTasksCache();
       logActivity(
         doc,
         executorId || "System",
@@ -258,6 +337,7 @@ function deleteTask(doc, id, executorId) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] === id) {
       sheet.deleteRow(i + 1);
+      clearTasksCache();
       logActivity(
         doc,
         executorId || "System",

@@ -21,7 +21,7 @@ export const Timeline = () => {
 
   const fetchTasks = async () => {
     try {
-      const data = await apiService.getTasks();
+      const data = await apiService.getTasksSummary();
       setTasks(data);
     } catch (error) {
       console.error(error);
