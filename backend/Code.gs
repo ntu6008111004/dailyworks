@@ -412,7 +412,7 @@ function getUsers(doc) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+  const headers = data[0].map((h) => h.toString().trim());
 
   return data.slice(1).map((row) => {
     let user = {};
@@ -425,14 +425,28 @@ function getUsers(doc) {
 
 function addUser(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map((h) => h.toString().trim());
   const newRow = [];
 
   headers.forEach((header) => {
+    if (!header) {
+      newRow.push("");
+      return;
+    }
     if (header === "ID") {
       newRow.push(Utilities.getUuid());
     } else {
-      newRow.push(data[header] || "");
+      let val = data[header];
+      if (val === undefined) {
+        const key = Object.keys(data).find(
+          (k) => k.toLowerCase() === header.toLowerCase(),
+        );
+        val = key ? data[key] : "";
+      }
+      newRow.push(val);
     }
   });
 
@@ -451,21 +465,37 @@ function addUser(doc, data, executorId) {
 function updateUser(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   const rows = sheet.getDataRange().getValues();
-  const headers = rows[0];
+  const headers = rows[0].map((h) => h.toString().trim());
   const idIndex = headers.indexOf("ID");
 
-  if (idIndex === -1) throw new Error("ID column not found");
+  if (idIndex === -1) throw new Error("ID column not found in Users sheet");
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] == data.ID) {
-      const oldName = rows[i][headers.indexOf("Name")];
-      const oldDept = rows[i][headers.indexOf("Department")];
+      const oldRow = rows[i];
+      const nameIdx = headers.indexOf("Name");
+      const deptIdx = headers.indexOf("Department");
+
+      const oldName = nameIdx !== -1 ? oldRow[nameIdx] : null;
+      const oldDept = deptIdx !== -1 ? oldRow[deptIdx] : null;
+
       let nameChanged = data.Name && data.Name !== oldName;
       let deptChanged = data.Department && data.Department !== oldDept;
 
       headers.forEach((header, j) => {
-        if (data[header] !== undefined && header !== "ID") {
-          sheet.getRange(i + 1, j + 1).setValue(data[header]);
+        if (!header || header === "ID") return;
+
+        let val = data[header];
+        if (val === undefined) {
+          // Fallback to case-insensitive key search
+          const key = Object.keys(data).find(
+            (k) => k.toLowerCase() === header.toLowerCase(),
+          );
+          val = key ? data[key] : undefined;
+        }
+
+        if (val !== undefined) {
+          sheet.getRange(i + 1, j + 1).setValue(val);
         }
       });
 
@@ -498,7 +528,10 @@ function updateUser(doc, data, executorId) {
 function deleteUser(doc, id, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   const rows = sheet.getDataRange().getValues();
-  const idIndex = rows[0].indexOf("ID");
+  const headers = rows[0].map((h) => h.toString().trim());
+  const idIndex = headers.indexOf("ID");
+
+  if (idIndex === -1) throw new Error("ID column not found");
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] == id) {
@@ -520,7 +553,7 @@ function loginUser(doc, { username, password }) {
   if (!sheet) throw new Error("Users sheet not found");
 
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+  const headers = data[0].map((h) => h.toString().trim());
 
   const userIndex = headers.indexOf("Username");
   const passIndex = headers.indexOf("Password");
@@ -534,7 +567,7 @@ function loginUser(doc, { username, password }) {
     if (row[userIndex] == username && row[passIndex] == password) {
       let user = {};
       headers.forEach((header, j) => {
-        if (header !== "Password") {
+        if (header && header !== "Password") {
           user[header] = row[j];
         }
       });
