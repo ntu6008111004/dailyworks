@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
-import { Users, Activity, PlayCircle, AlertTriangle, ClipboardList, AlertCircle, CheckCircle, Filter } from 'lucide-react';
+import { Users, Filter, Flame, Clock, Coffee, ShieldAlert } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
 
@@ -18,6 +18,7 @@ export const MyTeam = () => {
 
   useEffect(() => {
     fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchInitialData = async () => {
@@ -86,48 +87,32 @@ export const MyTeam = () => {
         ...member,
         totalTasks: memberTasks.length,
         pendingTasks: pending,
-        lateTasks: late
+        lateTasks: late,
+        isHighWorkload: pending > 5,
+        hasOverdue: late > 0,
+        isAvailable: pending === 0
       };
     });
 
-    // Sort: Late -> Pending -> Total
+    // Sort: Late -> High Workload -> Pending -> Total
     members.sort((a, b) => {
       if (b.lateTasks !== a.lateTasks) return b.lateTasks - a.lateTasks;
+      if (b.isHighWorkload !== a.isHighWorkload) return (b.isHighWorkload ? 1 : 0) - (a.isHighWorkload ? 1 : 0);
       if (b.pendingTasks !== a.pendingTasks) return b.pendingTasks - a.pendingTasks;
       return b.totalTasks - a.totalTasks;
     });
 
-    // 3. Global Stats for cards
-    const globalStats = {
-      total: 0,
-      notStarted: 0,
-      waitingFix: 0,
-      waitingReview: 0,
-      late: 0,
-      completed: 0
+    // 3. Team Health Stats for cards (People-centric)
+    const teamStats = {
+      totalMembers: members.length,
+      highWorkloadCount: members.filter(m => m.isHighWorkload).length,
+      hasOverdueCount: members.filter(m => m.hasOverdue).length,
+      availableCount: members.filter(m => m.isAvailable).length,
+      totalPendingAcrossTeam: members.reduce((sum, m) => sum + m.pendingTasks, 0),
+      totalOverdueAcrossTeam: members.reduce((sum, m) => sum + m.lateTasks, 0)
     };
 
-    const taskIdsFound = new Set();
-    filteredUsers.forEach(member => {
-      const memberTasks = allTasks.filter(t => t.User === member.Name || t.UserId == member.ID);
-      memberTasks.forEach(t => {
-        if (!taskIdsFound.has(t.ID)) {
-          taskIdsFound.add(t.ID);
-          globalStats.total++;
-          if (t.Status === 'ยังไม่เริ่ม') globalStats.notStarted++;
-          if (t.Status === 'รอแก้ไข') globalStats.waitingFix++;
-          if (t.Status === 'รอตรวจ') globalStats.waitingReview++;
-          if (t.Status === 'เสร็จสิ้น') globalStats.completed++;
-          
-          if (t.Status !== 'เสร็จสิ้น' && t.DueDate) {
-            const dueDate = new Date(t.DueDate);
-            if (dueDate < today) globalStats.late++;
-          }
-        }
-      });
-    });
-
-    return { teamMembers: members, stats: globalStats };
+    return { teamMembers: members, stats: teamStats };
   }, [allUsers, allTasks, filterDepartment, isAdmin, userDept, today]);
 
   return (
@@ -137,10 +122,10 @@ export const MyTeam = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Users className="text-blue-600" /> บุคคลในทีม 
+            <Users className="text-blue-600" /> สถานะบุคคลในทีม 
             {!isAdmin && <span className="text-sm font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">({userDept})</span>}
           </h2>
-          <p className="text-slate-500">ภาพรวมสถานะงานของสมาชิกในทีม</p>
+          <p className="text-slate-500">ติดตามภาระงานและความคืบหน้าของลูกทีม</p>
         </div>
 
         {isAdmin && (
@@ -157,43 +142,35 @@ export const MyTeam = () => {
         )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* Team Health Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard 
-          icon={<Activity size={24} />} 
-          label="งานทั้งหมด" 
-          value={stats.total} 
+          icon={<Users size={24} />} 
+          label="สมาชิกทั้งหมด" 
+          value={stats.totalMembers} 
+          subtext={`งานรอทำรวม ${stats.totalPendingAcrossTeam} งาน`}
           color="blue" 
         />
         <StatCard 
-          icon={<PlayCircle size={24} />} 
-          label="ยังไม่เริ่ม" 
-          value={stats.notStarted} 
-          color="slate" 
-        />
-        <StatCard 
-          icon={<AlertTriangle size={24} />} 
-          label="รอแก้ไข" 
-          value={stats.waitingFix} 
+          icon={<Flame size={24} />} 
+          label="งานล้นมือ (> 5 งาน)" 
+          value={stats.highWorkloadCount} 
+          subtext="ต้องการความช่วยเหลือ"
           color="amber" 
         />
         <StatCard 
-          icon={<ClipboardList size={24} />} 
-          label="รอตรวจ" 
-          value={stats.waitingReview} 
-          color="purple" 
-        />
-        <StatCard 
-          icon={<AlertCircle size={24} />} 
-          label="เกินกำหนด" 
-          value={stats.late} 
+          icon={<ShieldAlert size={24} />} 
+          label="มีงานส่งช้า" 
+          value={stats.hasOverdueCount} 
+          subtext={`รวมทั้งหมด ${stats.totalOverdueAcrossTeam} งาน`}
           color="red" 
         />
         <StatCard 
-          icon={<CheckCircle size={24} />} 
-          label="เสร็จสิ้น" 
-          value={stats.completed} 
-          color="green" 
+          icon={<Coffee size={24} />} 
+          label="ว่าง / เคลียร์งานแล้ว" 
+          value={stats.availableCount} 
+          subtext="พร้อมรับงานใหม่"
+          color="emerald" 
         />
       </div>
 
@@ -203,9 +180,9 @@ export const MyTeam = () => {
             <thead className="bg-slate-50/80 text-xs uppercase text-slate-500 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 font-semibold whitespace-nowrap">พนักงาน</th>
+                <th className="px-6 py-4 font-semibold text-center whitespace-nowrap flex-1">สถานะภาระงาน</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">งานในมือ (รอทำ)</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">งานส่งช้า</th>
-                <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">งานรวมทั้งหมด</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -220,47 +197,67 @@ export const MyTeam = () => {
                 </tr>
               ) : (
                 teamMembers.map((member) => (
-                  <tr key={member.ID} className="hover:bg-blue-50/40 transition-colors group">
+                  <tr key={member.ID} className={`transition-colors group ${member.hasOverdue ? 'hover:bg-red-50/30' : member.isHighWorkload ? 'hover:bg-amber-50/30' : 'hover:bg-blue-50/20'}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        {member.ProfileImage ? (
-                          <img src={member.ProfileImage} alt={member.Name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl shrink-0 border-2 border-white shadow-sm">
-                            {(member.Name || member.Username || 'U').charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <div className="relative">
+                          {member.ProfileImage ? (
+                            <img src={member.ProfileImage} alt={member.Name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xl shrink-0 border-2 border-white shadow-sm">
+                              {(member.Name || member.Username || 'U').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          {/* Indicator Dot */}
+                          <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white shadow-sm ${member.hasOverdue ? 'bg-red-500' : member.isHighWorkload ? 'bg-amber-500' : member.isAvailable ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
+                        </div>
                         <div>
                           <div className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{member.Name}</div>
                           <div className="flex gap-2 mt-1">
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded uppercase tracking-wider">{member.Role}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100/80 text-slate-500 rounded uppercase tracking-wider">{member.Role}</span>
                             <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded tracking-wider">{member.Department}</span>
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="inline-flex flex-col items-center justify-center">
-                        <span className={`text-xl font-black ${member.pendingTasks > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        {member.hasOverdue && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200 whitespace-nowrap">
+                            <Clock size={12} /> มีงานส่งช้า
+                          </span>
+                        )}
+                        {member.isHighWorkload && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full border border-amber-200 whitespace-nowrap">
+                            <Flame size={12} /> งานล้นมือ
+                          </span>
+                        )}
+                        {member.isAvailable && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200 whitespace-nowrap">
+                            <Coffee size={12} /> ว่าง
+                          </span>
+                        )}
+                        {!member.hasOverdue && !member.isHighWorkload && !member.isAvailable && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full border border-blue-100 whitespace-nowrap">
+                            ปกติ
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-slate-50/50 border border-slate-100 group-hover:bg-white group-hover:shadow-sm transition-all">
+                        <span className={`text-2xl font-black ${member.pendingTasks > 5 ? 'text-amber-600' : 'text-slate-700'}`}>
                           {member.pendingTasks}
                         </span>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">รอทำ</span>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">รอทำ</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="inline-flex flex-col items-center justify-center">
-                        <span className={`text-xl font-black ${member.lateTasks > 0 ? 'text-red-600' : 'text-slate-300'}`}>
+                      <div className="inline-flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-slate-50/50 border border-slate-100 group-hover:bg-white group-hover:shadow-sm transition-all">
+                        <span className={`text-2xl font-black ${member.lateTasks > 0 ? 'text-red-600' : 'text-slate-300'}`}>
                           {member.lateTasks}
                         </span>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">ส่งช้า</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <div className="inline-flex flex-col items-center justify-center">
-                        <span className="text-xl font-black text-slate-700">
-                          {member.totalTasks}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">ทั้งหมด</span>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">ส่งช้า</span>
                       </div>
                     </td>
                   </tr>
@@ -274,33 +271,41 @@ export const MyTeam = () => {
   );
 };
 
-const StatCard = ({ icon, label, value, color }) => {
+const StatCard = ({ icon, label, value, subtext, color }) => {
   const bgColors = {
-    blue: "bg-blue-50/80 text-blue-600 border-blue-100",
-    slate: "bg-slate-50/80 text-slate-600 border-slate-100",
-    amber: "bg-amber-50/80 text-amber-600 border-amber-100",
-    purple: "bg-purple-50/80 text-purple-600 border-purple-100",
-    red: "bg-red-50/80 text-red-600 border-red-100",
-    green: "bg-green-50/80 text-green-600 border-green-100"
+    blue: "bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200",
+    amber: "bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200",
+    red: "bg-gradient-to-br from-red-50 to-red-100/50 border-red-200",
+    emerald: "bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200",
   };
 
   const textColors = {
     blue: "text-blue-700",
-    slate: "text-slate-700",
     amber: "text-amber-700",
-    purple: "text-purple-700",
     red: "text-red-700",
-    green: "text-green-700"
+    emerald: "text-emerald-700",
+  };
+
+  const iconBgColors = {
+    blue: "bg-blue-600 text-white shadow-blue-200",
+    amber: "bg-amber-500 text-white shadow-amber-200",
+    red: "bg-red-500 text-white shadow-red-200",
+    emerald: "bg-emerald-500 text-white shadow-emerald-200",
   };
 
   return (
-    <div className="glass p-4 rounded-2xl border border-white/40 flex items-center gap-4 shadow-sm hover:translate-y-[-2px] transition-all">
-      <div className={`p-3 rounded-xl border ${bgColors[color]}`}>
-        {icon}
+    <div className={`p-5 rounded-2xl border flex flex-col gap-3 shadow-sm hover:-translate-y-1 transition-transform cursor-default ${bgColors[color]}`}>
+      <div className="flex items-start justify-between">
+        <div className={`p-2.5 rounded-xl shadow-sm ${iconBgColors[color]}`}>
+          {icon}
+        </div>
+        <div className="text-right">
+          <p className={`text-3xl font-black leading-none mb-1 ${textColors[color]}`}>{value}</p>
+        </div>
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide truncate">{label}</p>
-        <p className={`text-2xl font-black leading-tight ${textColors[color]}`}>{value}</p>
+      <div>
+        <p className={`text-sm font-bold truncate ${textColors[color]}`}>{label}</p>
+        {subtext && <p className="text-[10px] font-medium text-slate-500/80 mt-1 uppercase tracking-wider truncate">{subtext}</p>}
       </div>
     </div>
   );
