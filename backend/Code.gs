@@ -581,6 +581,7 @@ function logActivity(doc, userId, action, details) {
 }
 
 function migrateUsersSheet(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = doc.getSheetByName(SHEET_USERS);
   if (!sheet) return { error: "Users sheet not found" };
 
@@ -658,6 +659,7 @@ function syncUserTasks(doc, userId, newName, newDept, oldName) {
 }
 
 function migrateTaskUserIds(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
   const tasksSheet = doc.getSheetByName(SHEET_TASKS);
   const usersSheet = doc.getSheetByName(SHEET_USERS);
   if (!tasksSheet || !usersSheet) return { error: "Sheets not found" };
