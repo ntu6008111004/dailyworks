@@ -78,5 +78,9 @@ export const apiService = {
 
   uploadImage(base64, filename, mimeType) {
     return this.request('uploadImage', { base64, filename, mimeType });
+  },
+
+  migrateUsersSheet() {
+    return this.request('MIGRATE_USERS_SHEET');
   }
 };

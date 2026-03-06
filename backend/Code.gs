@@ -406,7 +406,7 @@ function updateUser(doc, data, executorId) {
   if (idIndex === -1) throw new Error("ID column not found");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] === data.ID) {
+    if (rows[i][idIndex] == data.ID) {
       headers.forEach((header, j) => {
         if (data[header] !== undefined && header !== "ID") {
           sheet.getRange(i + 1, j + 1).setValue(data[header]);
@@ -430,7 +430,7 @@ function deleteUser(doc, id, executorId) {
   const idIndex = rows[0].indexOf("ID");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] === id) {
+    if (rows[i][idIndex] == id) {
       sheet.deleteRow(i + 1);
       logActivity(
         doc,
@@ -533,8 +533,10 @@ function migrateUsersSheet(doc) {
 
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   if (headers.indexOf("ProfileImage") === -1) {
+    const newColIndex = sheet.getLastColumn() + 1;
     sheet.insertColumnAfter(sheet.getLastColumn());
-    sheet.getRange(1, sheet.getLastColumn()).setValue("ProfileImage");
+    sheet.getRange(1, newColIndex).setValue("ProfileImage");
+    SpreadsheetApp.flush();
     return { message: "ProfileImage column added successfully" };
   }
   return { message: "ProfileImage column already exists" };

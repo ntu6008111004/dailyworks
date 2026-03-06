@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
 
 export const AdminUsers = () => {
+  const { user: currentUser, updateUserState } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +25,16 @@ export const AdminUsers = () => {
   });
 
   useEffect(() => {
-    fetchUsers();
+    const init = async () => {
+      try {
+        await apiService.migrateUsersSheet();
+        await fetchUsers();
+      } catch (err) {
+        console.error('Migration failed:', err);
+        fetchUsers();
+      }
+    };
+    init();
   }, []);
 
   const fetchUsers = async () => {
@@ -101,15 +112,18 @@ export const AdminUsers = () => {
       if (editingUser) {
         const updateData = { ...formData };
         if (!updateData.Password) {
-          delete updateData.Password; // Don't update pass if empty
-        } else {
-          updateData.Password = btoa(updateData.Password); // Encode password
+          delete updateData.Password; // Let apiService handle absence
         }
         await apiService.updateUser(updateData);
+        
+        // Sync current user state if they updated themselves
+        if (currentUser && currentUser.ID == updateData.ID) {
+          updateUserState(updateData);
+        }
+        
         toast.success('อัปเดตผู้ใช้เรียบร้อย');
       } else {
         const newData = { ...formData };
-        if (newData.Password) newData.Password = btoa(newData.Password); // Encode password
         await apiService.addUser(newData);
         toast.success('เพิ่มผู้ใช้ใหม่เรียบร้อย');
       }
