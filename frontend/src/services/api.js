@@ -1,6 +1,12 @@
 const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
 
 export const apiService = {
+  executorId: 'System',
+
+  setExecutor(id) {
+    this.executorId = id || 'System';
+  },
+
   async request(action, data = {}) {
     try {
       const response = await fetch(GAS_URL, {
@@ -8,7 +14,11 @@ export const apiService = {
         headers: {
           'Content-Type': 'text/plain', // Avoid CORS preflight options
         },
-        body: JSON.stringify({ action, data }),
+        body: JSON.stringify({ 
+          action, 
+          data, 
+          executorId: this.executorId 
+        }),
       });
       
       const result = await response.json();

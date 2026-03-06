@@ -13,10 +13,19 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  React.useEffect(() => {
+    if (user) {
+      apiService.setExecutor(user.Name || user.name || user.Username);
+    } else {
+      apiService.setExecutor('System');
+    }
+  }, [user]);
+
   const login = async (username, password) => {
     setLoading(true);
     try {
       const userData = await apiService.login(username, password);
+      // setExecutor will be handled by useEffect
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
       return userData;

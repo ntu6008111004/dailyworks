@@ -115,11 +115,13 @@ function handleResponse(e) {
     const doc = SpreadsheetApp.openById(SCRIPT_PROP.getProperty("key"));
     let action = e.parameter.action;
     let data;
+    let executorId = "System";
 
     if (e.postData && e.postData.contents) {
       const postData = JSON.parse(e.postData.contents);
       action = postData.action || action;
       data = postData.data;
+      executorId = postData.executorId || executorId;
     }
 
     let result = {};
@@ -132,13 +134,13 @@ function handleResponse(e) {
         result = getTasks(doc);
         break;
       case "addTask":
-        result = addTask(doc, data);
+        result = addTask(doc, data, executorId);
         break;
       case "updateTask":
-        result = updateTask(doc, data);
+        result = updateTask(doc, data, executorId);
         break;
       case "deleteTask":
-        result = deleteTask(doc, data.id);
+        result = deleteTask(doc, data.id, executorId);
         break;
       case "uploadImage":
         result = uploadImage(data.base64, data.filename, data.mimeType);
@@ -147,13 +149,13 @@ function handleResponse(e) {
         result = getUsers(doc);
         break;
       case "addUser":
-        result = addUser(doc, data);
+        result = addUser(doc, data, executorId);
         break;
       case "updateUser":
-        result = updateUser(doc, data);
+        result = updateUser(doc, data, executorId);
         break;
       case "deleteUser":
-        result = deleteUser(doc, data.id);
+        result = deleteUser(doc, data.id, executorId);
         break;
       default:
         throw new Error("Invalid action");
@@ -192,7 +194,7 @@ function getTasks(doc) {
   });
 }
 
-function addTask(doc, data) {
+function addTask(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = [];
@@ -212,11 +214,11 @@ function addTask(doc, data) {
   sheet.appendRow(newRow);
   checkAndExpandSheet(sheet);
 
-  logActivity(doc, data.StaffID || "System", "ADD_TASK", `Task created`);
+  logActivity(doc, executorId || "System", "ADD_TASK", `Task created`);
   return { message: "Task added successfully" };
 }
 
-function updateTask(doc, data) {
+function updateTask(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
@@ -238,7 +240,7 @@ function updateTask(doc, data) {
       });
       logActivity(
         doc,
-        data.StaffID || "System",
+        executorId || "System",
         "UPDATE_TASK",
         `Task ${data.ID} updated`,
       );
@@ -248,7 +250,7 @@ function updateTask(doc, data) {
   throw new Error("Task not found");
 }
 
-function deleteTask(doc, id) {
+function deleteTask(doc, id, executorId) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   const rows = sheet.getDataRange().getValues();
   const idIndex = rows[0].indexOf("ID");
@@ -256,7 +258,12 @@ function deleteTask(doc, id) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] === id) {
       sheet.deleteRow(i + 1);
-      logActivity(doc, "System", "DELETE_TASK", `Task ${id} deleted`);
+      logActivity(
+        doc,
+        executorId || "System",
+        "DELETE_TASK",
+        `Task ${id} deleted`,
+      );
       return { message: "Task deleted successfully" };
     }
   }
@@ -278,7 +285,7 @@ function getUsers(doc) {
   });
 }
 
-function addUser(doc, data) {
+function addUser(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = [];
@@ -296,14 +303,14 @@ function addUser(doc, data) {
 
   logActivity(
     doc,
-    data.StaffID || "System",
+    executorId || "System",
     "ADD_USER",
     `User created: ${data.Username}`,
   );
   return { message: "User added successfully" };
 }
 
-function updateUser(doc, data) {
+function updateUser(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   const rows = sheet.getDataRange().getValues();
   const headers = rows[0];
@@ -320,7 +327,7 @@ function updateUser(doc, data) {
       });
       logActivity(
         doc,
-        data.StaffID || "System",
+        executorId || "System",
         "UPDATE_USER",
         `User ${data.ID} updated`,
       );
@@ -330,7 +337,7 @@ function updateUser(doc, data) {
   throw new Error("User not found");
 }
 
-function deleteUser(doc, id) {
+function deleteUser(doc, id, executorId) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   const rows = sheet.getDataRange().getValues();
   const idIndex = rows[0].indexOf("ID");
@@ -338,7 +345,12 @@ function deleteUser(doc, id) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] === id) {
       sheet.deleteRow(i + 1);
-      logActivity(doc, "System", "DELETE_USER", `User ${id} deleted`);
+      logActivity(
+        doc,
+        executorId || "System",
+        "DELETE_USER",
+        `User ${id} deleted`,
+      );
       return { message: "User deleted successfully" };
     }
   }
