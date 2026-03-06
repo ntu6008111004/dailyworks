@@ -2,9 +2,16 @@ const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
 
 export const apiService = {
   executorId: 'System',
+  userId: '',
 
   setExecutor(id) {
     this.executorId = id || 'System';
+  },
+
+  // New method: set both IDs separately
+  setUserSession(userId, displayName) {
+    this.userId = String(userId || '');
+    this.executorId = String(userId || displayName || 'System');
   },
 
   async request(action, data = {}) {
@@ -47,11 +54,17 @@ export const apiService = {
   },
 
   addTask(task) {
-    return this.request('addTask', task);
+    // Always inject UserID from session if not provided in task
+    const data = { ...task };
+    if (!data.UserID && this.userId) data.UserID = this.userId;
+    return this.request('addTask', data);
   },
 
   updateTask(task) {
-    return this.request('updateTask', task);
+    // Always inject UserID from session if not provided in task
+    const data = { ...task };
+    if (!data.UserID && this.userId) data.UserID = this.userId;
+    return this.request('updateTask', data);
   },
 
   deleteTask(id) {

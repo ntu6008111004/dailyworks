@@ -330,7 +330,7 @@ function addTask(doc, data, executorId) {
     } else if (header === "CreatedAt") {
       newRow.push(new Date());
     } else {
-      // Try exact match, then case-insensitive, then remove whitespace/underscores
+      // Try exact match, then case-insensitive, then normalized (no special chars)
       let val = data[header];
       if (val === undefined) {
         const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -341,12 +341,7 @@ function addTask(doc, data, executorId) {
         val = key ? data[key] : "";
       }
 
-      // Special fallback for UserID if still empty
-      if (header.toLowerCase() === "userid" && (!val || val === "")) {
-        val = String(data.UserID || data.userId || executorId || "");
-      }
-
-      newRow.push(val);
+      newRow.push(val === undefined ? "" : val);
     }
   });
 

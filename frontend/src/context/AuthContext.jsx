@@ -65,9 +65,13 @@ export const AuthProvider = ({ children }) => {
 
   React.useEffect(() => {
     if (user) {
-      apiService.setExecutor(user.ID || user.id);
+      // Pass user ID + name so backend gets proper executorId (ID) not name
+      apiService.setUserSession(
+        user.ID || user.id,
+        user.Name || user.name || user.Username
+      );
     } else {
-      apiService.setExecutor('System');
+      apiService.setUserSession(null, 'System');
     }
   }, [user]);
 
