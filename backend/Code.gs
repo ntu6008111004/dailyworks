@@ -316,7 +316,11 @@ function updateTask(doc, data, executorId) {
       headers.forEach((header, j) => {
         if (header === "CustomFields" && data[header]) {
           sheet.getRange(i + 1, j + 1).setValue(JSON.stringify(data[header]));
-        } else if (data[header] !== undefined && header !== "ID") {
+        } else if (
+          data[header] !== undefined &&
+          header !== "ID" &&
+          header !== "CreatedAt"
+        ) {
           sheet.getRange(i + 1, j + 1).setValue(data[header]);
         }
         if (header === "UpdatedAt") {
