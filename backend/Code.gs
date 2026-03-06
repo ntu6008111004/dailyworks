@@ -197,7 +197,19 @@ function getTasks(doc) {
   const result = data.slice(1).map((row) => {
     let task = {};
     headers.forEach((header, i) => {
-      task[header] = row[i];
+      let val = row[i];
+      if (val instanceof Date) {
+        if (header === "CreatedAt" || header === "UpdatedAt") {
+          val = val.toISOString();
+        } else {
+          val = Utilities.formatDate(
+            val,
+            Session.getScriptTimeZone(),
+            "yyyy-MM-dd",
+          );
+        }
+      }
+      task[header] = val;
     });
     // Parse JSON custom fields if exist
     if (task.CustomFields) {
@@ -249,7 +261,22 @@ function getTasksSummary(doc) {
     let task = {};
     summaryHeaders.forEach((header, i) => {
       const colIdx = indices[i];
-      task[header] = colIdx !== -1 ? row[colIdx] : "";
+      let val = colIdx !== -1 ? row[colIdx] : "";
+
+      // Prevent timezone shift issue by formatting Date objects to explicit strings
+      if (val instanceof Date) {
+        if (header === "CreatedAt" || header === "UpdatedAt") {
+          val = val.toISOString(); // keep full time for timestamps
+        } else {
+          val = Utilities.formatDate(
+            val,
+            Session.getScriptTimeZone(),
+            "yyyy-MM-dd",
+          );
+        }
+      }
+
+      task[header] = val;
     });
 
     // Add lightweight indicator for images
@@ -411,11 +438,31 @@ function updateUser(doc, data, executorId) {
 
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIndex] == data.ID) {
+      const oldName = rows[i][headers.indexOf("Name")];
+      const oldDept = rows[i][headers.indexOf("Department")];
+      let nameChanged = data.Name && data.Name !== oldName;
+      let deptChanged = data.Department && data.Department !== oldDept;
+
       headers.forEach((header, j) => {
         if (data[header] !== undefined && header !== "ID") {
           sheet.getRange(i + 1, j + 1).setValue(data[header]);
         }
       });
+
+      if (nameChanged || deptChanged) {
+        try {
+          syncUserTasks(
+            doc,
+            data.ID,
+            data.Name || oldName,
+            data.Department || oldDept,
+            oldName,
+          );
+        } catch (e) {
+          console.error("Could not sync tasks", e);
+        }
+      }
+
       logActivity(
         doc,
         executorId || "System",

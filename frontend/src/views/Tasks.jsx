@@ -78,7 +78,11 @@ export const Tasks = () => {
         await apiService.addTask({ 
           ...taskData, 
           StaffName: user?.Name || user?.name || 'Unknown',
-          Department: user?.Department || 'Unknown' 
+          Department: user?.Department || 'Unknown',
+          CustomFields: {
+            ...taskData.CustomFields,
+            StaffID: user?.ID || user?.id
+          }
         });
         toast.success('เพิ่มงานเรียบร้อย');
       }
