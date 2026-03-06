@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
 export const CustomSelect = ({ 
@@ -12,7 +12,6 @@ export const CustomSelect = ({
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef(null);
-  const listRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -24,19 +23,17 @@ export const CustomSelect = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useLayoutEffect(() => {
-    if (isOpen && containerRef.current) {
+  const handleToggle = () => {
+    if (!isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
       
       // If less than 250px below and more space above, drop up
-      const shouldDropUp = spaceBelow < 250 && spaceAbove > spaceBelow;
-      if (shouldDropUp !== dropUp) {
-        setDropUp(shouldDropUp);
-      }
+      setDropUp(spaceBelow < 250 && spaceAbove > spaceBelow);
     }
-  }, [isOpen, dropUp]);
+    setIsOpen(!isOpen);
+  };
 
   const selectedOption = options.find(opt => 
     typeof opt === 'object' ? opt.value === value : opt === value
@@ -56,7 +53,7 @@ export const CustomSelect = ({
       {label && <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         className={`w-full flex items-center justify-between px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm transition-all outline-none text-left
           ${isOpen ? 'ring-2 ring-blue-500 border-blue-500 shadow-sm' : 'hover:border-slate-300 hover:bg-slate-50'}
         `}
@@ -72,7 +69,6 @@ export const CustomSelect = ({
 
       {isOpen && (
         <div 
-          ref={listRef}
           className={`absolute left-0 right-0 z-[100] min-w-[200px] glass overflow-hidden rounded-2xl p-1 animate-in fade-in zoom-in-95 duration-100
             ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}
           `}
