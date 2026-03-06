@@ -9,6 +9,7 @@ import { LoadingModal } from '../components/LoadingModal';
 import { DailySummaryModal } from '../components/DailySummaryModal';
 import { MonthlySummaryModal } from '../components/MonthlySummaryModal';
 import { CustomSelect } from '../components/CustomSelect';
+import { TaskModal } from '../components/TaskModal';
 
 export const Tasks = () => {
   const { user } = useAuth();
