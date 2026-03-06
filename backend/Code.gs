@@ -193,11 +193,12 @@ function getTasks(doc) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+  const headers = data[0].map((h) => h.toString().trim()); // Trim headers here
 
   const result = data.slice(1).map((row) => {
     let task = {};
     headers.forEach((header, i) => {
+      if (!header) return; // Skip empty headers
       let val = row[i];
       if (val instanceof Date) {
         if (header === "CreatedAt" || header === "UpdatedAt") {
@@ -237,7 +238,7 @@ function getTasksSummary(doc) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
+  const headers = data[0].map((h) => h.toString().trim()); // Trim headers here
 
   // Only keep essential columns for summary
   const summaryHeaders = [
@@ -309,10 +310,19 @@ function getTaskById(doc, id) {
 
 function addTask(doc, data, executorId) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map((h) => h.toString().trim()); // Trim headers
   const newRow = [];
 
   headers.forEach((header) => {
+    if (!header) {
+      // Handle potential empty header cells
+      newRow.push("");
+      return;
+    }
+
     if (header === "ID") {
       newRow.push(Utilities.getUuid());
     } else if (header === "CustomFields") {
@@ -320,7 +330,15 @@ function addTask(doc, data, executorId) {
     } else if (header === "CreatedAt") {
       newRow.push(new Date());
     } else {
-      newRow.push(data[header] || "");
+      // Try exact match, then case-insensitive
+      let val = data[header];
+      if (val === undefined) {
+        const key = Object.keys(data).find(
+          (k) => k.toLowerCase() === header.toLowerCase(),
+        );
+        val = key ? data[key] : "";
+      }
+      newRow.push(val);
     }
   });
 

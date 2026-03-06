@@ -78,6 +78,8 @@ export const Tasks = () => {
         Department: user?.Department || 'Unknown'
       };
 
+      console.log('Sending Task Payload:', payload);
+
       if (editingTask) {
         await apiService.updateTask(payload);
         toast.success('อัปเดตงานเรียบร้อย');
