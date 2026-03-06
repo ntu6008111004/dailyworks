@@ -182,7 +182,13 @@ export const Timeline = () => {
                       const activeEndIdx = endIdx === -1 ? timelineDays.length - 1 : endIdx;
                       const span = activeEndIdx - activeStartIdx + 1;
 
-                      const colorClass = statusColors[task.Status] || statusColors['ยังไม่เริ่ม'];
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const isOverdue = task.end < today && task.Status !== 'เสร็จสิ้น';
+                      
+                      const colorClass = isOverdue 
+                        ? 'bg-red-100 border-red-400 text-red-800' 
+                        : (statusColors[task.Status] || statusColors['ยังไม่เริ่ม']);
 
                       return (
                         <div 
@@ -193,8 +199,8 @@ export const Timeline = () => {
                             width: '100%'
                           }}
                         >
-                          <div className={`h-full rounded-md border text-[10px] sm:text-xs px-2 flex items-center font-medium shadow-sm transition-all ${colorClass} truncate overflow-hidden whitespace-nowrap`} title={`${task.Detail} (${task.Status})`}>
-                            {task.Status} ({span} วัน)
+                          <div className={`h-full rounded-md border text-[10px] sm:text-xs px-2 flex items-center font-medium shadow-sm transition-all ${colorClass} truncate overflow-hidden whitespace-nowrap`} title={`${task.Detail} (${task.Status}${isOverdue ? ' - ล่าช้า' : ''})`}>
+                            {task.Status}{isOverdue && ' (ล่าช้า)'} ({span} วัน)
                           </div>
                         </div>
                       );

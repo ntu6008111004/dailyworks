@@ -185,7 +185,7 @@ export const Tasks = () => {
         </div>
       </div>
 
-      <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-end">
+      <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-end relative z-20">
         <div className="flex-1 w-full relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
@@ -314,7 +314,7 @@ export const Tasks = () => {
                 )}
               </div>
 
-              <div className="flex md:flex-col gap-2 justify-end opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex flex-row md:flex-col gap-2 justify-end mt-4 md:mt-0">
                 <button
                   onClick={() => handleEditTask(task)}
                   className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
