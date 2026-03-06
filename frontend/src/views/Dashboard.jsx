@@ -104,73 +104,79 @@ export const Dashboard = () => {
           <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.Name || user?.name || 'User'}</p>
         </div>
         
-        <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
-          <span className="text-sm font-medium text-slate-500 hidden sm:block">ปี:</span>
-          <CustomSelect
-            value={filterYear}
-            onChange={(val) => {
-              setFilterYear(val);
-              setStartDate('');
-              setEndDate('');
-            }}
-            options={['All', ...uniqueYears].map(y => ({ label: y === 'All' ? 'ทุกปี' : y, value: y }))}
-            className="w-full sm:w-28"
-          />
-          <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
-          <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
-          <input 
-            type="date" 
-            value={startDate}
-            onChange={(e) => { setStartDate(e.target.value); setFilterYear('All'); }}
-            className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-          />
-          <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
-          <input 
-            type="date" 
-            value={endDate}
-            onChange={(e) => { setEndDate(e.target.value); setFilterYear('All'); }}
-            className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-          />
-          
-          {(canSeeAll || userRole === 'Head') && (
-            <>
-              <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
-              <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรองพนักงาน:</span>
-              
-              {canSeeAll && (
+        <div className="flex flex-col gap-3 bg-white/50 p-3 rounded-xl border border-slate-200/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ปี:</span>
+            <CustomSelect
+              value={filterYear}
+              onChange={(val) => {
+                setFilterYear(val);
+                setStartDate('');
+                setEndDate('');
+              }}
+              options={['All', ...uniqueYears].map(y => ({ label: y === 'All' ? 'ทุกปี' : y, value: y }))}
+              className="w-full sm:w-28"
+            />
+            <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setFilterYear('All'); }}
+              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            />
+            <span className="text-sm font-medium text-slate-500 hidden sm:block">ถึง:</span>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setFilterYear('All'); }}
+              className="w-full sm:w-32 px-2 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
+            />
+            
+            {(canSeeAll || userRole === 'Head') && canSeeAll && (
+              <>
+                <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
+                <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรองแผนก:</span>
                 <CustomSelect
                   value={filterDepartment}
                   onChange={(val) => { setFilterDepartment(val); setFilterUser('All'); }}
                   options={['All', ...uniqueDepartments].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
                   className="w-36"
                 />
-              )}
-              
-              <CustomSelect
-                value={filterUser}
-                onChange={(val) => setFilterUser(val)}
-                options={['All', ...uniqueUsers].map(u => ({ label: u === 'All' ? 'พนง.ทั้งหมด' : u, value: u }))}
-                className="w-40"
-              />
-            </>
-          )}
+              </>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 flex-wrap">
+            {(canSeeAll || userRole === 'Head') && (
+              <>
+                <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรองพนักงาน:</span>
+                <CustomSelect
+                  value={filterUser}
+                  onChange={(val) => setFilterUser(val)}
+                  options={['All', ...uniqueUsers].map(u => ({ label: u === 'All' ? 'พนง.ทั้งหมด' : u, value: u }))}
+                  className="w-40"
+                />
+              </>
+            )}
 
-          {(filterYear !== 'All' || startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All') && (
-            <button
-              onClick={() => {
-                setFilterYear('All');
-                setStartDate('');
-                setEndDate('');
-                setFilterDepartment('All');
-                setFilterUser('All');
-              }}
-              className="flex items-center gap-1 px-2 py-1.5 ml-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
-              title="ล้างตัวกรอง"
-            >
-              <X size={14} />
-              <span className="hidden sm:inline">ล้าง</span>
-            </button>
-          )}
+            {(filterYear !== 'All' || startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All') && (
+              <button
+                onClick={() => {
+                  setFilterYear('All');
+                  setStartDate('');
+                  setEndDate('');
+                  setFilterDepartment('All');
+                  setFilterUser('All');
+                }}
+                className="flex items-center gap-1 px-3 py-2 ml-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
+                title="ล้างตัวกรอง"
+              >
+                <X size={14} />
+                <span className="hidden sm:inline">ล้างตัวกรองทั้งหมด</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
