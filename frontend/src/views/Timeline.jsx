@@ -239,7 +239,22 @@ export const Timeline = () => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">สถานะ</label>
-                  <div className="mt-1"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[selectedTask.Status] || 'bg-slate-100 text-slate-700'}`}>{selectedTask.Status}</span></div>
+                  <div className="mt-1">
+                    {(() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const isOverdue = selectedTask.end < today && selectedTask.Status !== 'เสร็จสิ้น';
+                      const colorClass = isOverdue 
+                        ? 'bg-red-100 text-red-800 border border-red-200' 
+                        : (statusColors[selectedTask.Status] || 'bg-slate-100 text-slate-700');
+                      
+                      return (
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
+                          {selectedTask.Status}{isOverdue ? ' (ล่าช้า)' : ''}
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ช่วงเวลา</label>
