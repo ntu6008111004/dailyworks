@@ -78,11 +78,6 @@ export const Tasks = () => {
         Department: user?.Department || 'Unknown'
       };
 
-      console.log('--- TASK SUBMISSION DEBUG ---');
-      console.log('Current User from Auth:', user);
-      console.log('Final Payload being sent:', payload);
-      console.log('-----------------------------');
-
       if (editingTask) {
         await apiService.updateTask(payload);
         toast.success('อัปเดตงานเรียบร้อย');
