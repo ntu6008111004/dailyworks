@@ -73,12 +73,15 @@ export const Tasks = () => {
     try {
       const payload = {
         ...taskData,
-        UserID: user?.ID || user?.id,
+        UserID: String(user?.ID || user?.id || ''),
         StaffName: user?.Name || user?.name || 'Unknown',
         Department: user?.Department || 'Unknown'
       };
 
-      console.log('Sending Task Payload:', payload);
+      console.log('--- TASK SUBMISSION DEBUG ---');
+      console.log('Current User from Auth:', user);
+      console.log('Final Payload being sent:', payload);
+      console.log('-----------------------------');
 
       if (editingTask) {
         await apiService.updateTask(payload);

@@ -330,14 +330,22 @@ function addTask(doc, data, executorId) {
     } else if (header === "CreatedAt") {
       newRow.push(new Date());
     } else {
-      // Try exact match, then case-insensitive
+      // Try exact match, then case-insensitive, then remove whitespace/underscores
       let val = data[header];
       if (val === undefined) {
-        const key = Object.keys(data).find(
-          (k) => k.toLowerCase() === header.toLowerCase(),
-        );
+        const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const key = Object.keys(data).find((k) => {
+          const normalizedKey = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return normalizedKey === normalizedHeader;
+        });
         val = key ? data[key] : "";
       }
+
+      // Special fallback for UserID if still empty
+      if (header.toLowerCase() === "userid" && (!val || val === "")) {
+        val = String(data.UserID || data.userId || executorId || "");
+      }
+
       newRow.push(val);
     }
   });
