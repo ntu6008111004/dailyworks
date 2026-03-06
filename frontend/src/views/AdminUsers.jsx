@@ -4,6 +4,7 @@ import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingModal } from '../components/LoadingModal';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -180,12 +181,16 @@ export const AdminUsers = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">สิทธิ์ (Role)</label>
-                  <select value={formData.Role} onChange={e => setFormData({...formData, Role: e.target.value})} className="w-full px-4 py-2 border rounded-xl bg-white">
-                    <option value="Staff">พนักงาน (Staff)</option>
-                    <option value="Head">หัวหน้าแผนก (Head)</option>
-                    <option value="Admin">ผู้ดูแลระบบ (Admin)</option>
-                  </select>
+                  <CustomSelect
+                    label="สิทธิ์ (Role)"
+                    value={formData.Role}
+                    onChange={val => setFormData({...formData, Role: val})}
+                    options={[
+                      { label: 'พนักงาน (Staff)', value: 'Staff' },
+                      { label: 'หัวหน้าแผนก (Head)', value: 'Head' },
+                      { label: 'ผู้ดูแลระบบ (Admin)', value: 'Admin' }
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">แผนก <span className="text-red-500">*</span></label>

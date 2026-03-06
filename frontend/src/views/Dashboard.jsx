@@ -5,6 +5,7 @@ import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
 import { StatusTasksModal } from '../components/StatusTasksModal';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Dashboard = () => {
   const { user } = useAuth();
@@ -105,20 +106,16 @@ export const Dashboard = () => {
         
         <div className="flex items-center gap-2 flex-wrap bg-white/50 p-2 rounded-xl border border-slate-200/60">
           <span className="text-sm font-medium text-slate-500 hidden sm:block">ปี:</span>
-          <select
+          <CustomSelect
             value={filterYear}
-            onChange={(e) => {
-              setFilterYear(e.target.value);
+            onChange={(val) => {
+              setFilterYear(val);
               setStartDate('');
               setEndDate('');
             }}
-            className="w-full sm:w-24 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-          >
-            <option value="All">ทุกปี</option>
-            {uniqueYears.map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+            options={['All', ...uniqueYears].map(y => ({ label: y === 'All' ? 'ทุกปี' : y, value: y }))}
+            className="w-full sm:w-28"
+          />
           <div className="w-px h-6 bg-slate-300 mx-1 hidden sm:block"></div>
           <span className="text-sm font-medium text-slate-500 hidden sm:block">ตั้งแต่วันที่:</span>
           <input 
@@ -141,28 +138,20 @@ export const Dashboard = () => {
               <span className="text-sm font-medium text-slate-500 hidden sm:block">ตัวกรองพนักงาน:</span>
               
               {canSeeAll && (
-                <select
+                <CustomSelect
                   value={filterDepartment}
-                  onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
-                  className="w-32 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-                >
-                  <option value="All">ทุกแผนก</option>
-                  {uniqueDepartments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
+                  onChange={(val) => { setFilterDepartment(val); setFilterUser('All'); }}
+                  options={['All', ...uniqueDepartments].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
+                  className="w-36"
+                />
               )}
               
-              <select
+              <CustomSelect
                 value={filterUser}
-                onChange={(e) => setFilterUser(e.target.value)}
-                className="w-36 px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm outline-none"
-              >
-                <option value="All">พนง.ทั้งหมด</option>
-                {uniqueUsers.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
+                onChange={(val) => setFilterUser(val)}
+                options={['All', ...uniqueUsers].map(u => ({ label: u === 'All' ? 'พนง.ทั้งหมด' : u, value: u }))}
+                className="w-40"
+              />
             </>
           )}
 

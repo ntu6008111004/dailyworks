@@ -3,6 +3,7 @@ import { X, Plus, Trash2, Link as LinkIcon, Image as ImageIcon, UploadCloud } fr
 import toast from 'react-hot-toast';
 import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
+import { CustomSelect } from './CustomSelect';
 
 export const TaskModal = ({ task, onClose, onSave }) => {
   const [formData, setFormData] = useState(() => ({
@@ -217,32 +218,24 @@ export const TaskModal = ({ task, onClose, onSave }) => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">สถานะ</label>
-                  <select
-                    value={formData.Status}
-                    onChange={e => setFormData({ ...formData, Status: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white"
-                  >
-                    <option value="ยังไม่เริ่ม">ยังไม่เริ่ม</option>
-                    <option value="กำลังทำ">กำลังทำ</option>
-                    <option value="รอตรวจ">รอตรวจ</option>
-                    <option value="รอแก้ไข">รอแก้ไข</option>
-                    <option value="เสร็จสิ้น">เสร็จสิ้น</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">ความสำคัญ</label>
-                  <select
-                    value={formData.Priority}
-                    onChange={e => setFormData({ ...formData, Priority: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white"
-                  >
-                    <option value="ต่ำ">ต่ำ</option>
-                    <option value="ปานกลาง">ปานกลาง</option>
-                    <option value="สูง">สูง</option>
-                  </select>
-                </div>
+                <CustomSelect
+                  label="สถานะ"
+                  value={formData.Status}
+                  onChange={val => setFormData({ ...formData, Status: val })}
+                  options={[
+                    'ยังไม่เริ่ม',
+                    'กำลังทำ',
+                    'รอตรวจ',
+                    'รอแก้ไข',
+                    'เสร็จสิ้น'
+                  ]}
+                />
+                <CustomSelect
+                  label="ความสำคัญ"
+                  value={formData.Priority}
+                  onChange={val => setFormData({ ...formData, Priority: val })}
+                  options={['ต่ำ', 'ปานกลาง', 'สูง']}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -8,6 +8,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { LoadingModal } from '../components/LoadingModal';
 import { DailySummaryModal } from '../components/DailySummaryModal';
 import { MonthlySummaryModal } from '../components/MonthlySummaryModal';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Tasks = () => {
   const { user } = useAuth();
@@ -218,48 +219,29 @@ export const Tasks = () => {
           {(canSeeAll || userRole === 'Head') && (
             <div className="flex items-center gap-2 flex-wrap">
               {canSeeAll && (
-                <div className="w-full sm:w-32 relative">
-                  <select
-                    value={filterDepartment}
-                    onChange={(e) => { setFilterDepartment(e.target.value); setFilterUser('All'); }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
-                  >
-                    <option value="All">ทุกแผนก</option>
-                    {uniqueDepartments.map(dept => (
-                      <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                  </select>
-                </div>
+                <CustomSelect
+                  value={filterDepartment}
+                  onChange={(val) => { setFilterDepartment(val); setFilterUser('All'); }}
+                  options={['All', ...uniqueDepartments].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
+                  className="w-full sm:w-36"
+                />
               )}
               
-              <div className="w-full sm:w-36 relative">
-                <select
-                  value={filterUser}
-                  onChange={(e) => setFilterUser(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
-                >
-                  <option value="All">พนง.ทั้งหมด</option>
-                  {uniqueUsers.map(name => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </div>
+              <CustomSelect
+                value={filterUser}
+                onChange={(val) => setFilterUser(val)}
+                options={['All', ...uniqueUsers].map(u => ({ label: u === 'All' ? 'พนง.ทั้งหมด' : u, value: u }))}
+                className="w-full sm:w-40"
+              />
             </div>
           )}
 
-          <div className="w-full sm:w-48 relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full pl-10 pr-8 py-2 border border-slate-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white cursor-pointer text-sm"
-            >
-              <option value="All">งานทั้งหมด</option>
-              {Object.keys(statusColors).map(status => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            value={filterStatus}
+            onChange={(val) => setFilterStatus(val)}
+            options={['All', ...Object.keys(statusColors)].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
+            className="w-full sm:w-48"
+          />
 
           {(searchQuery || startDate || endDate || filterDepartment !== 'All' || filterUser !== 'All' || filterStatus !== 'All') && (
             <button
