@@ -279,8 +279,15 @@ export const Tasks = () => {
             <div key={task.ID} className="glass p-5 rounded-2xl border border-slate-200/60 hover:shadow-md transition-shadow group flex flex-col md:flex-row gap-6">
               <div className="flex-1 space-y-3">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-lg font-bold text-slate-900">{task.Detail}</h3>
-                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
+                  <div className="flex flex-col gap-1.5 pr-4">
+                    {task.CustomFields?.Project && (
+                      <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md self-start border border-indigo-100">
+                        โปรเจค: {task.CustomFields.Project}
+                      </span>
+                    )}
+                    <h3 className="text-lg font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
+                  </div>
+                  <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                     {task.Status}
                   </span>
                 </div>
@@ -297,7 +304,7 @@ export const Tasks = () => {
 
                 {task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
                   <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
-                    {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images').map(([key, value]) => (
+                    {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images' && k !== 'Project').map(([key, value]) => (
                       <div key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-blue-800">
                         <span className="font-semibold">{key}:</span> {value}
                       </div>
