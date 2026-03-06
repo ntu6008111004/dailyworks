@@ -684,7 +684,8 @@ function migrateTaskUserIds(doc) {
 
   const taskHeaders = tasksSheet
     .getRange(1, 1, 1, tasksSheet.getLastColumn())
-    .getValues()[0];
+    .getValues()[0]
+    .map((h) => h.toString().trim());
   let userIdColIdx = taskHeaders.indexOf("UserID");
 
   if (userIdColIdx === -1) {
