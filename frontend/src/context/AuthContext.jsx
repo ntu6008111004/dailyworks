@@ -11,21 +11,24 @@ const STORAGE_KEY = 'dw_session';
 const SECRET = 'DWS!@#2025';
 
 function obfuscate(str) {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    result += String.fromCharCode(str.charCodeAt(i) ^ SECRET.charCodeAt(i % SECRET.length));
-  }
-  return btoa(result);
+  // Use encodeURIComponent to handle Unicode (Thai, etc.), then btoa
+  const encoded = btoa(unescape(encodeURIComponent(str)));
+  // Rotate characters by key length as lightweight obfuscation
+  const keyLen = SECRET.length;
+  return encoded.split('').map((c, i) => {
+    const code = c.charCodeAt(0) ^ (SECRET.charCodeAt(i % keyLen) & 0x1F);
+    return String.fromCharCode(code);
+  }).join('');
 }
 
 function deobfuscate(encoded) {
   try {
-    const str = atob(encoded);
-    let result = '';
-    for (let i = 0; i < str.length; i++) {
-      result += String.fromCharCode(str.charCodeAt(i) ^ SECRET.charCodeAt(i % SECRET.length));
-    }
-    return result;
+    const keyLen = SECRET.length;
+    const reversed = encoded.split('').map((c, i) => {
+      const code = c.charCodeAt(0) ^ (SECRET.charCodeAt(i % keyLen) & 0x1F);
+      return String.fromCharCode(code);
+    }).join('');
+    return decodeURIComponent(escape(atob(reversed)));
   } catch {
     return null;
   }
