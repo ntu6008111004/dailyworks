@@ -29,7 +29,7 @@ export const AdminUsers = () => {
     try {
       const data = await apiService.getUsers();
       setUsers(data);
-    } catch (error) {
+    } catch {
       toast.error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
     } finally {
       setLoading(false);
@@ -60,11 +60,17 @@ export const AdminUsers = () => {
     try {
       if (editingUser) {
         const updateData = { ...formData };
-        if (!updateData.Password) delete updateData.Password; // Don't update pass if empty
+        if (!updateData.Password) {
+          delete updateData.Password; // Don't update pass if empty
+        } else {
+          updateData.Password = btoa(updateData.Password); // Encode password
+        }
         await apiService.updateUser(updateData);
         toast.success('อัปเดตผู้ใช้เรียบร้อย');
       } else {
-        await apiService.addUser(formData);
+        const newData = { ...formData };
+        if (newData.Password) newData.Password = btoa(newData.Password); // Encode password
+        await apiService.addUser(newData);
         toast.success('เพิ่มผู้ใช้ใหม่เรียบร้อย');
       }
       setIsModalOpen(false);
