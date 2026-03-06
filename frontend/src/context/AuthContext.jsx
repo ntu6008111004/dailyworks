@@ -6,16 +6,66 @@ const AuthContext = createContext();
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
+// Simple XOR obfuscation key – not cryptographic but hides plaintext from casual inspection
+const STORAGE_KEY = 'dw_session';
+const SECRET = 'DWS!@#2025';
+
+function obfuscate(str) {
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    result += String.fromCharCode(str.charCodeAt(i) ^ SECRET.charCodeAt(i % SECRET.length));
+  }
+  return btoa(result);
+}
+
+function deobfuscate(encoded) {
+  try {
+    const str = atob(encoded);
+    let result = '';
+    for (let i = 0; i < str.length; i++) {
+      result += String.fromCharCode(str.charCodeAt(i) ^ SECRET.charCodeAt(i % SECRET.length));
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(userData) {
+  const encoded = obfuscate(JSON.stringify(userData));
+  localStorage.setItem(STORAGE_KEY, encoded);
+}
+
+function loadSession() {
+  // Support old plaintext sessions for backward compatibility
+  const encoded = localStorage.getItem(STORAGE_KEY);
+  if (encoded) {
+    const decoded = deobfuscate(encoded);
+    if (decoded) return JSON.parse(decoded);
+  }
+  // Fallback: check old key
+  const legacy = localStorage.getItem('user');
+  if (legacy) {
+    try {
+      const parsed = JSON.parse(legacy);
+      // Migrate to new key
+      saveSession(parsed);
+      localStorage.removeItem('user');
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState(() => loadSession());
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
     if (user) {
-      apiService.setExecutor(user.Name || user.name || user.Username);
+      apiService.setExecutor(user.ID || user.id);
     } else {
       apiService.setExecutor('System');
     }
@@ -25,9 +75,8 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const userData = await apiService.login(username, password);
-      // setExecutor will be handled by useEffect
       setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
+      saveSession(userData);
       return userData;
     } finally {
       setLoading(false);
@@ -36,13 +85,14 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('user');
   };
 
   const updateUserState = (newData) => {
     const updatedUser = { ...user, ...newData };
     setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
+    saveSession(updatedUser);
   };
 
   return (
