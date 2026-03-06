@@ -22,12 +22,17 @@ export const CustomDatePicker = ({ selectedDate, onChange, label, required, clas
   let dateObj = null;
   if (selectedDate) {
     if (typeof selectedDate === 'string') {
-      const parts = selectedDate.split('-');
-      if (parts.length === 3) {
-        // Parse as local date to avoid timezone offset issues
-        dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
-      } else {
+      if (selectedDate.includes('T')) {
+        // Let JS handle full ISO strings from the backend
         dateObj = new Date(selectedDate);
+      } else {
+        const parts = selectedDate.split('-');
+        if (parts.length === 3) {
+          // Parse as local date to avoid timezone offset issues for 'yyyy-mm-dd' strings
+          dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+        } else {
+          dateObj = new Date(selectedDate);
+        }
       }
     } else {
       dateObj = selectedDate;

@@ -64,6 +64,7 @@ function initializeSheets() {
       "Priority",
       "StartDate",
       "DueDate",
+      "UserID",
       "StaffName",
       "Department",
       "Note",
@@ -246,6 +247,7 @@ function getTasksSummary(doc) {
     "Priority",
     "StartDate",
     "DueDate",
+    "UserID",
     "StaffName",
     "Department",
     "CreatedAt",
@@ -591,4 +593,126 @@ function migrateUsersSheet(doc) {
     return { message: "ProfileImage column added successfully" };
   }
   return { message: "ProfileImage column already exists" };
+}
+
+function syncUserTasks(doc, userId, newName, newDept, oldName) {
+  const tasksSheet = doc.getSheetByName(SHEET_TASKS);
+  if (!tasksSheet) return;
+  const data = tasksSheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+
+  const headers = data[0];
+  const staffNameIdx = headers.indexOf("StaffName");
+  const deptIdx = headers.indexOf("Department");
+  const customFieldsIdx = headers.indexOf("CustomFields");
+  const userIdIdx = headers.indexOf("UserID");
+
+  if (staffNameIdx === -1) return;
+
+  let updated = false;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    let isMatch = false;
+
+    // Check by UserID column if it exists
+    if (userIdIdx !== -1 && row[userIdIdx] == userId) {
+      isMatch = true;
+    }
+
+    // Fallback: Check by StaffID in CustomFields if exists
+    if (!isMatch && customFieldsIdx !== -1 && row[customFieldsIdx]) {
+      try {
+        const cf = JSON.parse(row[customFieldsIdx]);
+        if (cf && cf.StaffID == userId) {
+          isMatch = true;
+        }
+      } catch (e) {}
+    }
+
+    // Fallback to name match for older tasks
+    if (!isMatch && oldName && row[staffNameIdx] === oldName) {
+      isMatch = true;
+    }
+
+    // Update if it's a match
+    if (isMatch) {
+      if (newName && row[staffNameIdx] !== newName) {
+        tasksSheet.getRange(i + 1, staffNameIdx + 1).setValue(newName);
+        updated = true;
+      }
+      if (newDept && deptIdx !== -1 && row[deptIdx] !== newDept) {
+        tasksSheet.getRange(i + 1, deptIdx + 1).setValue(newDept);
+        updated = true;
+      }
+      if (userIdIdx !== -1 && row[userIdIdx] != userId) {
+        tasksSheet.getRange(i + 1, userIdIdx + 1).setValue(userId);
+        updated = true;
+      }
+    }
+  }
+
+  if (updated) {
+    clearTasksCache();
+  }
+}
+
+function migrateTaskUserIds(doc) {
+  const tasksSheet = doc.getSheetByName(SHEET_TASKS);
+  const usersSheet = doc.getSheetByName(SHEET_USERS);
+  if (!tasksSheet || !usersSheet) return { error: "Sheets not found" };
+
+  const taskHeaders = tasksSheet
+    .getRange(1, 1, 1, tasksSheet.getLastColumn())
+    .getValues()[0];
+  let userIdColIdx = taskHeaders.indexOf("UserID");
+
+  if (userIdColIdx === -1) {
+    // Insert UserID column before StaffName
+    const staffNameColIdx = taskHeaders.indexOf("StaffName");
+    if (staffNameColIdx !== -1) {
+      tasksSheet.insertColumnBefore(staffNameColIdx + 1);
+      tasksSheet.getRange(1, staffNameColIdx + 1).setValue("UserID");
+      userIdColIdx = staffNameColIdx; // Updated index after insert
+    } else {
+      // Fallback: append at end
+      const newColIndex = tasksSheet.getLastColumn() + 1;
+      tasksSheet.insertColumnAfter(tasksSheet.getLastColumn());
+      tasksSheet.getRange(1, newColIndex).setValue("UserID");
+      userIdColIdx = newColIndex - 1;
+    }
+  }
+
+  // Get refreshed data
+  const taskData = tasksSheet.getDataRange().getValues();
+  const refreshedTaskHeaders = taskData[0];
+  const staffNameIdx = refreshedTaskHeaders.indexOf("StaffName");
+  userIdColIdx = refreshedTaskHeaders.indexOf("UserID");
+
+  const userData = usersSheet.getDataRange().getValues();
+  const userHeaders = userData[0];
+  const uIdIdx = userHeaders.indexOf("ID");
+  const uNameIdx = userHeaders.indexOf("Name");
+
+  const userMap = {};
+  for (let i = 1; i < userData.length; i++) {
+    const row = userData[i];
+    if (row[uNameIdx] && row[uIdIdx]) {
+      userMap[row[uNameIdx]] = row[uIdIdx];
+    }
+  }
+
+  let updateCount = 0;
+  for (let i = 1; i < taskData.length; i++) {
+    const taskRow = taskData[i];
+    const currentUserId = taskRow[userIdColIdx];
+    const staffName = taskRow[staffNameIdx];
+
+    if (!currentUserId && staffName && userMap[staffName]) {
+      tasksSheet.getRange(i + 1, userIdColIdx + 1).setValue(userMap[staffName]);
+      updateCount++;
+    }
+  }
+
+  return { message: "UserID migrated for " + updateCount + " tasks" };
 }

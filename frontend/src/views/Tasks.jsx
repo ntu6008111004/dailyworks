@@ -77,6 +77,7 @@ export const Tasks = () => {
       } else {
         await apiService.addTask({ 
           ...taskData, 
+          UserID: user?.ID || user?.id,
           StaffName: user?.Name || user?.name || 'Unknown',
           Department: user?.Department || 'Unknown',
           CustomFields: {
