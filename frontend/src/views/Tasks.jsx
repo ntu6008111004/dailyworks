@@ -71,20 +71,18 @@ export const Tasks = () => {
 
   const handleSaveTask = async (taskData) => {
     try {
+      const payload = {
+        ...taskData,
+        UserID: user?.ID || user?.id,
+        StaffName: user?.Name || user?.name || 'Unknown',
+        Department: user?.Department || 'Unknown'
+      };
+
       if (editingTask) {
-        await apiService.updateTask(taskData);
+        await apiService.updateTask(payload);
         toast.success('อัปเดตงานเรียบร้อย');
       } else {
-        await apiService.addTask({ 
-          ...taskData, 
-          UserID: user?.ID || user?.id,
-          StaffName: user?.Name || user?.name || 'Unknown',
-          Department: user?.Department || 'Unknown',
-          CustomFields: {
-            ...taskData.CustomFields,
-            StaffID: user?.ID || user?.id
-          }
-        });
+        await apiService.addTask(payload);
         toast.success('เพิ่มงานเรียบร้อย');
       }
       setIsModalOpen(false);
