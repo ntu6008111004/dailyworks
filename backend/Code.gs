@@ -24,6 +24,7 @@ function initializeSheets() {
       "Role",
       "Department",
       "Name",
+      "ProfileImage",
     ]);
     // Add default admin user (password is base64 for 'pass123')
     usersSheet.appendRow([
@@ -162,6 +163,12 @@ function handleResponse(e) {
         break;
       case "deleteUser":
         result = deleteUser(doc, data.id, executorId);
+        break;
+      case "getTaskById":
+        result = getTaskById(doc, data.id);
+        break;
+      case "MIGRATE_USERS_SHEET":
+        result = migrateUsersSheet(doc);
         break;
       default:
         throw new Error("Invalid action");
@@ -518,4 +525,17 @@ function logActivity(doc, userId, action, details) {
   const sheet = doc.getSheetByName(SHEET_LOGS);
   if (!sheet) return;
   sheet.appendRow([new Date(), userId, action, details]);
+}
+
+function migrateUsersSheet(doc) {
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  if (!sheet) return { error: "Users sheet not found" };
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf("ProfileImage") === -1) {
+    sheet.insertColumnAfter(sheet.getLastColumn());
+    sheet.getRange(1, sheet.getLastColumn()).setValue("ProfileImage");
+    return { message: "ProfileImage column added successfully" };
+  }
+  return { message: "ProfileImage column already exists" };
 }

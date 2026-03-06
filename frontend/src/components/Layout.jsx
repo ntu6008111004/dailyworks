@@ -65,13 +65,19 @@ export const Layout = () => {
         </div>
 
         <div className="p-4 border-t border-slate-200/50">
-          <div className="flex items-center gap-3 px-3 py-2 mb-2">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">
-              {(user?.Name || user?.name || user?.Username || 'U').charAt(0).toUpperCase()}
-            </div>
+          <div className="flex items-start gap-3 px-3 py-2 mb-2">
+            {user?.ProfileImage ? (
+              <img src={user.ProfileImage} alt={user.Name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg shrink-0">
+                {(user?.Name || user?.name || user?.Username || 'U').charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate">{user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}</p>
-              <p className="text-xs font-medium px-2 py-0.5 mt-1 bg-slate-100 text-slate-600 rounded-md inline-block">
+              <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 whitespace-normal break-words">
+                {user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}
+              </p>
+              <p className="text-[10px] font-medium px-2 py-0.5 mt-1 bg-slate-100 text-slate-600 rounded-md inline-block uppercase tracking-wider">
                 {user?.Role || user?.role || 'Guest'} {user?.Department ? `(${user?.Department})` : ''}
               </p>
             </div>

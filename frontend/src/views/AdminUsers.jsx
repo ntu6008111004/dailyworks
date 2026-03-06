@@ -18,7 +18,8 @@ export const AdminUsers = () => {
     Password: '',
     Role: 'Staff',
     Department: '',
-    Name: ''
+    Name: '',
+    ProfileImage: ''
   });
 
   useEffect(() => {
@@ -37,6 +38,43 @@ export const AdminUsers = () => {
     }
   };
 
+  const compressProfileImage = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 150; // Small avatar size
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Highly compressed WebP for profile pic (~10-30kb)
+          resolve(canvas.toDataURL('image/webp', 0.5));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleOpenModal = (user = null) => {
     if (user) {
       setEditingUser(user);
@@ -46,11 +84,12 @@ export const AdminUsers = () => {
         Password: '', // Don't show existing hash
         Role: user.Role,
         Department: user.Department,
-        Name: user.Name
+        Name: user.Name,
+        ProfileImage: user.ProfileImage || ''
       });
     } else {
       setEditingUser(null);
-      setFormData({ Username: '', Password: '', Role: 'Staff', Department: '', Name: '' });
+      setFormData({ Username: '', Password: '', Role: 'Staff', Department: '', Name: '', ProfileImage: '' });
     }
     setIsModalOpen(true);
   };
@@ -96,6 +135,14 @@ export const AdminUsers = () => {
     }
   };
 
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const compressed = await compressProfileImage(file);
+      setFormData({ ...formData, ProfileImage: compressed });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 flex flex-col h-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -120,7 +167,7 @@ export const AdminUsers = () => {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-slate-50/50 text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="px-6 py-4 font-semibold">ชื่อ - นามสกุล</th>
+                <th className="px-6 py-4 font-semibold">พนักงาน</th>
                 <th className="px-6 py-4 font-semibold">ชื่อผู้ใช้ (Username)</th>
                 <th className="px-6 py-4 font-semibold">แผนก</th>
                 <th className="px-6 py-4 font-semibold">สิทธิ์</th>
@@ -130,8 +177,18 @@ export const AdminUsers = () => {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {users.map(u => (
                 <tr key={u.ID} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{u.Name}</td>
-                  <td className="px-6 py-4 text-slate-500">{u.Username}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      {u.ProfileImage ? (
+                        <img src={u.ProfileImage} alt={u.Name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                          {u.Name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="font-medium text-slate-900">{u.Name}</div>
+                    </div>
+                  </td>                  <td className="px-6 py-4 text-slate-500">{u.Username}</td>
                   <td className="px-6 py-4">{u.Department}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-md ${
@@ -167,9 +224,32 @@ export const AdminUsers = () => {
               <h2 className="text-xl font-bold text-slate-900">{editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้ใหม่'}</h2>
             </div>
             <form onSubmit={handleSaveUser} className="p-6 space-y-4">
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative group cursor-pointer" onClick={() => document.getElementById('avatar-upload').click()}>
+                  <div className="w-24 h-24 rounded-full border-4 border-slate-100 overflow-hidden bg-slate-50 flex items-center justify-center shadow-inner">
+                    {formData.ProfileImage ? (
+                      <img src={formData.ProfileImage} alt="Avatar Preview" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                    ) : (
+                      <Users size={40} className="text-slate-300" />
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Plus size={24} className="text-white" />
+                  </div>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-2">คลิกเพื่ออัปโหลดรูปโปรไฟล์</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อ - นามสกุล / ชื่อเล่น <span className="text-red-500">*</span></label>
-                <input required type="text" value={formData.Name} onChange={e => setFormData({...formData, Name: e.target.value})} className="w-full px-4 py-2 border rounded-xl" />
+                <input required type="text" value={formData.Name} onChange={e => setFormData({...formData, Name: e.target.value})} className="w-full px-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อผู้ใช้ (Username) <span className="text-red-500">*</span></label>
