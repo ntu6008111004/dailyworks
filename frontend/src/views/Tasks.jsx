@@ -113,7 +113,7 @@ export const Tasks = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(localSearch);
-    }, 500);
+    }, 1200);
     return () => clearTimeout(timer);
   }, [localSearch]);
 
