@@ -105,8 +105,17 @@ export const Tasks = () => {
   const [filterDepartment, setFilterDepartment] = useState('All');
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Debounce search input to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(localSearch);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
 
   // Summary modals
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -300,8 +309,8 @@ export const Tasks = () => {
           <input
             type="text"
             placeholder="ค้นหางาน..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
