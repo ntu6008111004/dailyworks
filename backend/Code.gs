@@ -254,6 +254,7 @@ function getTasksSummary(doc) {
     "UserID",
     "StaffName",
     "Department",
+    "CustomFields",
     "CreatedAt",
   ];
   const indices = summaryHeaders.map((h) => headers.indexOf(h));
@@ -279,6 +280,15 @@ function getTasksSummary(doc) {
             Session.getScriptTimeZone(),
             "yyyy-MM-dd",
           );
+        }
+      }
+
+      // Parse CustomFields JSON
+      if (header === "CustomFields") {
+        try {
+          val = val ? JSON.parse(val) : {};
+        } catch (e) {
+          val = {};
         }
       }
 
