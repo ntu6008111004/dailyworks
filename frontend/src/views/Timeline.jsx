@@ -10,11 +10,11 @@ export const Timeline = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Timeline viewport configuration
   const [baseDate, setBaseDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('week'); // 'day', 'week', 'month'
-  
+
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -35,7 +35,7 @@ export const Timeline = () => {
       const userName = user?.Name || user?.name;
       // "7. ไทมล์ไลน์ จะแสดงเฉพาะงานของตัว account ตัวเองเท่านั้น"
       if (t.StaffName !== userName) return false;
-      
+
       return true;
     }).map(t => ({
       ...t,
@@ -87,7 +87,7 @@ export const Timeline = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลตารางเวลา..." />
-      
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">ไทม์ไลน์การทำงาน (Timeline)</h2>
@@ -122,12 +122,12 @@ export const Timeline = () => {
             <div className="flex border-b border-slate-200 bg-slate-50/95 sticky top-0 z-20">
               <div className="w-48 sm:w-64 shrink-0 border-r border-slate-200 p-4 font-semibold text-slate-700 flex items-center gap-2 sticky left-0 bg-slate-50/95 z-30 shadow-[1px_0_0_0_#e2e8f0]">
                 <CalendarIcon size={18} className="text-blue-500" />
-                ชื่องาน
+                รายละเอียดงาน
               </div>
               <div className="flex" style={{ width: `${timelineDays.length * 4}rem` }}>
                 {timelineDays.map(day => (
-                  <div 
-                    key={day.toISOString()} 
+                  <div
+                    key={day.toISOString()}
                     className={`flex-1 flex flex-col items-center justify-center p-2 border-r border-slate-200 text-sm ${isSameDay(day, new Date()) ? 'bg-blue-100/50' : ''}`}
                   >
                     <span className="text-xs text-slate-500 font-medium">{format(day, 'EEE', { locale: th })}</span>
@@ -144,12 +144,12 @@ export const Timeline = () => {
             {filteredTasks.length === 0 && !loading && (
               <div className="p-12 text-center text-slate-500 sticky left-0 w-full">ไม่มีข้อมูลงานที่จะแสดง</div>
             )}
-            
+
             {filteredTasks.map(task => {
               const hasProject = task.CustomFields?.Project;
               return (
-                <div 
-                  key={task.ID} 
+                <div
+                  key={task.ID}
                   className="flex border-b border-slate-100 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                   onClick={() => setSelectedTask(task)}
                 >
@@ -173,7 +173,7 @@ export const Timeline = () => {
                     {(() => {
                       const startIdx = timelineDays.findIndex(d => isSameDay(d, task.start) || d > task.start);
                       let endIdx = timelineDays.findIndex(d => isSameDay(d, task.end));
-                      if(endIdx === -1 && task.end > timelineDays[timelineDays.length - 1]) endIdx = timelineDays.length - 1;
+                      if (endIdx === -1 && task.end > timelineDays[timelineDays.length - 1]) endIdx = timelineDays.length - 1;
 
                       if (startIdx === -1 || (endIdx !== -1 && endIdx < 0)) return null;
                       if (task.start > timelineDays[timelineDays.length - 1] || task.end < timelineDays[0]) return null;
@@ -185,16 +185,16 @@ export const Timeline = () => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
                       const isOverdue = task.end < today && task.Status !== 'เสร็จสิ้น';
-                      
-                      const colorClass = isOverdue 
-                        ? 'bg-red-100 border-red-400 text-red-800' 
+
+                      const colorClass = isOverdue
+                        ? 'bg-red-100 border-red-400 text-red-800'
                         : (statusColors[task.Status] || statusColors['ยังไม่เริ่ม']);
 
                       return (
-                        <div 
+                        <div
                           className="absolute h-8 top-1/2 -translate-y-1/2 z-10 px-1 py-1"
-                          style={{ 
-                            gridColumnStart: activeStartIdx + 1, 
+                          style={{
+                            gridColumnStart: activeStartIdx + 1,
                             gridColumnEnd: activeStartIdx + 1 + span,
                             width: '100%'
                           }}
@@ -225,8 +225,8 @@ export const Timeline = () => {
             </div>
             <div className="p-6 overflow-y-auto flex-1 space-y-4 text-left">
               <div>
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ชื่องาน (Detail)</label>
-                <div className="mt-1 text-slate-900 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100">{selectedTask.Detail}</div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">รายละเอียดงาน</label>
+                <div className="mt-1 text-slate-900 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100 whitespace-pre-wrap">{selectedTask.Detail}</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -244,10 +244,10 @@ export const Timeline = () => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
                       const isOverdue = selectedTask.end < today && selectedTask.Status !== 'เสร็จสิ้น';
-                      const colorClass = isOverdue 
-                        ? 'bg-red-100 text-red-800 border border-red-200' 
+                      const colorClass = isOverdue
+                        ? 'bg-red-100 text-red-800 border border-red-200'
                         : (statusColors[selectedTask.Status] || 'bg-slate-100 text-slate-700');
-                      
+
                       return (
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
                           {selectedTask.Status}{isOverdue ? ' (ล่าช้า)' : ''}
@@ -259,7 +259,7 @@ export const Timeline = () => {
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">ช่วงเวลา</label>
                   <div className="mt-1 text-slate-900 text-sm">
-                    {format(new Date(selectedTask.StartDate), 'd MMM yyyy', { locale: th })} <br/>
+                    {format(new Date(selectedTask.StartDate), 'd MMM yyyy', { locale: th })} <br />
                     <span className="text-slate-400">ถึง</span> {format(new Date(selectedTask.DueDate), 'd MMM yyyy', { locale: th })}
                   </div>
                 </div>

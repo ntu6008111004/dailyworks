@@ -26,7 +26,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
       if (task.Image2) imgs.push(task.Image2);
       if (task.Image3) imgs.push(task.Image3);
       if (task.Image4) imgs.push(task.Image4);
-      
+
       if (task.CustomFields && task.CustomFields.Images) {
         const oldImgs = JSON.parse(task.CustomFields.Images);
         imgs.push(...oldImgs);
@@ -67,7 +67,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
             let width = img.width;
             let height = img.height;
             const MAX_DIM = 600; // Reduced from 800 to stay under 50k char limit
-            
+
             if (width > height) {
               if (width > MAX_DIM) {
                 height = Math.round(height * (MAX_DIM / width));
@@ -79,15 +79,15 @@ export const TaskModal = ({ task, onClose, onSave }) => {
                 height = MAX_DIM;
               }
             }
-            
+
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            
+
             // Reduced quality to 0.4 to ensure base64 string < 50,000 chars
-            const compressedBase64 = canvas.toDataURL('image/webp', 0.4); 
-            
+            const compressedBase64 = canvas.toDataURL('image/webp', 0.4);
+
             if (compressedBase64.length > 49000) {
               // Fallback to even smaller if still too big
               const smallCanvas = document.createElement('canvas');
@@ -208,7 +208,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียดงานย่อย <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียดงาน <span className="text-red-500">*</span></label>
                 <textarea
                   required
                   value={formData.Detail}
@@ -280,7 +280,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
                     {images.length + newImages.length} / 4
                   </span>
                 </label>
-                
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {images.map((url, idx) => (
                     <div key={`old-${idx}`} className="relative group aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden cursor-pointer">
@@ -290,7 +290,7 @@ export const TaskModal = ({ task, onClose, onSave }) => {
                       </button>
                     </div>
                   ))}
-                  
+
                   {newImages.map((img, idx) => (
                     <div key={`new-${idx}`} className="relative group aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden cursor-pointer">
                       <img src={img.preview} alt={`upload-${idx}`} className="w-full h-full object-cover" onClick={() => setPreviewImage(img.preview)} />
