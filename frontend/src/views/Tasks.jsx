@@ -384,7 +384,7 @@ export const Tasks = () => {
                             โปรเจค: {task.CustomFields.Project}
                           </span>
                         )}
-                        <h3 className="text-lg font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
+                        <h3 className="text-lg font-bold text-slate-900 line-clamp-2 whitespace-pre-wrap" title={task.Detail}>{task.Detail}</h3>
                       </div>
                       <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                         {task.Status}
