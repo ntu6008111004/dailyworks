@@ -16,7 +16,7 @@ const ITEMS_PER_PAGE = 10;
 
 // ─── Pagination Bar ───────────────────────────────────────────────────────────
 const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChange }) => {
-  if (totalPages <= 1 && totalCount === 0) return null;
+  if (totalPages <= 1) return null;
 
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalCount);
@@ -61,8 +61,8 @@ const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChang
               key={p}
               onClick={() => onPageChange(p)}
               className={`min-w-[2rem] h-8 px-2 rounded-lg text-sm font-medium transition-colors ${p === currentPage
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
                 }`}
             >
               {p}
@@ -437,7 +437,7 @@ export const Tasks = () => {
               ))}
 
               {/* ── Pagination ── */}
-              <div className="glass p-4 rounded-2xl">
+              <div className="glass p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}

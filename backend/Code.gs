@@ -228,7 +228,7 @@ function getTasks(doc) {
   });
 
   try {
-    cache.put("tasks_full", JSON.stringify(result), 600); // 10 mins
+    cache.put("tasks_full", JSON.stringify(result), 120); // 2 mins
   } catch (e) {}
   return result;
 }
@@ -294,7 +294,7 @@ function getTasksSummary(doc) {
   });
 
   try {
-    cache.put("tasks_summary", JSON.stringify(result), 600); // 10 mins
+    cache.put("tasks_summary", JSON.stringify(result), 120); // 2 mins
   } catch (e) {}
   return result;
 }
@@ -349,22 +349,24 @@ function getTasksPaged(doc, params) {
   var endDate    = params.endDate    || '';
 
   // RBAC params sent from frontend
-  var userRole   = params.userRole   || 'Staff';
-  var userName   = params.userName   || '';
-  var userDept   = params.userDept   || '';
+  var userRole   = (params.userRole   || 'Staff').toString().trim();
+  var userName   = (params.userName   || '').toString().trim().toLowerCase();
+  var userDept   = (params.userDept   || '').toString().trim();
   var canSeeAll  = userRole === 'Admin' || (userRole === 'Head' && userDept === 'HR');
 
   var filtered = allTasks.filter(function(t) {
+    var taskStaffName = (t.StaffName || '').toString().trim().toLowerCase();
+
     // RBAC
     if (!canSeeAll) {
-      if (userRole === 'Staff' && t.StaffName !== userName) return false;
+      if (userRole === 'Staff' && taskStaffName !== userName) return false;
       if (userRole === 'Head') {
-        if (t.Department !== userDept) return false;
-        if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+        if ((t.Department || '').toString().trim() !== userDept) return false;
+        if (filterUser !== 'All' && taskStaffName !== (filterUser || '').toString().trim().toLowerCase()) return false;
       }
     } else {
-      if (department !== 'All' && t.Department !== department) return false;
-      if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+      if (department !== 'All' && (t.Department || '').toString().trim() !== department) return false;
+      if (filterUser !== 'All' && taskStaffName !== (filterUser || '').toString().trim().toLowerCase()) return false;
     }
 
     // Status filter
