@@ -49,6 +49,12 @@ export const apiService = {
     return this.request('getTasksSummary');
   },
 
+  // Paginated tasks with server-side filter + RBAC
+  // filters: { keyword, status, department, user, startDate, endDate, userRole, userName, userDept, userId }
+  getTasksPaged(page, pageSize, filters = {}) {
+    return this.request('getTasksPaged', { page, pageSize, ...filters });
+  },
+
   getTaskById(id) {
     return this.request('getTaskById', { id });
   },

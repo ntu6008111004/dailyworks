@@ -138,6 +138,9 @@ function handleResponse(e) {
       case "getTasksSummary":
         result = getTasksSummary(doc);
         break;
+      case "getTasksPaged":
+        result = getTasksPaged(doc, data);
+        break;
       case "getTaskById":
         result = getTaskById(doc, data.id);
         break;
@@ -299,6 +302,104 @@ function getTasksSummary(doc) {
 function clearTasksCache() {
   const cache = CacheService.getScriptCache();
   cache.removeAll(["tasks_full", "tasks_summary"]);
+}
+
+/**
+ * Server-Side Pagination with Filtering and RBAC.
+ * Receives: { page, pageSize, keyword, status, department, user,
+ *             startDate, endDate, userRole, userName, userDept, userId }
+ * Returns:  { tasks, totalCount, totalPages, currentPage }
+ */
+function getTasksPaged(doc, params) {
+  const page     = parseInt(params.page || 1, 10);
+  const pageSize = parseInt(params.pageSize || 10, 10);
+
+  // Reuse the cached summary (avoids re-reading the sheet)
+  let allTasks = getTasksSummary(doc);
+
+  // Also include CustomFields for task card (lightweight — already in cache)
+  // Note: getTasksSummary does NOT include CustomFields, so we need to
+  // read those separately only if required. For now we add them from full cache.
+  // To keep payload light we only pull CustomFields via a merged approach.
+  const fullCache = (function() {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get("tasks_full");
+    if (cached) {
+      try { return JSON.parse(cached); } catch(e) {}
+    }
+    return null;
+  })();
+
+  // Build a quick lookup of CustomFields + HasImages from summary (already has HasImages)
+  // If full cache is warm, merge CustomFields; otherwise just use summary data.
+  if (fullCache) {
+    const cfMap = {};
+    fullCache.forEach(function(t) { cfMap[t.ID] = t.CustomFields; });
+    allTasks = allTasks.map(function(t) {
+      return Object.assign({}, t, { CustomFields: cfMap[t.ID] || null });
+    });
+  }
+
+  // --------- APPLY FILTERS ---------
+  var keyword    = (params.keyword    || '').toLowerCase().trim();
+  var status     = params.status     || 'All';
+  var department = params.department || 'All';
+  var filterUser = params.user       || 'All';
+  var startDate  = params.startDate  || '';
+  var endDate    = params.endDate    || '';
+
+  // RBAC params sent from frontend
+  var userRole   = params.userRole   || 'Staff';
+  var userName   = params.userName   || '';
+  var userDept   = params.userDept   || '';
+  var canSeeAll  = userRole === 'Admin' || (userRole === 'Head' && userDept === 'HR');
+
+  var filtered = allTasks.filter(function(t) {
+    // RBAC
+    if (!canSeeAll) {
+      if (userRole === 'Staff' && t.StaffName !== userName) return false;
+      if (userRole === 'Head') {
+        if (t.Department !== userDept) return false;
+        if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+      }
+    } else {
+      if (department !== 'All' && t.Department !== department) return false;
+      if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+    }
+
+    // Status filter
+    if (status !== 'All' && t.Status !== status) return false;
+
+    // Keyword search
+    if (keyword && !(t.Detail || '').toLowerCase().includes(keyword)) return false;
+
+    // Date range filter
+    if (startDate && t.StartDate && t.StartDate < startDate) return false;
+    if (endDate   && t.StartDate && t.StartDate > endDate)   return false;
+
+    return true;
+  });
+
+  // Sort newest first (by CreatedAt DESC)
+  filtered.sort(function(a, b) {
+    var da = a.CreatedAt ? new Date(a.CreatedAt) : new Date(0);
+    var db = b.CreatedAt ? new Date(b.CreatedAt) : new Date(0);
+    return db - da;
+  });
+
+  // --------- SLICE FOR PAGE ---------
+  var totalCount = filtered.length;
+  var totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  var safePage   = Math.min(Math.max(page, 1), totalPages);
+  var start      = (safePage - 1) * pageSize;
+  var pageTasks  = filtered.slice(start, start + pageSize);
+
+  return {
+    tasks:       pageTasks,
+    totalCount:  totalCount,
+    totalPages:  totalPages,
+    currentPage: safePage
+  };
 }
 
 function getTaskById(doc, id) {
