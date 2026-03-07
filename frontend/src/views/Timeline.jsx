@@ -33,26 +33,25 @@ export const Timeline = () => {
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       const userName = user?.Name || user?.name;
-      // "7. ไทมล์ไลน์ จะแสดงเฉพาะงานของตัว account ตัวเองเท่านั้น"
       if (t.StaffName !== userName) return false;
-
       return true;
     }).map(t => ({
       ...t,
-      // Ensure we have Date objects
       start: new Date(t.StartDate),
       end: new Date(t.DueDate)
-    })).sort((a, b) => a.start - b.start);
-  }, [tasks, user]);
+    })).sort((a, b) => {
+      // week/month: newest tasks on top; day: oldest first (chronological)
+      if (viewMode === 'day') return a.start - b.start;
+      return b.start - a.start;
+    });
+  }, [tasks, user, viewMode]);
 
   // Generate days based on view mode
-  // week/month: newest first (right-to-left: latest date on the left)
   const timelineDays = useMemo(() => {
     let start, end;
     if (viewMode === 'day') {
       start = subDays(baseDate, 1);
       end = addDays(baseDate, 1);
-      return eachDayOfInterval({ start, end }); // day view: old → new (keep as-is)
     } else if (viewMode === 'month') {
       start = startOfMonth(baseDate);
       end = endOfMonth(baseDate);
@@ -61,8 +60,7 @@ export const Timeline = () => {
       start = subDays(baseDate, 3);
       end = addDays(baseDate, 10);
     }
-    // Reverse so newest date appears on the left
-    return eachDayOfInterval({ start, end }).reverse();
+    return eachDayOfInterval({ start, end });
   }, [baseDate, viewMode]);
 
   const goToToday = () => setBaseDate(new Date());
@@ -174,37 +172,16 @@ export const Timeline = () => {
 
                     {/* Task Bar */}
                     {(() => {
-                      // For reversed views (week/month): timelineDays[0] = newest, timelineDays[last] = oldest
-                      // For day view: timelineDays[0] = oldest, timelineDays[last] = newest
+                      const startIdx = timelineDays.findIndex(d => isSameDay(d, task.start) || d > task.start);
+                      let endIdx = timelineDays.findIndex(d => isSameDay(d, task.end));
+                      if (endIdx === -1 && task.end > timelineDays[timelineDays.length - 1]) endIdx = timelineDays.length - 1;
 
-                      const first = timelineDays[0];
-                      const last = timelineDays[timelineDays.length - 1];
-                      const minDay = first < last ? first : last; // actual oldest date
-                      const maxDay = first > last ? first : last; // actual newest date
-
-                      // No overlap with visible range
-                      if (task.end < minDay || task.start > maxDay) return null;
-
-                      // Find where task.start lands in the array
-                      let startIdx, endIdx;
-                      if (viewMode === 'day') {
-                        // old → new: find first day >= task.start
-                        startIdx = timelineDays.findIndex(d => isSameDay(d, task.start) || d >= task.start);
-                        endIdx = timelineDays.findIndex(d => isSameDay(d, task.end));
-                        if (endIdx === -1 && task.end > last) endIdx = timelineDays.length - 1;
-                      } else {
-                        // new → old (reversed): find first day <= task.end (since array is descending)
-                        startIdx = timelineDays.findIndex(d => isSameDay(d, task.end) || d <= task.end);
-                        endIdx = timelineDays.findIndex(d => isSameDay(d, task.start) || d <= task.start);
-                        if (startIdx === -1 && task.end >= first) startIdx = 0;
-                        if (endIdx === -1 && task.start <= last) endIdx = timelineDays.length - 1;
-                      }
-
-                      if (startIdx === -1) return null;
+                      if (startIdx === -1 || (endIdx !== -1 && endIdx < 0)) return null;
+                      if (task.start > timelineDays[timelineDays.length - 1] || task.end < timelineDays[0]) return null;
 
                       const activeStartIdx = startIdx === -1 ? 0 : startIdx;
                       const activeEndIdx = endIdx === -1 ? timelineDays.length - 1 : endIdx;
-                      const span = Math.abs(activeEndIdx - activeStartIdx) + 1;
+                      const span = activeEndIdx - activeStartIdx + 1;
 
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
@@ -216,7 +193,7 @@ export const Timeline = () => {
 
                       return (
                         <div
-                          className="absolute h-8 top-1/2 -translate-y-1/2 z-10 px-0.5"
+                          className="absolute h-8 top-1/2 -translate-y-1/2 z-10 px-1 py-1"
                           style={{
                             gridColumnStart: activeStartIdx + 1,
                             gridColumnEnd: activeStartIdx + 1 + span,
