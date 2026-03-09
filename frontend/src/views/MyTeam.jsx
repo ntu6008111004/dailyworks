@@ -72,13 +72,16 @@ export const MyTeam = () => {
       let late = 0;
       
       memberTasks.forEach(t => {
+        const dueDate = t.DueDate ? new Date(t.DueDate).setHours(0, 0, 0, 0) : null;
         if (t.Status !== 'เสร็จสิ้น') {
           pending++;
-          if (t.DueDate) {
-            const dueDate = new Date(t.DueDate);
-            if (dueDate < today) {
-              late++;
-            }
+          if (dueDate && today.getTime() > dueDate) {
+            late++;
+          }
+        } else if (dueDate && t.CompletedAt) {
+          const completedDate = new Date(t.CompletedAt).setHours(0, 0, 0, 0);
+          if (completedDate > dueDate) {
+            late++;
           }
         }
       });

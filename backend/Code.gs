@@ -75,6 +75,7 @@ function initializeSheets() {
       "Image4",
       "CreatedAt",
       "UpdatedAt",
+      "CompletedAt",
     ]);
   }
 
@@ -256,6 +257,7 @@ function getTasksSummary(doc) {
     "Department",
     "CustomFields",
     "CreatedAt",
+    "CompletedAt",
   ];
   const indices = summaryHeaders.map((h) => headers.indexOf(h));
 
@@ -488,6 +490,13 @@ function updateTask(doc, data, executorId) {
         }
         if (header === "UpdatedAt") {
           sheet.getRange(i + 1, j + 1).setValue(new Date());
+        }
+        if (header === "CompletedAt") {
+          if (data.Status === "เสร็จสิ้น" && !rows[i][j]) {
+            sheet.getRange(i + 1, j + 1).setValue(new Date());
+          } else if (data.Status && data.Status !== "เสร็จสิ้น") {
+            sheet.getRange(i + 1, j + 1).setValue("");
+          }
         }
       });
       clearTasksCache();

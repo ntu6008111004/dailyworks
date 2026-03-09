@@ -185,10 +185,20 @@ export const Timeline = () => {
 
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const isOverdue = task.end < today && task.Status !== 'เสร็จสิ้น';
-
-                      const colorClass = isOverdue
-                        ? 'bg-red-100 border-red-400 text-red-800'
+                      const dueDate = new Date(task.end).setHours(0, 0, 0, 0);
+                      
+                      let isOverdue = false;
+                      if (task.Status === 'เสร็จสิ้น') {
+                        if (task.CompletedAt) {
+                          const completedDate = new Date(task.CompletedAt).setHours(0, 0, 0, 0);
+                          isOverdue = completedDate > dueDate;
+                        }
+                      } else {
+                        isOverdue = today > dueDate;
+                      }
+                      
+                      const colorClass = isOverdue 
+                        ? (task.Status === 'เสร็จสิ้น' ? 'bg-red-200 border-red-500 text-red-900 font-bold' : 'bg-red-100 border-red-400 text-red-800')
                         : (statusColors[task.Status] || statusColors['ยังไม่เริ่ม']);
 
                       return (
@@ -244,9 +254,20 @@ export const Timeline = () => {
                     {(() => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const isOverdue = selectedTask.end < today && selectedTask.Status !== 'เสร็จสิ้น';
-                      const colorClass = isOverdue
-                        ? 'bg-red-100 text-red-800 border border-red-200'
+                      const dueDate = new Date(selectedTask.end).setHours(0, 0, 0, 0);
+                      
+                      let isOverdue = false;
+                      if (selectedTask.Status === 'เสร็จสิ้น') {
+                        if (selectedTask.CompletedAt) {
+                          const completedDate = new Date(selectedTask.CompletedAt).setHours(0, 0, 0, 0);
+                          isOverdue = completedDate > dueDate;
+                        }
+                      } else {
+                        isOverdue = today > dueDate;
+                      }
+                      
+                      const colorClass = isOverdue 
+                        ? 'bg-red-100 text-red-800 border border-red-200' 
                         : (statusColors[selectedTask.Status] || 'bg-slate-100 text-slate-700');
 
                       return (

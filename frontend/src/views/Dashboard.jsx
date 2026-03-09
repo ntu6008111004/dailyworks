@@ -81,7 +81,18 @@ export const Dashboard = () => {
   });
 
   // Calculate stats
-  const overdueTasks = filteredTasks.filter(t => new Date(t.DueDate) < new Date() && t.Status !== 'เสร็จสิ้น');
+  const overdueTasks = filteredTasks.filter(t => {
+    const dueDate = new Date(t.DueDate).setHours(0,0,0,0);
+    const today = new Date().setHours(0,0,0,0);
+    
+    if (t.Status === 'เสร็จสิ้น') {
+      if (!t.CompletedAt) return false;
+      const completedDate = new Date(t.CompletedAt).setHours(0,0,0,0);
+      return completedDate > dueDate;
+    }
+    
+    return today > dueDate;
+  });
   const doneTasks = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
 
   // Prepare heatmap data
@@ -260,7 +271,14 @@ export const Dashboard = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-slate-500">เสร็จสิ้น</p>
-            <p className="text-2xl font-bold text-slate-900">{doneTasks.length}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold text-slate-900">{doneTasks.length}</p>
+              {doneTasks.filter(t => overdueTasks.some(ot => ot.ID === t.ID)).length > 0 && (
+                <span className="text-[10px] text-red-500 font-medium">
+                  (ล่าช้า {doneTasks.filter(t => overdueTasks.some(ot => ot.ID === t.ID)).length})
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

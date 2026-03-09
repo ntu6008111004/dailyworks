@@ -106,8 +106,8 @@ export const Tasks = () => {
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [localSearch, setLocalSearch] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [localStartDate, setLocalStartDate] = useState('');
+  const [localEndDate, setLocalEndDate] = useState('');
 
   // Debounce search input to avoid excessive API calls
   useEffect(() => {
@@ -140,7 +140,7 @@ export const Tasks = () => {
     }).map(u => u.Name)
   )].filter(Boolean);
 
-  const hasActiveFilter = searchQuery || startDate || endDate ||
+  const hasActiveFilter = searchQuery || localStartDate || localEndDate ||
     filterDepartment !== 'All' || filterUser !== 'All' || filterStatus !== 'All';
 
   // ─── Fetch helpers ───────────────────────────────────────────────────────────
@@ -149,13 +149,13 @@ export const Tasks = () => {
     status: filterStatus,
     department: filterDepartment,
     user: filterUser,
-    startDate,
-    endDate,
+    startDate: localStartDate,
+    endDate: localEndDate,
     userRole,
     userName,
     userDept,
     userId: String(user?.ID || user?.id || ''),
-  }), [searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate, userRole, userName, userDept, user]);
+  }), [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate, userRole, userName, userDept, user]);
 
   const fetchPage = useCallback(async (page) => {
     setLoading(true);
@@ -193,7 +193,7 @@ export const Tasks = () => {
   useEffect(() => {
     fetchPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate]);
+  }, [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -265,6 +265,7 @@ export const Tasks = () => {
     'รอตรวจ': 'bg-purple-100 text-purple-800 border-2 border-purple-400',
     'รอแก้ไข': 'bg-amber-100 text-amber-800 border-2 border-amber-400',
     'เสร็จสิ้น': 'bg-green-100 text-green-800 border-2 border-green-500 shadow-sm font-bold',
+    'ล่าช้า': 'bg-red-100 text-red-800 border-2 border-red-500 shadow-sm font-bold',
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────────
@@ -318,11 +319,11 @@ export const Tasks = () => {
         <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ตั้งแต่:</span>
-            <CustomDatePicker selectedDate={startDate} onChange={(date) => setStartDate(date)} className="sm:w-36" />
+            <CustomDatePicker selectedDate={localStartDate} onChange={(date) => setLocalStartDate(date)} className="sm:w-36" />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ถึง:</span>
-            <CustomDatePicker selectedDate={endDate} onChange={(date) => setEndDate(date)} className="sm:w-36" />
+            <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} className="sm:w-36" />
           </div>
 
           {(canSeeAll || userRole === 'Head') && (
@@ -354,9 +355,10 @@ export const Tasks = () => {
           {hasActiveFilter && (
             <button
               onClick={() => {
+                setLocalSearch('');
                 setSearchQuery('');
-                setStartDate('');
-                setEndDate('');
+                setLocalStartDate('');
+                setLocalEndDate('');
                 setFilterDepartment('All');
                 setFilterUser('All');
                 setFilterStatus('All');
@@ -393,13 +395,33 @@ export const Tasks = () => {
                             โปรเจค: {task.CustomFields.Project}
                           </span>
                         )}
-                        <h3 className="text-lg font-bold text-slate-900 line-clamp-2 whitespace-pre-wrap" title={task.Detail}>{task.Detail}</h3>
+                        <h3 className="text-lg font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
                       </div>
-                      <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
-                        {task.Status}
-                      </span>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
+                          {task.Status}
+                        </span>
+                        {(() => {
+                          const today = new Date().setHours(0,0,0,0);
+                          const dueDate = new Date(task.DueDate).setHours(0,0,0,0);
+                          let isLate = false;
+                          if (task.Status === 'เสร็จสิ้น') {
+                            if (task.CompletedAt) {
+                              const completedDate = new Date(task.CompletedAt).setHours(0,0,0,0);
+                              isLate = completedDate > dueDate;
+                            }
+                          } else {
+                            isLate = today > dueDate;
+                          }
+                          return isLate ? (
+                            <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
+                              ล่าช้า
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                     </div>
-
+                    
                     <div className="flex flex-wrap gap-4 text-sm text-slate-500">
                       <div className="flex items-center gap-1.5">
                         <Calendar size={16} />

@@ -91,6 +91,24 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                                 {task.CustomFields.Project}
                               </span>
                             )}
+                            {(() => {
+                              const today = new Date().setHours(0,0,0,0);
+                              const dueDate = new Date(task.DueDate).setHours(0,0,0,0);
+                              let isLate = false;
+                              if (task.Status === 'เสร็จสิ้น') {
+                                if (task.CompletedAt) {
+                                  const completedDate = new Date(task.CompletedAt).setHours(0,0,0,0);
+                                  isLate = completedDate > dueDate;
+                                }
+                              } else {
+                                isLate = today > dueDate;
+                              }
+                              return isLate ? (
+                                <span className="text-[10px] text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
+                                  ล่าช้า
+                                </span>
+                              ) : null;
+                            })()}
                             <span className="text-xs text-slate-400">ID: #{String(task.ID).slice(-4)}</span>
                           </div>
                         </div>
