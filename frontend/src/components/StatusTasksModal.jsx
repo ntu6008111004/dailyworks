@@ -48,7 +48,8 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
     'รอแก้ไข': 'text-amber-900 bg-amber-200',
     'รอตรวจ': 'text-purple-900 bg-purple-200',
     'เสร็จสิ้น': 'text-green-900 bg-green-200',
-    'เกินกำหนด': 'text-red-900 bg-red-200'
+    'เกินกำหนด': 'text-red-900 bg-red-200',
+    'ล่าช้า': 'text-red-600 bg-red-50 border-red-100'
   };
 
   const headerColor = statusColors[status] || statusColors['ทั้งหมด'];
@@ -92,6 +93,9 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                                 {task.CustomFields.Project}
                               </span>
                             )}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-semibold ${statusColors[task.Status]}`}>
+                              {task.Status}
+                            </span>
                             {apiService.isOverdue(task) && (
                               <span className="text-[10px] text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
                                 ล่าช้า
