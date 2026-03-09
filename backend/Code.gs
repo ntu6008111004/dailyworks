@@ -245,7 +245,15 @@ function getTasksSummary(doc) {
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  const headers = data[0].map((h) => h.toString().trim()); // Trim headers here
+  let headers = data[0].map((h) => h.toString().trim());
+
+  // Auto-migration: check if CompletedAt exists, if not, add it
+  if (headers.indexOf("CompletedAt") === -1) {
+    const lastCol = sheet.getLastColumn();
+    sheet.getRange(1, lastCol + 1).setValue("CompletedAt");
+    headers.push("CompletedAt");
+    SpreadsheetApp.flush();
+  }
 
   // Only keep essential columns for summary
   const summaryHeaders = [

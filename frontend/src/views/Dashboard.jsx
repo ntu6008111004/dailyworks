@@ -3,7 +3,6 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { toast } from 'react-hot-toast';
 import { LoadingModal } from '../components/LoadingModal';
 import { StatusTasksModal } from '../components/StatusTasksModal';
 import { CustomSelect } from '../components/CustomSelect';
@@ -103,23 +102,7 @@ export const Dashboard = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">แผงควบคุม</h2>
-          <div className="flex items-center gap-2">
-            <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.Name || user?.name || 'User'}</p>
-            <button 
-              onClick={async () => {
-                const toastId = toast.loading('กำลังปรับปรุงระบบฐานข้อมูล...');
-                try {
-                  const res = await apiService.migrateTasksSheet();
-                  toast.success(res.message, { id: toastId });
-                } catch (e) {
-                  toast.error('ล้มเหลว: ' + e.message, { id: toastId });
-                }
-              }}
-              className="text-[10px] text-indigo-500 hover:text-indigo-700 underline cursor-pointer"
-            >
-              (กดเพื่ออัปเดตระบบ)
-            </button>
-          </div>
+          <p className="text-slate-500">ยินดีต้อนรับกลับมา, {user?.Name || user?.name || 'User'}</p>
         </div>
         
         <div className="flex flex-col gap-3 bg-white/50 p-3 rounded-xl border border-slate-200/60">
