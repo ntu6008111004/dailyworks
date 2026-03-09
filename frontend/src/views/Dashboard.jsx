@@ -317,7 +317,16 @@ export const Dashboard = () => {
                     <h4 className="font-bold text-red-900 line-clamp-1">{task.Detail}</h4>
                     <p className="text-xs text-red-700 bg-red-100/50 w-fit px-1.5 py-0.5 rounded mt-0.5">ID: #{String(task.ID).slice(-4)} | {task.StaffName}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      task.Status === 'เสร็จสิ้น' ? 'bg-green-100 text-green-800' :
+                      task.Status === 'รอตรวจ' ? 'bg-purple-100 text-purple-800' :
+                      task.Status === 'รอแก้ไข' ? 'bg-amber-100 text-amber-800' :
+                      task.Status === 'กำลังทำ' ? 'bg-blue-100 text-blue-800' :
+                      'bg-slate-100 text-slate-800'
+                    }`}>
+                      {task.Status}
+                    </span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                       ล่าช้า
                     </span>
