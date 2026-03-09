@@ -175,6 +175,9 @@ function handleResponse(e) {
       case "MIGRATE_USERS_SHEET":
         result = migrateUsersSheet(doc);
         break;
+      case "MIGRATE_TASKS_SHEET":
+        result = migrateTasksSheet(doc);
+        break;
       default:
         throw new Error("Invalid action");
     }
@@ -274,7 +277,7 @@ function getTasksSummary(doc) {
 
       // Prevent timezone shift issue by formatting Date objects to explicit strings
       if (val instanceof Date) {
-        if (header === "CreatedAt" || header === "UpdatedAt") {
+        if (header === "CreatedAt" || header === "UpdatedAt" || header === "CompletedAt") {
           val = val.toISOString(); // keep full time for timestamps
         } else {
           val = Utilities.formatDate(
@@ -894,4 +897,20 @@ function migrateTaskUserIds(doc) {
   }
 
   return { message: "UserID migrated for " + updateCount + " tasks" };
+}
+
+function migrateTasksSheet(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_TASKS);
+  if (!sheet) return { error: "Tasks sheet not found" };
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf("CompletedAt") === -1) {
+    const newColIndex = sheet.getLastColumn() + 1;
+    sheet.insertColumnAfter(sheet.getLastColumn());
+    sheet.getRange(1, newColIndex).setValue("CompletedAt");
+    SpreadsheetApp.flush();
+    return { message: "CompletedAt column added successfully" };
+  }
+  return { message: "CompletedAt column already exists" };
 }
