@@ -183,19 +183,7 @@ export const Timeline = () => {
                       const activeEndIdx = endIdx === -1 ? timelineDays.length - 1 : endIdx;
                       const span = activeEndIdx - activeStartIdx + 1;
 
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const dueDate = new Date(task.end).setHours(0, 0, 0, 0);
-                      
-                      let isOverdue = false;
-                      if (task.Status === 'เสร็จสิ้น') {
-                        if (task.CompletedAt) {
-                          const completedDate = new Date(task.CompletedAt).setHours(0, 0, 0, 0);
-                          isOverdue = completedDate > dueDate;
-                        }
-                      } else {
-                        isOverdue = today > dueDate;
-                      }
+                      const isOverdue = apiService.isOverdue(task);
                       
                       const colorClass = isOverdue 
                         ? (task.Status === 'เสร็จสิ้น' ? 'bg-red-200 border-red-500 text-red-900 font-bold' : 'bg-red-100 border-red-400 text-red-800')
@@ -252,19 +240,7 @@ export const Timeline = () => {
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">สถานะ</label>
                   <div className="mt-1">
                     {(() => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const dueDate = new Date(selectedTask.end).setHours(0, 0, 0, 0);
-                      
-                      let isOverdue = false;
-                      if (selectedTask.Status === 'เสร็จสิ้น') {
-                        if (selectedTask.CompletedAt) {
-                          const completedDate = new Date(selectedTask.CompletedAt).setHours(0, 0, 0, 0);
-                          isOverdue = completedDate > dueDate;
-                        }
-                      } else {
-                        isOverdue = today > dueDate;
-                      }
+                      const isOverdue = apiService.isOverdue(selectedTask);
                       
                       const colorClass = isOverdue 
                         ? 'bg-red-100 text-red-800 border border-red-200' 

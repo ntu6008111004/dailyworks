@@ -389,36 +389,23 @@ export const Tasks = () => {
                 <div key={task.ID} className="glass p-5 rounded-2xl border border-slate-200/60 hover:shadow-md transition-shadow group flex flex-col md:flex-row gap-6">
                   <div className="flex-1 space-y-3">
                     <div className="flex items-start justify-between">
-                      <div className="flex flex-col gap-1.5 pr-4">
+                      <div className="flex flex-col gap-1.5 pr-6">
                         {task.CustomFields?.Project && (
                           <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md self-start border border-indigo-100">
                             โปรเจค: {task.CustomFields.Project}
                           </span>
                         )}
-                        <h3 className="text-lg font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
+                        <h3 className="text-base font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
                         <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                           {task.Status}
                         </span>
-                        {(() => {
-                          const today = new Date().setHours(0,0,0,0);
-                          const dueDate = new Date(task.DueDate).setHours(0,0,0,0);
-                          let isLate = false;
-                          if (task.Status === 'เสร็จสิ้น') {
-                            if (task.CompletedAt) {
-                              const completedDate = new Date(task.CompletedAt).setHours(0,0,0,0);
-                              isLate = completedDate > dueDate;
-                            }
-                          } else {
-                            isLate = today > dueDate;
-                          }
-                          return isLate ? (
-                            <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
-                              ล่าช้า
-                            </span>
-                          ) : null;
-                        })()}
+                        {apiService.isOverdue(task) && (
+                          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
+                            ล่าช้า
+                          </span>
+                        )}
                       </div>
                     </div>
                     

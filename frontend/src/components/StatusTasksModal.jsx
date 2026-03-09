@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { X, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
+import { apiService } from '../services/api';
 
 export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -84,31 +85,18 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                     {empTasks.map(task => (
                       <div key={task.ID} className="p-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex-1">
-                          <h4 className="font-bold text-slate-900">{task.Detail}</h4>
+                          <h4 className="text-sm font-bold text-slate-900">{task.Detail}</h4>
                           <div className="flex flex-wrap items-center gap-2 mt-1.5 ">
                             {task.CustomFields?.Project && (
                               <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-semibold">
                                 {task.CustomFields.Project}
                               </span>
                             )}
-                            {(() => {
-                              const today = new Date().setHours(0,0,0,0);
-                              const dueDate = new Date(task.DueDate).setHours(0,0,0,0);
-                              let isLate = false;
-                              if (task.Status === 'เสร็จสิ้น') {
-                                if (task.CompletedAt) {
-                                  const completedDate = new Date(task.CompletedAt).setHours(0,0,0,0);
-                                  isLate = completedDate > dueDate;
-                                }
-                              } else {
-                                isLate = today > dueDate;
-                              }
-                              return isLate ? (
-                                <span className="text-[10px] text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
-                                  ล่าช้า
-                                </span>
-                              ) : null;
-                            })()}
+                            {apiService.isOverdue(task) && (
+                              <span className="text-[10px] text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
+                                ล่าช้า
+                              </span>
+                            )}
                             <span className="text-xs text-slate-400">ID: #{String(task.ID).slice(-4)}</span>
                           </div>
                         </div>
