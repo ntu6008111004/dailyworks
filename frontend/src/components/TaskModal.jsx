@@ -5,10 +5,8 @@ import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
-import { useAuth } from '../context/AuthContext';
 
 export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true }) => {
-  const { user } = useAuth();
   
   const handleBackdropClick = (e) => {
     if (closeOnOutsideClick && e.target === e.currentTarget) {
@@ -59,8 +57,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     return [];
   });
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
+  const processFiles = (files) => {
     if (images.length + newImages.length + files.length > 4) {
       toast.error('คุณสามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปเท่านั้น');
       return;
@@ -75,7 +72,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            const MAX_DIM = 600; // Reduced from 800 to stay under 50k char limit
+            const MAX_DIM = 600;
 
             if (width > height) {
               if (width > MAX_DIM) {
@@ -94,11 +91,9 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Reduced quality to 0.4 to ensure base64 string < 50,000 chars
             const compressedBase64 = canvas.toDataURL('image/webp', 0.4);
 
             if (compressedBase64.length > 49000) {
-              // Fallback to even smaller if still too big
               const smallCanvas = document.createElement('canvas');
               smallCanvas.width = width * 0.7;
               smallCanvas.height = height * 0.7;
@@ -116,8 +111,28 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     });
 
     Promise.all(newPromises).then(results => {
-      setNewImages([...newImages, ...results]);
+      setNewImages(prev => [...prev, ...results]);
     });
+  };
+
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) processFiles(files);
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData.items;
+    const files = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) {
+      processFiles(files);
+      toast.success(`วางรูปภาพ ${files.length} รูปเรียบร้อย`);
+    }
   };
 
   const removeOldImage = (index) => {
@@ -194,6 +209,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm overflow-y-auto"
       onClick={handleBackdropClick}
+      onPaste={handlePaste}
     >
       <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
@@ -284,9 +300,9 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
               {/* Image Upload */}
               <div className="border-t border-slate-100 pt-4">
                 <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-1.5" title="คุณสามารถกด Ctrl+V เพื่อวางรูปภาพได้">
                     <ImageIcon size={16} className="text-green-500" />
-                    รูปภาพประกอบ (สูงสุด 4 รูป)
+                    รูปภาพประกอบ (สูงสุด 4 รูป / Ctrl+V เพื่อวาง)
                   </span>
                   <span className="text-xs text-slate-500 font-normal border px-2 py-0.5 rounded-md bg-slate-50">
                     {images.length + newImages.length} / 4
