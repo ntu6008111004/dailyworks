@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
@@ -54,47 +54,57 @@ export const Dashboard = () => {
     return () => { isMounted = false; };
   }, [user, canSeeAll, userRole]);
 
+  const uniqueDepartments = useMemo(() => {
+    return [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
+  }, [allUsers]);
 
+  const uniqueUsers = useMemo(() => {
+    return [...new Set(allUsers.filter(u => {
+      if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
+      return filterDepartment === 'All' || u.Department === filterDepartment;
+    }).map(u => u.Name))].filter(Boolean);
+  }, [allUsers, userRole, canSeeAll, userDept, filterDepartment]);
 
-  const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(allUsers.filter(u => {
-    if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
-    return filterDepartment === 'All' || u.Department === filterDepartment;
-  }).map(u => u.Name))].filter(Boolean);
-  const uniqueYears = [...new Set(tasks.map(t => new Date(t.StartDate).getFullYear()))].filter(Boolean).sort((a,b) => b - a);
+  const uniqueYears = useMemo(() => {
+    return [...new Set(tasks.map(t => new Date(t.StartDate).getFullYear()))].filter(Boolean).sort((a,b) => b - a);
+  }, [tasks]);
 
-  const filteredTasks = tasks.filter(t => {
-    if (!canSeeAll) {
-      if (userRole === 'Staff' && t.StaffName !== userName) return false;
-      if (userRole === 'Head') {
-        if (t.Department !== userDept) return false;
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (!canSeeAll) {
+        if (userRole === 'Staff' && t.StaffName !== userName) return false;
+        if (userRole === 'Head') {
+          if (t.Department !== userDept) return false;
+          if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
+        }
+      } else {
+        if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
         if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
       }
-    } else {
-      if (filterDepartment !== 'All' && t.Department !== filterDepartment) return false;
-      if (filterUser !== 'All' && t.StaffName !== filterUser) return false;
-    }
-    if (filterYear !== 'All' && new Date(t.StartDate).getFullYear().toString() !== filterYear.toString()) return false;
-    if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
-    if (endDate && new Date(t.StartDate) > new Date(endDate)) return false;
-    return true;
-  });
+      if (filterYear !== 'All' && new Date(t.StartDate).getFullYear().toString() !== filterYear.toString()) return false;
+      if (startDate && new Date(t.StartDate) < new Date(startDate)) return false;
+      if (endDate && new Date(t.StartDate) > new Date(endDate)) return false;
+      return true;
+    });
+  }, [tasks, canSeeAll, userRole, userName, userDept, filterUser, filterDepartment, filterYear, startDate, endDate]);
 
-  // Calculate stats
-  const overdueTasks = filteredTasks.filter(t => apiService.isOverdue(t));
-  const doneTasks = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
+  const { overdueTasks, doneTasks, heatmapData } = useMemo(() => {
+    const overdue = filteredTasks.filter(t => apiService.isOverdue(t));
+    const done = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
+    
+    const workload = filteredTasks.reduce((acc, task) => {
+      if (!acc[task.StaffName]) acc[task.StaffName] = 0;
+      acc[task.StaffName]++;
+      return acc;
+    }, {});
+    
+    const heatmap = Object.keys(workload).map(name => ({
+      name,
+      tasks: workload[name]
+    })).sort((a, b) => b.tasks - a.tasks);
 
-  // Prepare heatmap data
-  const workload = filteredTasks.reduce((acc, task) => {
-    if (!acc[task.StaffName]) acc[task.StaffName] = 0;
-    acc[task.StaffName]++;
-    return acc;
-  }, {});
-  
-  const heatmapData = Object.keys(workload).map(name => ({
-    name,
-    tasks: workload[name]
-  })).sort((a, b) => b.tasks - a.tasks);
+    return { overdueTasks: overdue, doneTasks: done, heatmapData: heatmap };
+  }, [filteredTasks]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -16,7 +16,7 @@ import { TaskModal } from '../components/TaskModal';
 const ITEMS_PER_PAGE = 10;
 
 // ─── Pagination Bar ───────────────────────────────────────────────────────────
-const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChange }) => {
+const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChange, onPrefetchPage }) => {
   if (totalPages <= 1) return null;
 
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -74,6 +74,7 @@ const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChang
         {/* Next */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
+          onMouseEnter={() => onPrefetchPage && onPrefetchPage(currentPage + 1)}
           disabled={currentPage >= totalPages}
           className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           aria-label="หน้าถัดไป"
@@ -240,18 +241,47 @@ export const Tasks = () => {
       };
 
       if (editingTask) {
-        await apiService.updateTask(payload);
-        toast.success('อัปเดตงานเรียบร้อย');
+        // Optimistic Edit
+        const oldTask = tasks.find(t => t.ID === payload.ID);
+        setTasks(prev => prev.map(t => t.ID === payload.ID ? { ...t, ...payload, syncState: 'syncing' } : t));
+        setIsModalOpen(false);
+
+        try {
+          await apiService.updateTask(payload);
+          setTasks(prev => prev.map(t => t.ID === payload.ID ? { ...t, syncState: 'success' } : t));
+          setTimeout(() => {
+             setTasks(prev => prev.map(t => t.ID === payload.ID ? { ...t, syncState: null } : t));
+          }, 1500);
+          toast.success('อัปเดตงานเรียบร้อย');
+        } catch (error) {
+          // Rollback
+          setTasks(prev => prev.map(t => t.ID === payload.ID ? oldTask : t));
+          toast.error('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+        }
       } else {
-        await apiService.addTask(payload);
-        toast.success('เพิ่มงานเรียบร้อย');
+        // Optimistic Add
+        const tempId = 'temp-' + Date.now();
+        const newTask = { ...payload, ID: tempId, CreatedAt: new Date().toISOString(), syncState: 'pending' };
+        setTasks(prev => [newTask, ...prev]);
+        setIsModalOpen(false);
+
+        try {
+          await apiService.addTask(payload);
+          // To ensure IDs and timestamps match server, refetch
+          fetchPage(1);
+          toast.success('เพิ่มงานเรียบร้อย');
+        } catch (error) {
+          // Rollback
+          setTasks(prev => prev.filter(t => t.ID !== tempId));
+          toast.error('เกิดข้อผิดพลาดในการเพิ่มงาน: ' + error.message);
+        }
       }
-      setIsModalOpen(false);
-      fetchPage(currentPage);
+      
       // Refresh summary list too
       apiService.getTasksSummary().then(data => setAllTasksForSummary(data || [])).catch(() => { });
     } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการบันทึก: ' + error.message);
+      console.error(error);
+      toast.error('เกิดข้อผิดพลาดในการสร้าง payload');
     }
   };
 
@@ -259,17 +289,23 @@ export const Tasks = () => {
 
   const handleDeleteTask = async () => {
     if (!deleteConfirmId) return;
-    setLoading(true);
+    
+    // Optimistic Delete
+    const targetId = deleteConfirmId;
+    setTasks(prev => prev.filter(t => t.ID !== targetId));
+    setDeleteConfirmId(null);
+    
     try {
-      await apiService.deleteTask(deleteConfirmId);
+      await apiService.deleteTask(targetId);
       toast.success('ลบงานเรียบร้อย');
-      // If deleting the last item on this page, go back one page
       const newPage = tasks.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      fetchPage(newPage);
+      if (newPage !== currentPage) fetchPage(newPage);
+      
       apiService.getTasksSummary().then(data => setAllTasksForSummary(data || [])).catch(() => { });
     } catch (error) {
-      toast.error('เกิดข้อผิดพลาดในการลบ: ' + error.message);
-      setLoading(false);
+      console.error(error);
+      toast.error('บันทึกล้มเหลว (ลองใหม่อีกครั้ง)');
+      fetchPage(currentPage); // Rollback by refetching
     }
   };
 
@@ -405,8 +441,28 @@ export const Tasks = () => {
           ) : (
             <>
               {tasks.map(task => (
-                <div key={task.ID} className="glass px-4 py-3 rounded-2xl border border-slate-200/60 hover:shadow-md transition-shadow group flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 space-y-1.5">
+                <div key={task.ID} className={`glass px-4 py-3 rounded-2xl border transition-all group flex flex-col md:flex-row gap-4 relative ${
+                  task.syncState === 'pending' ? 'opacity-70 border-blue-200' : 'border-slate-200/60 hover:shadow-md'
+                }`}>
+                  
+                  {/* Sync Indicators */}
+                  {task.syncState === 'pending' && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 animate-pulse">
+                      🚩 กำลังบันทึก...
+                    </div>
+                  )}
+                  {task.syncState === 'syncing' && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                      <RefreshCw size={10} className="animate-spin" /> กำลังซิงค์...
+                    </div>
+                  )}
+                  {task.syncState === 'success' && (
+                    <div className="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                      <CheckCircle2 size={10} /> อัปเดตแล้ว
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1.5 pt-4 md:pt-0">
                     <div className="flex items-start justify-between">
                       <div className="flex flex-col gap-1 pr-4 flex-1 min-w-0">
                         {task.CustomFields?.Project && (
@@ -420,7 +476,7 @@ export const Tasks = () => {
                           <div className="h-2"></div> 
                         )}
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
+                      <div className="flex flex-col items-end gap-1 shrink-0 mt-2 md:mt-0 pt-2 lg:pt-0">
                         <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                           {task.Status}
                         </span>
@@ -485,6 +541,11 @@ export const Tasks = () => {
                   totalCount={totalCount}
                   pageSize={ITEMS_PER_PAGE}
                   onPageChange={handlePageChange}
+                  onPrefetchPage={(page) => {
+                    if (page <= totalPages) {
+                      apiService.getTasksPaged(page, ITEMS_PER_PAGE, buildFilters()).catch(() => {});
+                    }
+                  }}
                 />
               </div>
             </>
