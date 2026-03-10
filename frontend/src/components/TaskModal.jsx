@@ -48,6 +48,8 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
   const [previewImage, setPreviewImage] = useState(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const [customFields, setCustomFields] = useState(() => {
     if (task?.CustomFields) {
       return Object.entries(task.CustomFields)
@@ -132,6 +134,32 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     if (files.length > 0) {
       processFiles(files);
       toast.success(`วางรูปภาพ ${files.length} รูปเรียบร้อย`);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+    if (files.length > 0) {
+      processFiles(files);
+      toast.success(`ลากวางรูปภาพ ${files.length} รูปเรียบร้อย`);
+    } else {
+      toast.error('กรุณาวางไฟล์รูปภาพเท่านั้น');
     }
   };
 
@@ -309,10 +337,17 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                   </span>
                 </label>
                 <p className="text-[11px] text-red-500 font-medium mb-3 flex items-center gap-1">
-                  * คุณสามารถกด <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">Ctrl + V</kbd> เพื่อวางรูปจากคลิปบอร์ดได้ทันที
+                  * คุณสามารถ <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">ลากวาง</kbd> หรือกด <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">Ctrl + V</kbd> เพื่อเพิ่มรูปได้ทันที
                 </p>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div 
+                  className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 rounded-2xl transition-all ${
+                    isDragging ? 'bg-blue-50 ring-2 ring-blue-400 ring-dashed scale-[1.02]' : ''
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   {images.map((url, idx) => (
                     <div key={`old-${idx}`} className="relative group aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden cursor-pointer">
                       <img src={url} alt={`Task ${idx}`} className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
