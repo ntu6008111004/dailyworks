@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
+import { th } from 'date-fns/locale';
 import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -139,12 +140,20 @@ export const Tasks = () => {
 
   // ─── Derived filter lists ────────────────────────────────────────────────────
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
-  const uniqueUsers = [...new Set(
-    allUsers.filter(u => {
-      if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
-      return filterDepartment === 'All' || u.Department === filterDepartment;
-    }).map(u => u.Name)
-  )].filter(Boolean);
+  const filteredUsers = allUsers.filter(u => {
+    if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
+    return filterDepartment === 'All' || u.Department === filterDepartment;
+  });
+
+  const uniqueUsersMap = new Map();
+  filteredUsers.forEach(u => {
+    if (u.ID && u.Name) uniqueUsersMap.set(u.ID, u.Name);
+  });
+  
+  const uniqueUserOptions = Array.from(uniqueUsersMap.entries()).map(([id, name]) => ({
+    label: name,
+    value: id
+  }));
 
   const hasActiveFilter = searchQuery || localStartDate || localEndDate ||
     filterDepartment !== 'All' || filterUser !== 'All' || filterStatus !== 'All';
@@ -349,7 +358,7 @@ export const Tasks = () => {
               <CustomSelect
                 value={filterUser}
                 onChange={(val) => setFilterUser(val)}
-                options={['All', ...uniqueUsers].map(u => ({ label: u === 'All' ? 'พนง.ทั้งหมด' : u, value: u }))}
+                options={[{ label: 'พนง.ทั้งหมด', value: 'All' }, ...uniqueUserOptions]}
                 className="w-full sm:w-40"
               />
             </div>
@@ -405,7 +414,11 @@ export const Tasks = () => {
                             {task.CustomFields.Project}
                           </span>
                         )}
-                        <h3 className="text-xs text-slate-600 line-clamp-1 leading-snug" title={task.Detail}>{task.Detail}</h3>
+                        {userPerms.showFullTaskDetail ? (
+                          <h3 className="text-xs text-slate-600 line-clamp-3 leading-relaxed mt-2" title={task.Detail}>{task.Detail}</h3>
+                        ) : (
+                          <div className="h-2"></div> 
+                        )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
@@ -419,10 +432,10 @@ export const Tasks = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-500 mt-5 pt-2 border-t border-slate-50">
                       <div className="flex items-center gap-1">
                         <Calendar size={13} />
-                        <span>กำหนดส่ง: {format(new Date(task.DueDate), 'MMM d, yyyy')}</span>
+                        <span>กำหนดส่ง: วัน{format(new Date(task.DueDate), "eeeeที่ d MMMM yyyy", { locale: th })}</span>
                       </div>
                       <div className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded-md">
                         <span className="font-medium text-slate-700">{task.StaffName}</span>
@@ -484,6 +497,7 @@ export const Tasks = () => {
           task={editingTask}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveTask}
+          closeOnOutsideClick={false}
         />
       )}
 
@@ -492,6 +506,7 @@ export const Tasks = () => {
         onClose={() => setIsSummaryOpen(false)}
         tasks={allTasksForSummary}
         user={user}
+        closeOnOutsideClick={false}
       />
 
       <MonthlySummaryModal
@@ -499,6 +514,7 @@ export const Tasks = () => {
         onClose={() => setIsMonthlySummaryOpen(false)}
         tasks={allTasksForSummary}
         user={user}
+        closeOnOutsideClick={false}
       />
 
       <ConfirmModal
@@ -508,6 +524,7 @@ export const Tasks = () => {
         title="ยืนยันการลบข้อมูล"
         message="คุณมั่นใจหรือไม่ว่าต้องการลบงานนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้"
         type="danger"
+        closeOnOutsideClick={false}
       />
     </div>
   );

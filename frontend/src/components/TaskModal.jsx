@@ -5,8 +5,17 @@ import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
+import { useAuth } from '../context/AuthContext';
 
-export const TaskModal = ({ task, onClose, onSave }) => {
+export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true }) => {
+  const { user } = useAuth();
+  
+  const handleBackdropClick = (e) => {
+    if (closeOnOutsideClick && e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   const [formData, setFormData] = useState(() => ({
     Detail: task?.Detail || '',
     Priority: task?.Priority || 'ปานกลาง',
@@ -182,7 +191,10 @@ export const TaskModal = ({ task, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm overflow-y-auto"
+      onClick={handleBackdropClick}
+    >
       <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <h2 className="text-xl font-bold text-slate-900">

@@ -6,12 +6,11 @@ import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
 
 export const MyTeam = () => {
-  const { user } = useAuth();
+  const { user, getPositionName } = useAuth();
   const [allUsers, setAllUsers] = useState([]);
   const [allTasks, setAllTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
-  const [positions, setPositions] = useState([]);
 
   const userRole = user?.Role || user?.role || 'Staff';
   const userDept = user?.Department || user?.department || '';
@@ -25,15 +24,13 @@ export const MyTeam = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [usersData, tasksData, posData] = await Promise.all([
-        apiService.getUsers(),
-        apiService.getTasksSummary(),
-        apiService.getPositions().catch(() => [])
+      const [usersData, tasksData] = await Promise.all([
+        apiService.getUsers({ includeImage: false }),
+        apiService.getTasksSummary()
       ]);
       
       setAllUsers(usersData);
       setAllTasks(tasksData);
-      setPositions(posData);
       
       // Default filter for non-admins to their own department
       if (!isAdmin) {
@@ -121,11 +118,6 @@ export const MyTeam = () => {
     return { teamMembers: members, stats: teamStats };
   }, [allUsers, allTasks, filterDepartment, isAdmin, userDept, today]);
 
-  const getPositionName = (id) => {
-    const pos = positions.find(p => p.ID === id);
-    return pos ? pos.Name : id;
-  };
-
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลทีม..." />
@@ -211,15 +203,15 @@ export const MyTeam = () => {
                   <tr key={member.ID} className={`transition-colors group ${member.hasOverdue ? 'hover:bg-red-50/30' : member.isHighWorkload ? 'hover:bg-amber-50/30' : 'hover:bg-blue-50/20'}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative">
-                          {member.ProfileImage ? (
-                            <img src={member.ProfileImage} alt={member.Name} className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xl shrink-0 border-2 border-white shadow-sm">
-                              {(member.Name || member.Username || 'U').charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          {/* Indicator Dot */}
+                         <div className="relative">
+                           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-xl shrink-0 border-2 border-white shadow-sm overflow-hidden">
+                             {member.ProfileImage && member.ProfileImage !== 'has_image' ? (
+                               <img src={member.ProfileImage} alt={member.Name} className="w-full h-full object-cover" />
+                             ) : (
+                               (member.Name || member.Username || 'U').charAt(0).toUpperCase()
+                             )}
+                           </div>
+                           {/* Indicator Dot */}
                           <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white shadow-sm ${member.hasOverdue ? 'bg-red-500' : member.isHighWorkload ? 'bg-amber-500' : member.isAvailable ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
                         </div>
                         <div>

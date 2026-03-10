@@ -8,9 +8,8 @@ import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
 
 export const AdminUsers = () => {
-  const { user: currentUser, updateUserState } = useAuth();
+  const { user: currentUser, updateUserState, positions } = useAuth();
   const [users, setUsers] = useState([]);
-  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -27,29 +26,14 @@ export const AdminUsers = () => {
   });
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        await apiService.migrateUsersSheet();
-        await apiService.migrateUsersAddPosition();
-        await apiService.migrateUsersPositionToId();
-        const [_, posData] = await Promise.all([
-          fetchUsers(),
-          apiService.getPositions().catch(() => [])
-        ]);
-        setPositions(posData || []);
-      } catch (err) {
-        console.error('Migration failed:', err);
-        fetchUsers();
-        apiService.getPositions().then(d => setPositions(d || [])).catch(() => {});
-      }
-    };
-    init();
+    fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const data = await apiService.getUsers();
+      // Fetch without images for the table
+      const data = await apiService.getUsers({ includeImage: false });
       setUsers(data);
     } catch {
       toast.error('ไม่สามารถดึงข้อมูลผู้ใช้ได้');
@@ -95,9 +79,15 @@ export const AdminUsers = () => {
     });
   };
 
-  const handleOpenModal = (user = null) => {
+  const handleOpenModal = async (user = null) => {
     if (user) {
       setEditingUser(user);
+      
+      // If we don't have the image (because we fetched lightweight list), 
+      // we might want to fetch it now if needed, but for now we'll just populate what we have.
+      // Since it's an admin edit, maybe we fetch the full list or a single user?
+      // For now, let's just use what's in the list.
+      
       setFormData({
         ID: user.ID,
         Username: user.Username,
@@ -106,8 +96,24 @@ export const AdminUsers = () => {
         Department: user.Department,
         Name: user.Name,
         Position: user.Position || '',
-        ProfileImage: user.ProfileImage || ''
+        ProfileImage: user.ProfileImage === 'has_image' ? '' : (user.ProfileImage || '')
       });
+
+      // If it says "has_image", we need to fetch the full user data to get the base64
+      if (user.ProfileImage === 'has_image') {
+        try {
+          // We don't have a getUserById but we can use getUsers with ID if we modify backend,
+          // or just fetch all with images for this one time. 
+          // Let's just fetch all users with images and find the one.
+          const allWithImages = await apiService.getUsers({ includeImage: true });
+          const fullUser = allWithImages.find(u => u.ID === user.ID);
+          if (fullUser) {
+            setFormData(prev => ({ ...prev, ProfileImage: fullUser.ProfileImage }));
+          }
+        } catch (e) {
+          console.error("Failed to fetch user image", e);
+        }
+      }
     } else {
       setEditingUser(null);
       setFormData({ Username: '', Password: '', Role: 'Staff', Department: '', Name: '', Position: '', ProfileImage: '' });
@@ -201,18 +207,19 @@ export const AdminUsers = () => {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {users.map(u => (
                 <tr key={u.ID} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {u.ProfileImage ? (
-                        <img src={u.ProfileImage} alt={u.Name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                          {u.Name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="font-medium text-slate-900">{u.Name}</div>
-                    </div>
-                  </td>                  <td className="px-6 py-4 text-slate-500">{u.Username}</td>
+                   <td className="px-6 py-4">
+                     <div className="flex items-center gap-3">
+                       <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs overflow-hidden">
+                         {u.ProfileImage && u.ProfileImage !== 'has_image' ? (
+                           <img src={u.ProfileImage} alt={u.Name} className="w-full h-full object-cover" />
+                         ) : (
+                           u.Name.charAt(0).toUpperCase()
+                         )}
+                       </div>
+                       <div className="font-medium text-slate-900">{u.Name}</div>
+                     </div>
+                   </td>
+                  <td className="px-6 py-4 text-slate-500">{u.Username}</td>
                   <td className="px-6 py-4">{u.Department}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 text-xs font-semibold rounded-md ${
@@ -242,8 +249,14 @@ export const AdminUsers = () => {
 
       {/* User Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h2 className="text-xl font-bold text-slate-900">{editingUser ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้ใหม่'}</h2>
             </div>

@@ -7,12 +7,11 @@ import { LoadingModal } from '../components/LoadingModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const MyProfile = () => {
-  const { user, updateUserState } = useAuth();
+  const { user, updateUserState, getPositionName } = useAuth();
   const fileInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [positions, setPositions] = useState([]);
   
   const [formData, setFormData] = useState({
     ID: user?.ID || '',
@@ -26,22 +25,8 @@ export const MyProfile = () => {
   });
 
   useEffect(() => {
-    fetchPositions();
+    // Positions are now managed globally in AuthContext
   }, []);
-
-  const fetchPositions = async () => {
-    try {
-      const data = await apiService.getPositions();
-      setPositions(data || []);
-    } catch (e) {
-      console.error('Error fetching positions:', e);
-    }
-  };
-
-  const getPositionName = (id) => {
-    const pos = positions.find(p => p.ID === id);
-    return pos ? pos.Name : (id || '— ไม่ระบุ —');
-  };
 
   const compressProfileImage = (file) => {
     return new Promise((resolve) => {
@@ -109,11 +94,12 @@ export const MyProfile = () => {
     setLoading(true);
     
     try {
-      const updateData = { ...formData };
+      // Create a shallow copy to filter out sensitive fields
+      const { Role, Department, Position, ...updateData } = formData;
       
-      // Preserve original role and department
-      updateData.Role = user?.Role || user?.role;
-      updateData.Department = user?.Department || user?.department;
+      // Only admins should be able to send these fields, or we just omit them 
+      // as they are handled as read-only on the backend for non-admins anyway.
+      // But for clarity/security, we omit them here too.
       
       if (!updateData.Password) {
         delete updateData.Password;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { apiService } from '../services/api';
 
 const AuthContext = createContext();
@@ -65,10 +65,63 @@ function loadSession() {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => loadSession());
   const [loading, setLoading] = useState(false);
+  const [positions, setPositions] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Helper to get position name by ID
+  const getPositionName = useCallback((id) => {
+    if (!id) return '';
+    const idStr = String(id);
+    const pos = positions.find(p => String(p.ID) === idStr);
+    return pos ? pos.Name : id;
+  }, [positions]);
+
+  // Helper to get position color by ID
+  const getPositionColor = useCallback((id) => {
+    if (!id) return '';
+    const idStr = String(id);
+    const pos = positions.find(p => String(p.ID) === idStr);
+    
+    if (pos?.Color) return pos.Color;
+    
+    const name = pos?.Name || '';
+    if (name.includes('Admin')) return 'bg-red-100 text-red-600';
+    if (name.includes('Manager') || name.includes('หัวหน้า')) return 'bg-purple-100 text-purple-600';
+    if (name.includes('Staff') || name.includes('พนักงาน')) return 'bg-blue-100 text-blue-600';
+    return 'bg-blue-50 text-blue-500';
+  }, [positions]);
+
+  const refreshInitData = useCallback(async (targetId) => {
+    if (!targetId && !isInitializing) return;
+    
+    try {
+      const data = await apiService.getInitData(targetId);
+      if (data.positions) setPositions(data.positions);
+      if (data.departments) setDepartments(data.departments);
+      if (data.currentUser) {
+        // Use a functional update to avoid dependency on 'user'
+        setUser(prev => {
+          const updated = { ...prev, ...data.currentUser };
+          if (JSON.stringify(updated) !== JSON.stringify(prev)) {
+            saveSession(updated);
+            return updated;
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch init data:', error);
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [isInitializing]); // Removed 'user' to break the loop
 
   React.useEffect(() => {
+    const userId = user?.ID || user?.id;
+    refreshInitData(userId);
+    
     if (user) {
-      // Pass user ID + name so backend gets proper executorId (ID) not name
       apiService.setUserSession(
         user.ID || user.id,
         user.Name || user.name || user.Username
@@ -76,7 +129,8 @@ export const AuthProvider = ({ children }) => {
     } else {
       apiService.setUserSession(null, 'System');
     }
-  }, [user]);
+    // Only re-run when actual identity fields change, not the whole user object
+  }, [user?.ID, user?.id, user?.Username, refreshInitData]);
 
   const login = async (username, password) => {
     setLoading(true);
@@ -84,6 +138,7 @@ export const AuthProvider = ({ children }) => {
       const userData = await apiService.login(username, password);
       setUser(userData);
       saveSession(userData);
+      // Data will be refreshed by useEffect hook due to user change
       return userData;
     } finally {
       setLoading(false);
@@ -92,6 +147,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
+    setPositions([]);
+    setDepartments([]);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('user');
   };
@@ -103,7 +160,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUserState, loading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      updateUserState, 
+      loading, 
+      positions, 
+      departments, 
+      getPositionName,
+      refreshInitData,
+      isInitializing,
+      getPositionColor
+    }}>
       {children}
     </AuthContext.Provider>
   );
