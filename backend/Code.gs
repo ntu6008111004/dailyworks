@@ -4,6 +4,7 @@ const SCRIPT_PROP = PropertiesService.getScriptProperties();
 const SHEET_USERS = "Users";
 const SHEET_TASKS = "Tasks";
 const SHEET_LOGS = "ActivityLogs";
+const SHEET_POSITIONS = "Positions";
 
 function setup() {
   const doc = SpreadsheetApp.getActiveSpreadsheet();
@@ -177,6 +178,27 @@ function handleResponse(e) {
         break;
       case "MIGRATE_TASKS_SHEET":
         result = migrateTasksSheet(doc);
+        break;
+      case "getPositions":
+        result = getPositions(doc);
+        break;
+      case "addPosition":
+        result = addPosition(doc, data, executorId);
+        break;
+      case "updatePosition":
+        result = updatePosition(doc, data, executorId);
+        break;
+      case "deletePosition":
+        result = deletePosition(doc, data.id, executorId);
+        break;
+      case "MIGRATE_POSITIONS_SHEET":
+        result = migratePositionsSheet(doc);
+        break;
+      case "MIGRATE_USERS_ADD_POSITION":
+        result = migrateUsersAddPosition(doc);
+        break;
+      case "MIGRATE_USERS_ADD_PERMISSIONS":
+        result = migrateUsersAddPermissions(doc);
         break;
       default:
         throw new Error("Invalid action");
@@ -395,8 +417,18 @@ function getTasksPaged(doc, params) {
     // Status filter
     if (status !== 'All' && t.Status !== status) return false;
 
-    // Keyword search
-    if (keyword && !(t.Detail || '').toLowerCase().includes(keyword)) return false;
+    // Keyword search — search Detail AND CustomFields.Project
+    if (keyword) {
+      var detailMatch = (t.Detail || '').toLowerCase().includes(keyword);
+      var projectVal = '';
+      if (t.CustomFields && typeof t.CustomFields === 'object') {
+        projectVal = (t.CustomFields.Project || '').toLowerCase();
+      } else if (t.CustomFields && typeof t.CustomFields === 'string') {
+        try { projectVal = (JSON.parse(t.CustomFields).Project || '').toLowerCase(); } catch(e) {}
+      }
+      var projectMatch = projectVal.includes(keyword);
+      if (!detailMatch && !projectMatch) return false;
+    }
 
     // Date range filter
     if (startDate && t.StartDate && t.StartDate < startDate) return false;
@@ -553,7 +585,16 @@ function getUsers(doc) {
   return data.slice(1).map((row) => {
     let user = {};
     headers.forEach((header, i) => {
-      user[header] = row[i];
+      let val = row[i];
+      // Parse Permissions JSON if present
+      if (header === 'Permissions') {
+        try {
+          val = val ? JSON.parse(val) : {};
+        } catch(e) {
+          val = {};
+        }
+      }
+      user[header] = val;
     });
     return user;
   });
@@ -631,6 +672,10 @@ function updateUser(doc, data, executorId) {
         }
 
         if (val !== undefined) {
+          // Serialize Permissions if it's an object
+          if (header === 'Permissions' && typeof val === 'object' && val !== null) {
+            val = JSON.stringify(val);
+          }
           sheet.getRange(i + 1, j + 1).setValue(val);
         }
       });
@@ -921,4 +966,113 @@ function migrateTasksSheet(doc) {
     return { message: "CompletedAt column added successfully" };
   }
   return { message: "CompletedAt column already exists" };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Positions CRUD
+// ───────────────────────────────────────────────────────────────────────────
+
+function getPositions(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  const headers = data[0].map(h => h.toString().trim());
+  return data.slice(1).map(row => {
+    let pos = {};
+    headers.forEach((h, i) => { pos[h] = row[i]; });
+    return pos;
+  }).filter(p => p.ID && p.Name);
+}
+
+function addPosition(doc, data, executorId) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!sheet) throw new Error('Positions sheet not found');
+  const id = Utilities.getUuid();
+  sheet.appendRow([id, data.Name || '']);
+  logActivity(doc, executorId || 'System', 'ADD_POSITION', 'Position: ' + data.Name);
+  return { message: 'Position added', id };
+}
+
+function updatePosition(doc, data, executorId) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!sheet) throw new Error('Positions sheet not found');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0].map(h => h.toString().trim());
+  const idIdx = headers.indexOf('ID');
+  const nameIdx = headers.indexOf('Name');
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIdx] == data.ID) {
+      if (nameIdx !== -1) sheet.getRange(i + 1, nameIdx + 1).setValue(data.Name || rows[i][nameIdx]);
+      logActivity(doc, executorId || 'System', 'UPDATE_POSITION', 'Position ' + data.ID);
+      return { message: 'Position updated' };
+    }
+  }
+  throw new Error('Position not found');
+}
+
+function deletePosition(doc, id, executorId) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!sheet) throw new Error('Positions sheet not found');
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0].map(h => h.toString().trim());
+  const idIdx = headers.indexOf('ID');
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][idIdx] == id) {
+      sheet.deleteRow(i + 1);
+      logActivity(doc, executorId || 'System', 'DELETE_POSITION', 'Position ' + id);
+      return { message: 'Position deleted' };
+    }
+  }
+  throw new Error('Position not found');
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Migration helpers
+// ───────────────────────────────────────────────────────────────────────────
+
+function migratePositionsSheet(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!sheet) {
+    sheet = doc.insertSheet(SHEET_POSITIONS);
+    sheet.appendRow(['ID', 'Name']);
+    SpreadsheetApp.flush();
+    return { message: 'Positions sheet created' };
+  }
+  return { message: 'Positions sheet already exists' };
+}
+
+function migrateUsersAddPosition(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  if (!sheet) return { error: 'Users sheet not found' };
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf('Position') === -1) {
+    const newCol = sheet.getLastColumn() + 1;
+    sheet.insertColumnAfter(sheet.getLastColumn());
+    sheet.getRange(1, newCol).setValue('Position');
+    SpreadsheetApp.flush();
+    return { message: 'Position column added to Users' };
+  }
+  return { message: 'Position column already exists' };
+}
+
+function migrateUsersAddPermissions(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = doc.getSheetByName(SHEET_USERS);
+  if (!sheet) return { error: 'Users sheet not found' };
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf('Permissions') === -1) {
+    const newCol = sheet.getLastColumn() + 1;
+    sheet.insertColumnAfter(sheet.getLastColumn());
+    sheet.getRange(1, newCol).setValue('Permissions');
+    SpreadsheetApp.flush();
+    return { message: 'Permissions column added to Users' };
+  }
+  return { message: 'Permissions column already exists' };
 }

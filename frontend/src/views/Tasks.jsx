@@ -131,6 +131,12 @@ export const Tasks = () => {
   const isHRHead = userRole === 'Head' && userDept === 'HR';
   const canSeeAll = isAdmin || isHRHead;
 
+  // ─── Permissions ────────────────────────────────────────────────────────────
+  const DEFAULT_PERMS = { showDailySummary: true, showMonthlySummary: true, showFullTaskDetail: true };
+  const userPerms = user?.Permissions && typeof user.Permissions === 'object'
+    ? { ...DEFAULT_PERMS, ...user.Permissions }
+    : DEFAULT_PERMS;
+
   // ─── Derived filter lists ────────────────────────────────────────────────────
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
   const uniqueUsers = [...new Set(
@@ -279,6 +285,7 @@ export const Tasks = () => {
           <p className="text-slate-500">จัดการข้อมูลบันทึกงานประจำวันของคุณ</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {userPerms.showDailySummary && (
           <button
             onClick={() => setIsSummaryOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-indigo-100"
@@ -286,6 +293,8 @@ export const Tasks = () => {
             <Calendar size={20} />
             <span className="hidden sm:inline">สรุปงานวันนี้</span>
           </button>
+          )}
+          {userPerms.showMonthlySummary && (
           <button
             onClick={() => setIsMonthlySummaryOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-sky-100"
@@ -293,6 +302,7 @@ export const Tasks = () => {
             <PieChart size={20} />
             <span className="hidden sm:inline">สรุปรายเดือน</span>
           </button>
+          )}
           <button
             onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all shadow-sm focus:ring-4 focus:ring-blue-100"
@@ -309,7 +319,7 @@ export const Tasks = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
             type="text"
-            placeholder="ค้นหางาน..."
+            placeholder="ค้นหางาน หรือชื่อโปรเจค..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -386,43 +396,43 @@ export const Tasks = () => {
           ) : (
             <>
               {tasks.map(task => (
-                <div key={task.ID} className="glass p-5 rounded-2xl border border-slate-200/60 hover:shadow-md transition-shadow group flex flex-col md:flex-row gap-6">
-                  <div className="flex-1 space-y-3">
+                <div key={task.ID} className="glass px-4 py-3 rounded-2xl border border-slate-200/60 hover:shadow-md transition-shadow group flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 space-y-1.5">
                     <div className="flex items-start justify-between">
-                      <div className="flex flex-col gap-1.5 pr-6">
+                      <div className="flex flex-col gap-1 pr-4 flex-1 min-w-0">
                         {task.CustomFields?.Project && (
-                          <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md self-start border border-indigo-100">
-                            โปรเจค: {task.CustomFields.Project}
+                          <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg self-start border border-indigo-100 leading-tight">
+                            {task.CustomFields.Project}
                           </span>
                         )}
-                        <h3 className="text-base font-bold text-slate-900 line-clamp-2" title={task.Detail}>{task.Detail}</h3>
+                        <h3 className="text-xs text-slate-600 line-clamp-1 leading-snug" title={task.Detail}>{task.Detail}</h3>
                       </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className={`shrink-0 px-3 py-1 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                           {task.Status}
                         </span>
                         {apiService.isOverdue(task) && (
-                          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
                             ล่าช้า
                           </span>
                         )}
                       </div>
                     </div>
-                    
-                    <div className="flex flex-wrap gap-4 text-sm text-slate-500">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar size={16} />
+
+                    <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                      <div className="flex items-center gap-1">
+                        <Calendar size={13} />
                         <span>กำหนดส่ง: {format(new Date(task.DueDate), 'MMM d, yyyy')}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-100 rounded-md">
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded-md">
                         <span className="font-medium text-slate-700">{task.StaffName}</span>
                       </div>
                     </div>
 
-                    {task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
-                      <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+                    {userPerms.showFullTaskDetail && task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
+                      <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
                         {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images' && k !== 'Project').map(([key, value]) => (
-                          <div key={key} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-blue-800">
+                          <div key={key} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-blue-800">
                             <span className="font-semibold">{key}:</span> {value}
                           </div>
                         ))}
@@ -430,25 +440,25 @@ export const Tasks = () => {
                     )}
 
                     {task.HasImages && (
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-md max-w-max border border-green-100 mt-2">
-                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      <div className="flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-md max-w-max border border-green-100">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
                         มีรูปภาพแนบ
                       </div>
                     )}
                   </div>
 
-                  <div className="flex flex-row md:flex-col gap-2 justify-end mt-4 md:mt-0">
+                  <div className="flex flex-row md:flex-col gap-2 justify-end">
                     <button
                       onClick={() => handleEditTask(task)}
                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     >
-                      <Edit2 size={18} />
+                      <Edit2 size={16} />
                     </button>
                     <button
                       onClick={() => requestDelete(task.ID)}
                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

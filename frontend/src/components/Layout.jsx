@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
 
@@ -19,8 +19,9 @@ export const Layout = () => {
   }
 
   if (user?.Role === 'Admin' || user?.role === 'Admin') {
-    // We already imported Users, let's just reuse it 
     navItems.push({ name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: <Users size={20} /> });
+    navItems.push({ name: 'Master Data', path: '/admin/masterdata', icon: <Database size={20} /> });
+    navItems.push({ name: 'Role Management', path: '/admin/roles', icon: <ShieldCheck size={20} /> });
   }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

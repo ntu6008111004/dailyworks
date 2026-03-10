@@ -10,6 +10,7 @@ import { CustomSelect } from '../components/CustomSelect';
 export const AdminUsers = () => {
   const { user: currentUser, updateUserState } = useAuth();
   const [users, setUsers] = useState([]);
+  const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -21,6 +22,7 @@ export const AdminUsers = () => {
     Role: 'Staff',
     Department: '',
     Name: '',
+    Position: '',
     ProfileImage: ''
   });
 
@@ -28,10 +30,16 @@ export const AdminUsers = () => {
     const init = async () => {
       try {
         await apiService.migrateUsersSheet();
-        await fetchUsers();
+        await apiService.migrateUsersAddPosition();
+        const [_, posData] = await Promise.all([
+          fetchUsers(),
+          apiService.getPositions().catch(() => [])
+        ]);
+        setPositions(posData || []);
       } catch (err) {
         console.error('Migration failed:', err);
         fetchUsers();
+        apiService.getPositions().then(d => setPositions(d || [])).catch(() => {});
       }
     };
     init();
@@ -96,11 +104,12 @@ export const AdminUsers = () => {
         Role: user.Role,
         Department: user.Department,
         Name: user.Name,
+        Position: user.Position || '',
         ProfileImage: user.ProfileImage || ''
       });
     } else {
       setEditingUser(null);
-      setFormData({ Username: '', Password: '', Role: 'Staff', Department: '', Name: '', ProfileImage: '' });
+      setFormData({ Username: '', Password: '', Role: 'Staff', Department: '', Name: '', Position: '', ProfileImage: '' });
     }
     setIsModalOpen(true);
   };
@@ -290,6 +299,17 @@ export const AdminUsers = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">แผนก <span className="text-red-500">*</span></label>
                   <input required type="text" value={formData.Department} onChange={e => setFormData({...formData, Department: e.target.value})} className="w-full px-4 py-2 border rounded-xl" placeholder="เช่น IT, HR" />
                 </div>
+              </div>
+              <div>
+                <CustomSelect
+                  label="ตำแหน่งงาน (Position)"
+                  value={formData.Position || ''}
+                  onChange={val => setFormData({...formData, Position: val})}
+                  options={[
+                    { label: '— ไม่ระบุ —', value: '' },
+                    ...positions.map(p => ({ label: p.Name, value: p.Name }))
+                  ]}
+                />
               </div>
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">ยกเลิก</button>
