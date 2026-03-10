@@ -191,17 +191,31 @@ export const Tasks = () => {
 
   // Initial mount: also fetch users list and all tasks for summary modals
   useEffect(() => {
+    let isMounted = true;
     fetchPage(1);
 
     // Fetch user list for filter dropdowns (Admins/Heads only)
     if (canSeeAll || userRole === 'Head') {
-      apiService.getUsers().then(setAllUsers).catch(() => { });
+      apiService.getUsers().then(data => { if (isMounted) setAllUsers(data); }).catch(() => { });
     }
 
     // Fetch summary task list (lightweight) once for modals
-    apiService.getTasksSummary().then(data => {
-      setAllTasksForSummary(data || []);
-    }).catch(() => { });
+    const fetchSummary = () => {
+      apiService.getTasksSummary().then(data => {
+        if (isMounted) setAllTasksForSummary(data || []);
+      }).catch(() => { });
+    };
+    
+    fetchSummary();
+
+    window.addEventListener('tasks-optimistic-update', fetchSummary);
+    window.addEventListener('cache-cleared', fetchSummary);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tasks-optimistic-update', fetchSummary);
+      window.removeEventListener('cache-cleared', fetchSummary);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -244,6 +258,7 @@ export const Tasks = () => {
         // Optimistic Edit
         const oldTask = tasks.find(t => t.ID === payload.ID);
         setTasks(prev => prev.map(t => t.ID === payload.ID ? { ...t, ...payload, syncState: 'syncing' } : t));
+        apiService.mutateSummaryCache('update', payload);
         setIsModalOpen(false);
 
         try {
@@ -263,6 +278,7 @@ export const Tasks = () => {
         const tempId = 'temp-' + Date.now();
         const newTask = { ...payload, ID: tempId, CreatedAt: new Date().toISOString(), syncState: 'pending' };
         setTasks(prev => [newTask, ...prev]);
+        apiService.mutateSummaryCache('add', newTask);
         setIsModalOpen(false);
 
         try {
@@ -279,9 +295,6 @@ export const Tasks = () => {
           toast.error('เกิดข้อผิดพลาดในการเพิ่มงาน: ' + error.message);
         }
       }
-      
-      // Refresh summary list too
-      apiService.getTasksSummary().then(data => setAllTasksForSummary(data || [])).catch(() => { });
     } catch (error) {
       console.error(error);
       toast.error('เกิดข้อผิดพลาดในการสร้าง payload');
@@ -296,6 +309,7 @@ export const Tasks = () => {
     // Optimistic Delete
     const targetId = deleteConfirmId;
     setTasks(prev => prev.filter(t => t.ID !== targetId));
+    apiService.mutateSummaryCache('delete', targetId);
     setDeleteConfirmId(null);
     
     try {
@@ -303,8 +317,6 @@ export const Tasks = () => {
       toast.success('ลบงานเรียบร้อย');
       const newPage = tasks.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
       if (newPage !== currentPage) fetchPage(newPage, true);
-      
-      apiService.getTasksSummary().then(data => setAllTasksForSummary(data || [])).catch(() => { });
     } catch (error) {
       console.error(error);
       toast.error('บันทึกล้มเหลว (ลองใหม่อีกครั้ง)');

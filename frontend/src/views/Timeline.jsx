@@ -52,16 +52,37 @@ export const Timeline = () => {
   const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    let isMounted = true;
+    const fetchTimeline = async () => {
       try {
         const data = await apiService.getTasksSummary();
-        setTasks(data);
+        if (isMounted) setTasks(data);
       } catch (error) {
         console.error(error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
-    })();
+    };
+    
+    fetchTimeline();
+
+    const handleSync = async () => {
+      try {
+        const data = await apiService.getTasksSummary();
+        if (isMounted) setTasks(data);
+      } catch (err) {
+        console.error('Timeline sync error:', err);
+      }
+    };
+
+    window.addEventListener('tasks-optimistic-update', handleSync);
+    window.addEventListener('cache-cleared', handleSync);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('tasks-optimistic-update', handleSync);
+      window.removeEventListener('cache-cleared', handleSync);
+    };
   }, []);
 
   // Filter tasks for current user only
