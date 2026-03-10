@@ -51,7 +51,24 @@ export const Dashboard = () => {
     };
     
     fetchData();
-    return () => { isMounted = false; };
+
+    const handleSync = async () => {
+      try {
+        const data = await apiService.getTasksSummary();
+        if (isMounted) setTasks(data);
+      } catch (err) {
+        console.error('Sync error:', err);
+      }
+    };
+
+    window.addEventListener('tasks-optimistic-update', handleSync);
+    window.addEventListener('cache-cleared', handleSync);
+
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('tasks-optimistic-update', handleSync);
+      window.removeEventListener('cache-cleared', handleSync);
+    };
   }, [user, canSeeAll, userRole]);
 
   const uniqueDepartments = useMemo(() => {

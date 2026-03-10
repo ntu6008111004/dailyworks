@@ -20,6 +20,23 @@ export const apiService = {
 
   clearCache() {
     cache.clear();
+    window.dispatchEvent(new CustomEvent('cache-cleared'));
+  },
+
+  mutateSummaryCache(actionType, taskOrId) {
+    const summaryKey = JSON.stringify({ action: 'getTasksSummary', data: {} });
+    if (cache.has(summaryKey)) {
+      let tasks = cache.get(summaryKey).data;
+      if (actionType === 'add') {
+         tasks = [taskOrId, ...tasks];
+      } else if (actionType === 'update') {
+         tasks = tasks.map(t => String(t.ID) === String(taskOrId.ID) ? { ...t, ...taskOrId } : t);
+      } else if (actionType === 'delete') {
+         tasks = tasks.filter(t => String(t.ID) !== String(taskOrId));
+      }
+      cache.set(summaryKey, { data: tasks, timestamp: Date.now() });
+      window.dispatchEvent(new CustomEvent('tasks-optimistic-update'));
+    }
   },
 
   async request(action, data = {}, options = { useCache: false }) {
@@ -104,20 +121,26 @@ export const apiService = {
   addTask(task) {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
-    this.clearCache();
-    return this.request('addTask', data);
+    return this.request('addTask', data).then(res => {
+      this.clearCache();
+      return res;
+    });
   },
 
   updateTask(task) {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
-    this.clearCache();
-    return this.request('updateTask', data);
+    return this.request('updateTask', data).then(res => {
+      this.clearCache();
+      return res;
+    });
   },
 
   deleteTask(id) {
-    this.clearCache();
-    return this.request('deleteTask', { id });
+    return this.request('deleteTask', { id }).then(res => {
+      this.clearCache();
+      return res;
+    });
   },
 
   getUsers(options = {}) {
