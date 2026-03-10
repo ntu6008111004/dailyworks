@@ -1,5 +1,10 @@
 const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
 
+// Simple in-memory cache and request deduplication
+const cache = new Map();
+const pendingRequests = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const apiService = {
   executorId: 'System',
   userId: '',
@@ -8,33 +13,66 @@ export const apiService = {
     this.executorId = id || 'System';
   },
 
-  // New method: set both IDs separately
   setUserSession(userId, displayName) {
     this.userId = String(userId || '');
     this.executorId = String(userId || displayName || 'System');
   },
 
-  async request(action, data = {}) {
-    try {
-      const response = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain', // Avoid CORS preflight options
-        },
-        body: JSON.stringify({ 
-          action, 
-          data, 
-          executorId: this.executorId 
-        }),
-      });
-      
-      const result = await response.json();
-      if (result.status === 'error') throw new Error(result.message);
-      return result.data;
-    } catch (error) {
-      console.error('API Error:', error);
-      throw error;
+  clearCache() {
+    cache.clear();
+  },
+
+  async request(action, data = {}, options = { useCache: false }) {
+    const cacheKey = options.useCache ? JSON.stringify({ action, data }) : null;
+
+    if (cacheKey) {
+      if (cache.has(cacheKey)) {
+        const cached = cache.get(cacheKey);
+        if (Date.now() - cached.timestamp < CACHE_TTL) {
+          return cached.data;
+        }
+        cache.delete(cacheKey); // Expired
+      }
+
+      if (pendingRequests.has(cacheKey)) {
+        return pendingRequests.get(cacheKey);
+      }
     }
+
+    const fetchPromise = (async () => {
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain', // Avoid CORS preflight options
+          },
+          body: JSON.stringify({ 
+            action, 
+            data, 
+            executorId: this.executorId 
+          }),
+        });
+        
+        const result = await response.json();
+        if (result.status === 'error') throw new Error(result.message);
+        
+        if (cacheKey) {
+          cache.set(cacheKey, { data: result.data, timestamp: Date.now() });
+        }
+        return result.data;
+      } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+      } finally {
+        if (cacheKey) pendingRequests.delete(cacheKey);
+      }
+    })();
+
+    if (cacheKey) {
+      pendingRequests.set(cacheKey, fetchPromise);
+    }
+
+    return fetchPromise;
   },
 
   login(username, password) {
@@ -46,17 +84,17 @@ export const apiService = {
   },
 
   getTasksSummary() {
-    return this.request('getTasksSummary');
+    return this.request('getTasksSummary', {}, { useCache: true });
   },
 
-  // Paginated tasks with server-side filter + RBAC
-  // filters: { keyword, status, department, user, startDate, endDate, userRole, userName, userDept, userId }
   getTasksPaged(page, pageSize, filters = {}) {
-    return this.request('getTasksPaged', { page, pageSize, ...filters });
+    // Enabled caching so that prefetching on hover works efficiently.
+    // Mutations (add/edit/delete) will clear the cache anyway.
+    return this.request('getTasksPaged', { page, pageSize, ...filters }, { useCache: true });
   },
 
   getInitData(userId) {
-    return this.request('init', { userId });
+    return this.request('init', { userId }, { useCache: true });
   },
 
   getTaskById(id) {
@@ -64,38 +102,42 @@ export const apiService = {
   },
 
   addTask(task) {
-    // Always inject UserID from session if not provided in task
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
+    this.clearCache();
     return this.request('addTask', data);
   },
 
   updateTask(task) {
-    // Always inject UserID from session if not provided in task
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
+    this.clearCache();
     return this.request('updateTask', data);
   },
 
   deleteTask(id) {
+    this.clearCache();
     return this.request('deleteTask', { id });
   },
 
   getUsers(options = {}) {
-    return this.request('getUsers', options);
+    return this.request('getUsers', options, { useCache: true });
   },
 
   addUser(user) {
     if (user.Password) user.Password = btoa(user.Password);
+    this.clearCache();
     return this.request('addUser', user);
   },
 
   updateUser(user) {
     if (user.Password && !user.Password.endsWith('==')) user.Password = btoa(user.Password);
+    this.clearCache();
     return this.request('updateUser', user);
   },
 
   deleteUser(id) {
+    this.clearCache();
     return this.request('deleteUser', { id });
   },
 
@@ -113,15 +155,18 @@ export const apiService = {
 
   // Positions Master Data
   getPositions() {
-    return this.request('getPositions');
+    return this.request('getPositions', {}, { useCache: true });
   },
   addPosition(data) {
+    this.clearCache();
     return this.request('addPosition', data);
   },
   updatePosition(data) {
+    this.clearCache();
     return this.request('updatePosition', data);
   },
   deletePosition(id) {
+    this.clearCache();
     return this.request('deletePosition', { id });
   },
   migratePositionsSheet() {
@@ -139,6 +184,7 @@ export const apiService = {
 
   // Role/Permissions update (re-uses updateUser)
   updateUserPermissions(userId, permissions) {
+    this.clearCache();
     return this.request('updateUser', { ID: userId, Permissions: permissions });
   },
 
