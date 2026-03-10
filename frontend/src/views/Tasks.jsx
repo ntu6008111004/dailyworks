@@ -173,8 +173,8 @@ export const Tasks = () => {
     userId: String(user?.ID || user?.id || ''),
   }), [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate, userRole, userName, userDept, user]);
 
-  const fetchPage = useCallback(async (page) => {
-    setLoading(true);
+  const fetchPage = useCallback(async (page, isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const result = await apiService.getTasksPaged(page, ITEMS_PER_PAGE, buildFilters());
       setTasks(result.tasks || []);
@@ -185,7 +185,7 @@ export const Tasks = () => {
       console.error(error);
       toast.error('ไม่สามารถดึงข้อมูลได้');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [buildFilters]);
 
@@ -267,8 +267,11 @@ export const Tasks = () => {
 
         try {
           await apiService.addTask(payload);
-          // To ensure IDs and timestamps match server, refetch
-          fetchPage(1);
+          setTasks(prev => prev.map(t => t.ID === tempId ? { ...t, syncState: 'success' } : t));
+          setTimeout(() => {
+            // To ensure IDs and timestamps match server, silently refetch after the indicator finishes
+            fetchPage(1, true);
+          }, 1500);
           toast.success('เพิ่มงานเรียบร้อย');
         } catch (error) {
           // Rollback
@@ -299,13 +302,13 @@ export const Tasks = () => {
       await apiService.deleteTask(targetId);
       toast.success('ลบงานเรียบร้อย');
       const newPage = tasks.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      if (newPage !== currentPage) fetchPage(newPage);
+      if (newPage !== currentPage) fetchPage(newPage, true);
       
       apiService.getTasksSummary().then(data => setAllTasksForSummary(data || [])).catch(() => { });
     } catch (error) {
       console.error(error);
       toast.error('บันทึกล้มเหลว (ลองใหม่อีกครั้ง)');
-      fetchPage(currentPage); // Rollback by refetching
+      fetchPage(currentPage, true); // Rollback by silently refetching
     }
   };
 
