@@ -31,6 +31,7 @@ export const AdminUsers = () => {
       try {
         await apiService.migrateUsersSheet();
         await apiService.migrateUsersAddPosition();
+        await apiService.migrateUsersPositionToId();
         const [_, posData] = await Promise.all([
           fetchUsers(),
           apiService.getPositions().catch(() => [])
@@ -307,7 +308,7 @@ export const AdminUsers = () => {
                   onChange={val => setFormData({...formData, Position: val})}
                   options={[
                     { label: '— ไม่ระบุ —', value: '' },
-                    ...positions.map(p => ({ label: p.Name, value: p.Name }))
+                    ...positions.map(p => ({ label: p.Name, value: p.ID }))
                   ]}
                 />
               </div>

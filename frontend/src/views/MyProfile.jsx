@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { Upload, Camera, Save, X } from 'lucide-react';
@@ -12,14 +12,36 @@ export const MyProfile = () => {
   
   const [loading, setLoading] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [positions, setPositions] = useState([]);
   
   const [formData, setFormData] = useState({
     ID: user?.ID || '',
     Username: user?.Username || user?.username || '',
     Password: '',
     Name: user?.Name || user?.name || '',
-    ProfileImage: user?.ProfileImage || ''
+    Phone: user?.Phone || '',
+    ProfileImage: user?.ProfileImage || '',
+    Department: user?.Department || '',
+    Position: user?.Position || '',
   });
+
+  useEffect(() => {
+    fetchPositions();
+  }, []);
+
+  const fetchPositions = async () => {
+    try {
+      const data = await apiService.getPositions();
+      setPositions(data || []);
+    } catch (e) {
+      console.error('Error fetching positions:', e);
+    }
+  };
+
+  const getPositionName = (id) => {
+    const pos = positions.find(p => p.ID === id);
+    return pos ? pos.Name : (id || '— ไม่ระบุ —');
+  };
 
   const compressProfileImage = (file) => {
     return new Promise((resolve) => {
@@ -236,7 +258,7 @@ export const MyProfile = () => {
                 <input
                   type="text"
                   disabled
-                  value={user?.Position || user?.position || '-'}
+                  value={getPositionName(user?.Position || user?.position)}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
                 />
               </div>

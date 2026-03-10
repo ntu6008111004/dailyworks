@@ -129,6 +129,9 @@ export const apiService = {
   migrateUsersAddPermissions() {
     return this.request('MIGRATE_USERS_ADD_PERMISSIONS');
   },
+  migrateUsersPositionToId() {
+    return this.request('MIGRATE_USERS_POSITION_TO_ID');
+  },
 
   // Role/Permissions update (re-uses updateUser)
   updateUserPermissions(userId, permissions) {

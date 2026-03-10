@@ -200,6 +200,9 @@ function handleResponse(e) {
       case "MIGRATE_USERS_ADD_PERMISSIONS":
         result = migrateUsersAddPermissions(doc);
         break;
+      case "MIGRATE_USERS_POSITION_TO_ID":
+        result = migrateUsersPositionToId(doc);
+        break;
       default:
         throw new Error("Invalid action");
     }
@@ -1075,4 +1078,36 @@ function migrateUsersAddPermissions(doc) {
     return { message: 'Permissions column added to Users' };
   }
   return { message: 'Permissions column already exists' };
+}
+
+function migrateUsersPositionToId(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const userSheet = doc.getSheetByName(SHEET_USERS);
+  const posSheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!userSheet || !posSheet) return { error: 'Sheets not found' };
+
+  const userData = userSheet.getDataRange().getValues();
+  const userHeaders = userData[0].map(h => h.toString().trim());
+  const posIdx = userHeaders.indexOf('Position');
+  const userIdIdx = userHeaders.indexOf('ID');
+
+  if (posIdx === -1) return { error: 'Position column not found' };
+
+  const positions = getPositions(doc);
+  const posMap = {}; // Name -> ID
+  positions.forEach(p => {
+    posMap[p.Name] = p.ID;
+  });
+
+  let updateCount = 0;
+  for (let i = 1; i < userData.length; i++) {
+    const currentVal = userData[i][posIdx];
+    // If it is a name (exists in posMap) and not already a UUID (rough check for '-' presence)
+    if (currentVal && posMap[currentVal] && !currentVal.includes('-')) {
+      userSheet.getRange(i + 1, posIdx + 1).setValue(posMap[currentVal]);
+      updateCount++;
+    }
+  }
+
+  return { message: `Migrated ${updateCount} users from Position Name to ID` };
 }

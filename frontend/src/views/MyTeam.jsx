@@ -11,6 +11,7 @@ export const MyTeam = () => {
   const [allTasks, setAllTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
+  const [positions, setPositions] = useState([]);
 
   const userRole = user?.Role || user?.role || 'Staff';
   const userDept = user?.Department || user?.department || '';
@@ -24,13 +25,15 @@ export const MyTeam = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [usersData, tasksData] = await Promise.all([
+      const [usersData, tasksData, posData] = await Promise.all([
         apiService.getUsers(),
-        apiService.getTasksSummary()
+        apiService.getTasksSummary(),
+        apiService.getPositions().catch(() => [])
       ]);
       
       setAllUsers(usersData);
       setAllTasks(tasksData);
+      setPositions(posData);
       
       // Default filter for non-admins to their own department
       if (!isAdmin) {
@@ -117,6 +120,11 @@ export const MyTeam = () => {
 
     return { teamMembers: members, stats: teamStats };
   }, [allUsers, allTasks, filterDepartment, isAdmin, userDept, today]);
+
+  const getPositionName = (id) => {
+    const pos = positions.find(p => p.ID === id);
+    return pos ? pos.Name : id;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -217,8 +225,12 @@ export const MyTeam = () => {
                         <div>
                           <div className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{member.Name}</div>
                           <div className="flex gap-2 mt-1">
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100/80 text-slate-500 rounded uppercase tracking-wider">{member.Role}</span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded tracking-wider">{member.Department}</span>
+                            {getPositionName(member.Position) && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded tracking-wider">
+                                {getPositionName(member.Position)}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded tracking-wider">{member.Department}</span>
                           </div>
                         </div>
                       </div>

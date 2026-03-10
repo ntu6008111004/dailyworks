@@ -2,11 +2,25 @@ import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
+import { apiService } from '../services/api';
+import { useState, useEffect } from 'react';
 
 export const Layout = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [positions, setPositions] = useState([]);
+
+  useEffect(() => {
+    apiService.getPositions()
+      .then(data => setPositions(data || []))
+      .catch(err => console.error('Error fetching positions in layout:', err));
+  }, []);
+
+  const getPositionDisplay = () => {
+    const posId = user?.Position || user?.position;
+    const pos = positions.find(p => p.ID === posId);
+    return pos ? pos.Name : posId;
+  };
 
   const navItems = [
     { name: 'หน้าภาพรวม', path: '/', icon: <LayoutDashboard size={20} /> },
@@ -87,9 +101,11 @@ export const Layout = () => {
               <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 whitespace-normal break-words group-hover:text-blue-700 transition-colors">
                 {user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}
               </p>
-              <p className="text-[10px] font-medium px-2 py-0.5 mt-1 bg-slate-100/80 text-slate-600 rounded-md inline-block uppercase tracking-wider group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                {user?.Role || user?.role || 'Guest'} {user?.Department ? `(${user?.Department})` : ''}
-              </p>
+              {getPositionDisplay() && (
+                <p className="text-[10px] font-bold px-2 py-0.5 mt-1 bg-blue-100 text-blue-600 rounded-md inline-block uppercase tracking-wider group-hover:bg-blue-200 transition-colors">
+                  {getPositionDisplay()}
+                </p>
+              )}
             </div>
           </Link>
           <button
