@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useState } from 'react';
 
 export const Layout = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, getPositionName, getPositionColor } = useAuth();
   const location = useLocation();
 
   const navItems = [
@@ -14,11 +13,11 @@ export const Layout = () => {
     { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> }
   ];
 
-  if (user?.Role === 'Admin' || user?.Role === 'Head' || user?.role === 'Admin' || user?.role === 'Head') {
+  if (user?.Role === 'Admin' || user?.Role === 'Head') {
     navItems.push({ name: 'บุคคลในทีม', path: '/team', icon: <Users size={20} /> });
   }
 
-  if (user?.Role === 'Admin' || user?.role === 'Admin') {
+  if (user?.Role === 'Admin') {
     navItems.push({ name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: <Users size={20} /> });
     navItems.push({ name: 'Master Data', path: '/admin/masterdata', icon: <Database size={20} /> });
     navItems.push({ name: 'Role Management', path: '/admin/roles', icon: <ShieldCheck size={20} /> });
@@ -87,9 +86,11 @@ export const Layout = () => {
               <p className="text-sm font-bold text-slate-900 leading-tight line-clamp-2 whitespace-normal break-words group-hover:text-blue-700 transition-colors">
                 {user?.Name || user?.name || user?.Username || 'ผู้ใช้งาน'}
               </p>
-              <p className="text-[10px] font-medium px-2 py-0.5 mt-1 bg-slate-100/80 text-slate-600 rounded-md inline-block uppercase tracking-wider group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                {user?.Role || user?.role || 'Guest'} {user?.Department ? `(${user?.Department})` : ''}
-              </p>
+              {(user?.Position || user?.position) && (
+                  <div className={`mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider ${getPositionColor(user?.Position || user?.position)}`}>
+                    {getPositionName(user?.Position || user?.position)}
+                  </div>
+              )}
             </div>
           </Link>
           <button

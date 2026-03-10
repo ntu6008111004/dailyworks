@@ -1,8 +1,14 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
-export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger' }) => {
+export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', closeOnOutsideClick = true }) => {
   if (!isOpen) return null;
+
+  const handleBackdropClick = (e) => {
+    if (closeOnOutsideClick && e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   const icons = {
     danger: <AlertTriangle className="text-red-500 w-12 h-12" />,
@@ -17,7 +23,10 @@ export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type 
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
       <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-center mb-4">
           <div className={`p-4 rounded-full ${type === 'danger' ? 'bg-red-50' : type === 'success' ? 'bg-green-50' : 'bg-blue-50'}`}>

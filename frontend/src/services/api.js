@@ -55,6 +55,10 @@ export const apiService = {
     return this.request('getTasksPaged', { page, pageSize, ...filters });
   },
 
+  getInitData(userId) {
+    return this.request('init', { userId });
+  },
+
   getTaskById(id) {
     return this.request('getTaskById', { id });
   },
@@ -77,8 +81,8 @@ export const apiService = {
     return this.request('deleteTask', { id });
   },
 
-  getUsers() {
-    return this.request('getUsers');
+  getUsers(options = {}) {
+    return this.request('getUsers', options);
   },
 
   addUser(user) {
@@ -128,6 +132,9 @@ export const apiService = {
   },
   migrateUsersAddPermissions() {
     return this.request('MIGRATE_USERS_ADD_PERMISSIONS');
+  },
+  migrateUsersPositionToId() {
+    return this.request('MIGRATE_USERS_POSITION_TO_ID');
   },
 
   // Role/Permissions update (re-uses updateUser)

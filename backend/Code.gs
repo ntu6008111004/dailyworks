@@ -128,6 +128,7 @@ function handleResponse(e) {
       executorId = postData.executorId || executorId;
     }
 
+    action = (action || "").toString().trim();
     let result = {};
 
     switch (action) {
@@ -170,9 +171,6 @@ function handleResponse(e) {
       case "deleteUser":
         result = deleteUser(doc, data.id, executorId);
         break;
-      case "getTaskById":
-        result = getTaskById(doc, data.id);
-        break;
       case "MIGRATE_USERS_SHEET":
         result = migrateUsersSheet(doc);
         break;
@@ -181,6 +179,9 @@ function handleResponse(e) {
         break;
       case "getPositions":
         result = getPositions(doc);
+        break;
+      case "init":
+        result = getInitData(doc, data);
         break;
       case "addPosition":
         result = addPosition(doc, data, executorId);
@@ -199,6 +200,9 @@ function handleResponse(e) {
         break;
       case "MIGRATE_USERS_ADD_PERMISSIONS":
         result = migrateUsersAddPermissions(doc);
+        break;
+      case "MIGRATE_USERS_POSITION_TO_ID":
+        result = migrateUsersPositionToId(doc);
         break;
       default:
         throw new Error("Invalid action");
@@ -400,18 +404,20 @@ function getTasksPaged(doc, params) {
   var canSeeAll  = userRole === 'Admin' || (userRole === 'Head' && userDept === 'HR');
 
   var filtered = allTasks.filter(function(t) {
-    var taskStaffName = (t.StaffName || '').toString().trim().toLowerCase();
-
     // RBAC
+    const tUserId = String(t.UserID || '');
+    const currentUserId = String(params.userId || '');
+    const tDept = (t.Department || '').toString().trim().toLowerCase();
+    
     if (!canSeeAll) {
-      if (userRole === 'Staff' && taskStaffName !== userName) return false;
+      if (userRole === 'Staff' && tUserId !== currentUserId) return false;
       if (userRole === 'Head') {
-        if ((t.Department || '').toString().trim() !== userDept) return false;
-        if (filterUser !== 'All' && taskStaffName !== (filterUser || '').toString().trim().toLowerCase()) return false;
+        if (tDept !== userDept.toLowerCase()) return false;
+        if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
       }
     } else {
-      if (department !== 'All' && (t.Department || '').toString().trim() !== department) return false;
-      if (filterUser !== 'All' && taskStaffName !== (filterUser || '').toString().trim().toLowerCase()) return false;
+      if (department !== 'All' && tDept !== department.toLowerCase()) return false;
+      if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
     }
 
     // Status filter
@@ -576,15 +582,20 @@ function deleteTask(doc, id, executorId) {
   throw new Error("Task not found");
 }
 
-function getUsers(doc) {
+function getUsers(doc, options = {}) {
   const sheet = doc.getSheetByName(SHEET_USERS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map((h) => h.toString().trim());
+  const includeImage = options.includeImage !== false;
 
   return data.slice(1).map((row) => {
     let user = {};
     headers.forEach((header, i) => {
+      if (!includeImage && header === "ProfileImage") {
+        user[header] = row[i] ? "has_image" : ""; // Tiny indicator instead of base64
+        return;
+      }
       let val = row[i];
       // Parse Permissions JSON if present
       if (header === 'Permissions') {
@@ -598,6 +609,28 @@ function getUsers(doc) {
     });
     return user;
   });
+}
+
+function getInitData(doc, params) {
+  const positions = getPositions(doc);
+  const users = getUsers(doc, { includeImage: false });
+  
+  // Extract unique departments
+  const departments = [...new Set(users.map(u => u.Department).filter(Boolean))].sort();
+  
+  // Get current user data if ID provided
+  let currentUser = null;
+  if (params && params.userId) {
+    // We need the profile image for the current logged-in user
+    const allUsersWithImages = getUsers(doc, { includeImage: true }); 
+    currentUser = allUsersWithImages.find(u => u.ID == params.userId) || null;
+  }
+
+  return {
+    positions,
+    departments,
+    currentUser
+  };
 }
 
 function addUser(doc, data, executorId) {
@@ -652,9 +685,18 @@ function updateUser(doc, data, executorId) {
       const oldRow = rows[i];
       const nameIdx = headers.indexOf("Name");
       const deptIdx = headers.indexOf("Department");
+      const roleIdx = headers.indexOf("Role");
+      const posIdx  = headers.indexOf("Position");
 
       const oldName = nameIdx !== -1 ? oldRow[nameIdx] : null;
       const oldDept = deptIdx !== -1 ? oldRow[deptIdx] : null;
+      const oldRole = roleIdx !== -1 ? oldRow[roleIdx] : null;
+      const oldPos  = posIdx  !== -1 ? oldRow[posIdx]  : null;
+
+      // Authenticated user (executor) info
+      const usersInfo = getUsers(doc, { includeImage: false });
+      const executor = usersInfo.find(u => u.ID == executorId) || { Role: 'Staff' };
+      const isAdmin = executor.Role === 'Admin';
 
       let nameChanged = data.Name && data.Name !== oldName;
       let deptChanged = data.Department && data.Department !== oldDept;
@@ -672,6 +714,13 @@ function updateUser(doc, data, executorId) {
         }
 
         if (val !== undefined) {
+          // SECURITY: Only Admin can change certain fields
+          if (!isAdmin) {
+            if (header === 'Role' || header === 'Department' || header === 'Position') {
+              return; // Skip sensitive fields for non-admins
+            }
+          }
+
           // Serialize Permissions if it's an object
           if (header === 'Permissions' && typeof val === 'object' && val !== null) {
             val = JSON.stringify(val);
@@ -982,6 +1031,8 @@ function getPositions(doc) {
   return data.slice(1).map(row => {
     let pos = {};
     headers.forEach((h, i) => { pos[h] = row[i]; });
+    // Default color if missing
+    if (!pos.Color) pos.Color = 'bg-blue-100 text-blue-600';
     return pos;
   }).filter(p => p.ID && p.Name);
 }
@@ -992,8 +1043,14 @@ function addPosition(doc, data, executorId) {
   if (!sheet) throw new Error('Positions sheet not found');
   const id = Utilities.getUuid();
   sheet.appendRow([id, data.Name || '']);
+  clearPositionsCache();
   logActivity(doc, executorId || 'System', 'ADD_POSITION', 'Position: ' + data.Name);
   return { message: 'Position added', id };
+}
+
+function clearPositionsCache() {
+  const cache = CacheService.getScriptCache();
+  cache.remove("positions_list");
 }
 
 function updatePosition(doc, data, executorId) {
@@ -1024,6 +1081,7 @@ function deletePosition(doc, id, executorId) {
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][idIdx] == id) {
       sheet.deleteRow(i + 1);
+      clearPositionsCache();
       logActivity(doc, executorId || 'System', 'DELETE_POSITION', 'Position ' + id);
       return { message: 'Position deleted' };
     }
@@ -1040,9 +1098,18 @@ function migratePositionsSheet(doc) {
   let sheet = doc.getSheetByName(SHEET_POSITIONS);
   if (!sheet) {
     sheet = doc.insertSheet(SHEET_POSITIONS);
-    sheet.appendRow(['ID', 'Name']);
+    sheet.appendRow(['ID', 'Name', 'Color']);
     SpreadsheetApp.flush();
     return { message: 'Positions sheet created' };
+  } else {
+    // Check if Color column exists
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (headers.indexOf('Color') === -1) {
+      const newCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, newCol).setValue('Color');
+      SpreadsheetApp.flush();
+      return { message: 'Color column added to Positions' };
+    }
   }
   return { message: 'Positions sheet already exists' };
 }
@@ -1075,4 +1142,36 @@ function migrateUsersAddPermissions(doc) {
     return { message: 'Permissions column added to Users' };
   }
   return { message: 'Permissions column already exists' };
+}
+
+function migrateUsersPositionToId(doc) {
+  if (!doc) doc = SpreadsheetApp.getActiveSpreadsheet();
+  const userSheet = doc.getSheetByName(SHEET_USERS);
+  const posSheet = doc.getSheetByName(SHEET_POSITIONS);
+  if (!userSheet || !posSheet) return { error: 'Sheets not found' };
+
+  const userData = userSheet.getDataRange().getValues();
+  const userHeaders = userData[0].map(h => h.toString().trim());
+  const posIdx = userHeaders.indexOf('Position');
+  const userIdIdx = userHeaders.indexOf('ID');
+
+  if (posIdx === -1) return { error: 'Position column not found' };
+
+  const positions = getPositions(doc);
+  const posMap = {}; // Name -> ID
+  positions.forEach(p => {
+    posMap[p.Name] = p.ID;
+  });
+
+  let updateCount = 0;
+  for (let i = 1; i < userData.length; i++) {
+    const currentVal = userData[i][posIdx];
+    // If it is a name (exists in posMap) and not already a UUID (rough check for '-' presence)
+    if (currentVal && posMap[currentVal] && !currentVal.includes('-')) {
+      userSheet.getRange(i + 1, posIdx + 1).setValue(posMap[currentVal]);
+      updateCount++;
+    }
+  }
+
+  return { message: `Migrated ${updateCount} users from Position Name to ID` };
 }

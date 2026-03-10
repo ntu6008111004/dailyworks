@@ -4,41 +4,40 @@ import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
-export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
+export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsideClick = true }) => {
   const [monthStr, setMonthStr] = useState(format(new Date(), 'yyyy-MM'));
   const [copied, setCopied] = useState(false);
 
+  // Filter tasks that belong to this month
   const activeTasks = useMemo(() => {
+    if (!isOpen) return [];
     return tasks.filter(t => {
-      const userName = user?.Name || user?.name;
-      if (t.StaffName !== userName) return false;
+      const currentUserId = String(user?.ID || user?.id || '');
+      const tUserId = String(t.UserID || '');
+      if (tUserId !== currentUserId) return false;
 
-      // Ensure we catch any task that was active/started in this month
       try {
-        // Task.StartDate/DueDate are stored as ISO dates or 'YYYY-MM-DD' strings 
-        // We extract the 'YYYY-MM' prefix directly to avoid timezone shift issues from new Date()
         let taskStartStr = '';
         let taskDueStr = '';
 
         if (typeof t.StartDate === 'string') {
           taskStartStr = t.StartDate.substring(0, 7);
         } else if (t.StartDate instanceof Date) {
-            taskStartStr = format(t.StartDate, 'yyyy-MM');
+          taskStartStr = format(t.StartDate, 'yyyy-MM');
         }
 
         if (typeof t.DueDate === 'string') {
           taskDueStr = t.DueDate.substring(0, 7);
         } else if (t.DueDate instanceof Date) {
-            taskDueStr = format(t.DueDate, 'yyyy-MM');
+          taskDueStr = format(t.DueDate, 'yyyy-MM');
         }
         
-        // Month string comparison works chronologically, e.g. "2024-01" <= "2024-02"
         return monthStr >= taskStartStr && monthStr <= taskDueStr;
       } catch {
         return false;
       }
     });
-  }, [tasks, user, monthStr]);
+  }, [tasks, user, monthStr, isOpen]);
 
   const stats = useMemo(() => {
     const s = {
@@ -61,6 +60,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
   }, [activeTasks]);
 
   const summaryText = useMemo(() => {
+    if (!isOpen) return '';
     try {
       let text = `สรุปผลการปฏิบัติงาน\nประจำเดือน ${format(new Date(monthStr + '-01'), 'MMMM yyyy', { locale: th })}\n\n`;
       
@@ -83,7 +83,8 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
           text += `📌 ${status} (${grouped[status].length} งาน):\n`;
           grouped[status].forEach((t, i) => {
             const projectStr = t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : '';
-            text += `  ${i + 1}. ${projectStr}${t.Detail}\n`;
+            const detailStr = (user?.Permissions?.showFullTaskDetail !== false) ? t.Detail : '';
+            text += `  ${i + 1}. ${projectStr}${detailStr}\n`;
           });
           text += '\n';
         }
@@ -93,7 +94,15 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
     } catch {
       return '';
     }
-  }, [activeTasks, monthStr]);
+  }, [activeTasks, monthStr, user?.Permissions?.showFullTaskDetail, isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleBackdropClick = (e) => {
+    if (closeOnOutsideClick && e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(summaryText).then(() => {
@@ -102,11 +111,12 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
     });
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200">
+    <div 
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-sky-50/50 rounded-t-3xl">
           <h2 className="text-xl font-bold text-sky-900">สรุปงานรายเดือน</h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
@@ -115,7 +125,6 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-8">
-          {/* Left Column - Controls & Chart */}
           <div className="w-full md:w-1/2 space-y-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">เลือกเดือนที่ต้องการสรุป</label>
@@ -131,23 +140,12 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
               {stats.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={stats}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
+                    <Pie data={stats} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                       {stats.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{borderRadius: '0.75rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                      itemStyle={{fontWeight: 600}}
-                    />
+                    <Tooltip contentStyle={{borderRadius: '0.75rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} itemStyle={{fontWeight: 600}} />
                     <Legend verticalAlign="bottom" height={36}/>
                   </PieChart>
                 </ResponsiveContainer>
@@ -155,28 +153,12 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">ไม่มีข้อมูลเพื่อสร้างกราฟ</div>
               )}
             </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-               {stats.map(s => (
-                 <div key={s.name} className="flex justify-between items-center bg-white border border-slate-100 p-3 rounded-xl shadow-sm">
-                   <div className="flex items-center gap-2">
-                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }}></div>
-                     <span className="text-sm font-medium text-slate-700">{s.name}</span>
-                   </div>
-                   <span className="font-bold text-slate-900">{s.value}</span>
-                 </div>
-               ))}
-            </div>
           </div>
 
-          {/* Right Column - Text Output */}
           <div className="w-full md:w-1/2 flex flex-col">
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium text-slate-700">ตัวอย่างข้อความสำหรับส่งไลน์</label>
-              <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-sm focus:ring-4 focus:ring-sky-100"
-              >
+              <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-sm focus:ring-4 focus:ring-sky-100">
                 {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
                 {copied ? 'คัดลอกสำเร็จ' : 'คัดลอกข้อความ'}
               </button>
@@ -188,10 +170,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user }) => {
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 rounded-b-3xl">
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors"
-          >
+          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors">
             ปิดหน้าต่าง
           </button>
         </div>

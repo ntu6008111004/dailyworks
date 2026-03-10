@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { Upload, Camera, Save, X } from 'lucide-react';
@@ -7,7 +7,7 @@ import { LoadingModal } from '../components/LoadingModal';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export const MyProfile = () => {
-  const { user, updateUserState } = useAuth();
+  const { user, updateUserState, getPositionName } = useAuth();
   const fileInputRef = useRef(null);
   
   const [loading, setLoading] = useState(false);
@@ -18,8 +18,15 @@ export const MyProfile = () => {
     Username: user?.Username || user?.username || '',
     Password: '',
     Name: user?.Name || user?.name || '',
-    ProfileImage: user?.ProfileImage || ''
+    Phone: user?.Phone || '',
+    ProfileImage: user?.ProfileImage || '',
+    Department: user?.Department || '',
+    Position: user?.Position || '',
   });
+
+  useEffect(() => {
+    // Positions are now managed globally in AuthContext
+  }, []);
 
   const compressProfileImage = (file) => {
     return new Promise((resolve) => {
@@ -87,11 +94,12 @@ export const MyProfile = () => {
     setLoading(true);
     
     try {
-      const updateData = { ...formData };
+      // Create a shallow copy to filter out sensitive fields
+      const { Role, Department, Position, ...updateData } = formData;
       
-      // Preserve original role and department
-      updateData.Role = user?.Role || user?.role;
-      updateData.Department = user?.Department || user?.department;
+      // Only admins should be able to send these fields, or we just omit them 
+      // as they are handled as read-only on the backend for non-admins anyway.
+      // But for clarity/security, we omit them here too.
       
       if (!updateData.Password) {
         delete updateData.Password;
@@ -236,7 +244,7 @@ export const MyProfile = () => {
                 <input
                   type="text"
                   disabled
-                  value={user?.Position || user?.position || '-'}
+                  value={getPositionName(user?.Position || user?.position)}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
                 />
               </div>
