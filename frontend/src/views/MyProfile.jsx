@@ -229,6 +229,18 @@ export const MyProfile = () => {
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
               />
             </div>
+
+            {(user?.Position || user?.position) && (
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-500">ตำแหน่งงาน</label>
+                <input
+                  type="text"
+                  disabled
+                  value={user?.Position || user?.position || '-'}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-not-allowed"
+                />
+              </div>
+            )}
           </div>
           
           <div className="pt-4 mt-8 border-t border-slate-200">

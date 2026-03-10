@@ -6,6 +6,8 @@ import { Dashboard } from './views/Dashboard';
 import { Tasks } from './views/Tasks';
 import { Timeline } from './views/Timeline';
 import { AdminUsers } from './views/AdminUsers';
+import { AdminMasterData } from './views/AdminMasterData';
+import { AdminRoles } from './views/AdminRoles';
 import { MyProfile } from './views/MyProfile';
 import { MyTeam } from './views/MyTeam';
 import { Login } from './views/Login';
@@ -34,6 +36,8 @@ function App() {
             <Route path="profile" element={<MyProfile />} />
             <Route path="team" element={<MyTeam />} />
             <Route path="admin/users" element={<AdminUsers />} />
+            <Route path="admin/masterdata" element={<AdminMasterData />} />
+            <Route path="admin/roles" element={<AdminRoles />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

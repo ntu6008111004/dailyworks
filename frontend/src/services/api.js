@@ -107,6 +107,34 @@ export const apiService = {
     return this.request('MIGRATE_TASKS_SHEET');
   },
 
+  // Positions Master Data
+  getPositions() {
+    return this.request('getPositions');
+  },
+  addPosition(data) {
+    return this.request('addPosition', data);
+  },
+  updatePosition(data) {
+    return this.request('updatePosition', data);
+  },
+  deletePosition(id) {
+    return this.request('deletePosition', { id });
+  },
+  migratePositionsSheet() {
+    return this.request('MIGRATE_POSITIONS_SHEET');
+  },
+  migrateUsersAddPosition() {
+    return this.request('MIGRATE_USERS_ADD_POSITION');
+  },
+  migrateUsersAddPermissions() {
+    return this.request('MIGRATE_USERS_ADD_PERMISSIONS');
+  },
+
+  // Role/Permissions update (re-uses updateUser)
+  updateUserPermissions(userId, permissions) {
+    return this.request('updateUser', { ID: userId, Permissions: permissions });
+  },
+
   // Helper moved from components for consistency
   isOverdue(task) {
     if (!task || !task.DueDate) return false;
