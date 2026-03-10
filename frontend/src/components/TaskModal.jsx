@@ -308,6 +308,9 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                     {images.length + newImages.length} / 4
                   </span>
                 </label>
+                <p className="text-[11px] text-red-500 font-medium mb-3 flex items-center gap-1">
+                  * คุณสามารถกด <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">Ctrl + V</kbd> เพื่อวางรูปจากคลิปบอร์ดได้ทันที
+                </p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   {images.map((url, idx) => (
