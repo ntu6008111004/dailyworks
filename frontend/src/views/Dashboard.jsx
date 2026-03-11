@@ -104,7 +104,7 @@ export const Dashboard = () => {
     });
   }, [tasks, canSeeAll, userRole, userName, userDept, filterUser, filterDepartment, filterYear, startDate, endDate]);
 
-  const { doneTasks, chartData } = useMemo(() => {
+  const { doneTasks, chartData, statusChartData } = useMemo(() => {
     const done = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
     
     // Group tasks by staff for the chart
@@ -122,7 +122,21 @@ export const Dashboard = () => {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
 
-    return { doneTasks: done, chartData: sortedData };
+    // Group by status for the new chart
+    const statusCounts = filteredTasks.reduce((acc, task) => {
+      const status = task.Status || 'ไม่ระบุ';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const statusData = [
+      { name: 'ยังไม่เริ่ม', value: statusCounts['ยังไม่เริ่ม'] || 0, color: '#94a3b8' },
+      { name: 'รอแก้ไข', value: statusCounts['รอแก้ไข'] || 0, color: '#fbbf24' },
+      { name: 'รอตรวจ', value: statusCounts['รอตรวจ'] || 0, color: '#c084fc' },
+      { name: 'เสร็จสิ้น', value: statusCounts['เสร็จสิ้น'] || 0, color: '#22c55e' }
+    ].filter(s => s.value > 0);
+
+    return { doneTasks: done, chartData: sortedData, statusChartData: statusData };
   }, [filteredTasks]);
 
   return (
@@ -284,49 +298,93 @@ export const Dashboard = () => {
       </div>
 
       {/* Chart Section */}
-      <div className="glass p-6 rounded-3xl border border-slate-200/60 shadow-sm animate-in fade-in zoom-in-95 duration-500">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h3 className="text-lg font-bold text-slate-800">สัดส่วนงานแยกตามรายบุคคล</h3>
-            <p className="text-sm text-slate-500">แสดงปริมาณงานทั้งหมดของพนักงานแบบรายบุคคล</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass p-6 rounded-3xl border border-slate-200/60 shadow-sm animate-in fade-in zoom-in-95 duration-500">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">สัดส่วนงานแยกตามสถานะ</h3>
+              <p className="text-sm text-slate-500">แสดงปริมาณงานทั้งหมดแยกตามสถานะการดำเนินงาน</p>
+            </div>
+          </div>
+          
+          <div className="h-[350px] w-full">
+            {statusChartData && statusChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    innerRadius={65}
+                    paddingAngle={5}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {statusChartData.map((entry, index) => (
+                      <Cell key={`status-cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <Activity size={40} className="mb-2 opacity-20" />
+                <p>ไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+              </div>
+            )}
           </div>
         </div>
-        
-        <div className="h-[400px] w-full">
-          {chartData && chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  dataKey="total"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={130}
-                  innerRadius={80}
-                  paddingAngle={5}
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                >
-                  {chartData.map((entry, index) => {
-                    const COLORS = [
-                      '#2563eb', '#8b5cf6', '#ec4899', '#f97316', '#eab308', 
-                      '#22c55e', '#06b6d4', '#64748b', '#f43f5e', '#84cc16'
-                    ];
-                    return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
-                  })}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400">
-              <Activity size={40} className="mb-2 opacity-20" />
-              <p>ไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+
+        <div className="glass p-6 rounded-3xl border border-slate-200/60 shadow-sm animate-in fade-in zoom-in-95 duration-500">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">สัดส่วนงานแยกตามรายบุคคล</h3>
+              <p className="text-sm text-slate-500">แสดงปริมาณงานทั้งหมดของพนักงาน 10 อันดับแรก</p>
             </div>
-          )}
+          </div>
+          
+          <div className="h-[350px] w-full">
+            {chartData && chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    dataKey="total"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    innerRadius={65}
+                    paddingAngle={5}
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {chartData.map((entry, index) => {
+                      const COLORS = [
+                        '#2563eb', '#8b5cf6', '#ec4899', '#f97316', '#eab308', 
+                        '#22c55e', '#06b6d4', '#64748b', '#f43f5e', '#84cc16'
+                      ];
+                      return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                    })}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <Activity size={40} className="mb-2 opacity-20" />
+                <p>ไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
