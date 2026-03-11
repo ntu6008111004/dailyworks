@@ -21,9 +21,6 @@ const STATUS_COLORS = {
 };
 
 const getTaskColor = (task) => {
-  const isOverdue = apiService.isOverdue(task);
-  if (isOverdue && task.Status === 'เสร็จสิ้น') return 'bg-rose-600 text-white';
-  if (isOverdue) return 'bg-red-400 text-white';
   return STATUS_COLORS[task.Status] || 'bg-slate-300 text-slate-700';
 };
 
@@ -314,7 +311,6 @@ export const Timeline = () => {
         {Object.entries(STATUS_COLORS).map(([s, c]) => (
           <span key={s} className={`px-2 py-0.5 rounded-md font-medium ${c}`}>{s}</span>
         ))}
-        <span className="px-2 py-0.5 rounded-md font-medium bg-red-400 text-white">ล่าช้า</span>
       </div>
 
       {/* ── Task Detail Modal ── */}
@@ -355,7 +351,7 @@ export const Timeline = () => {
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">สถานะ</label>
                   <div className="mt-1">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getTaskColor(selectedTask)}`}>
-                      {selectedTask.Status}{apiService.isOverdue(selectedTask) ? ' (ล่าช้า)' : ''}
+                      {selectedTask.Status}
                     </span>
                   </div>
                 </div>

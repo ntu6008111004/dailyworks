@@ -418,7 +418,7 @@ export const Tasks = () => {
           <CustomSelect
             value={filterStatus}
             onChange={(val) => setFilterStatus(val)}
-            options={['All', ...Object.keys(statusColors)].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
+            options={['All', ...Object.keys(statusColors).filter(s => s !== 'ล่าช้า' && s !== 'เกินกำหนด')].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
             className="w-full sm:w-48"
           />
 
@@ -495,11 +495,6 @@ export const Tasks = () => {
                         <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
                           {task.Status}
                         </span>
-                        {apiService.isOverdue(task) && (
-                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md ${statusColors['ล่าช้า']}`}>
-                            ล่าช้า
-                          </span>
-                        )}
                       </div>
                     </div>
 

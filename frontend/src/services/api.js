@@ -213,24 +213,7 @@ export const apiService = {
 
   // Helper moved from components for consistency
   isOverdue(task) {
-    if (!task || !task.DueDate) return false;
-    
-    // Normalize today to start of day
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Parse DueDate (GAS returns yyyy-MM-dd)
-    const dueDate = new Date(task.DueDate);
-    dueDate.setHours(0, 0, 0, 0);
-
-    if (task.Status === 'เสร็จสิ้น') {
-      if (!task.CompletedAt) return false;
-      // GAS returns ISO string for CompletedAt now
-      const completedDate = new Date(task.CompletedAt);
-      completedDate.setHours(0, 0, 0, 0);
-      return completedDate > dueDate;
-    }
-
-    return today > dueDate;
+    // Disabled as per user request (ล่าช้า)
+    return false;
   }
 };

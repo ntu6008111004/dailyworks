@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { X, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
-import { apiService } from '../services/api';
 
 export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -96,11 +95,6 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-semibold ${statusColors[task.Status]}`}>
                               {task.Status}
                             </span>
-                            {apiService.isOverdue(task) && (
-                              <span className="text-[10px] text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
-                                ล่าช้า
-                              </span>
-                            )}
                             <span className="text-xs text-slate-400">ID: #{String(task.ID).slice(-4)}</span>
                           </div>
                         </div>
