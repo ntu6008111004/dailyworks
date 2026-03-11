@@ -3,8 +3,10 @@ import { X, Copy, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { useAuth } from '../context/AuthContext';
 
 export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsideClick = true }) => {
+  const { getPositionName } = useAuth();
   const [monthStr, setMonthStr] = useState(format(new Date(), 'yyyy-MM'));
   const [copied, setCopied] = useState(false);
 
@@ -62,7 +64,12 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
   const summaryText = useMemo(() => {
     if (!isOpen) return '';
     try {
-      let text = `สรุปผลการปฏิบัติงาน\nประจำเดือน ${format(new Date(monthStr + '-01'), 'MMMM yyyy', { locale: th })}\n\n`;
+      const posId = user?.Position || user?.CustomFields?.Position;
+      const positionName = getPositionName(posId);
+
+      let text = `ชื่อ: ${user?.Name || '-'}\n`;
+      text += `ตำแหน่ง: ${positionName || '-'}\n`;
+      text += `สรุปผลการปฏิบัติงาน\nประจำเดือน ${format(new Date(monthStr + '-01'), 'MMMM yyyy', { locale: th })}\n\n`;
       
       if (activeTasks.length === 0) {
         return text + "- ไม่มีข้อมูลงานในเดือนนี้ -";
@@ -94,7 +101,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
     } catch {
       return '';
     }
-  }, [activeTasks, monthStr, user?.Permissions?.showFullTaskDetail, isOpen]);
+  }, [activeTasks, monthStr, user, getPositionName, isOpen]);
 
   if (!isOpen) return null;
 

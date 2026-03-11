@@ -205,15 +205,56 @@ export const apiService = {
     return this.request('MIGRATE_USERS_POSITION_TO_ID');
   },
 
+  // Briefing Service
+  getBriefings() {
+    return this.request('getBriefings', {}, { useCache: true });
+  },
+  getBriefingsNoCache() {
+    return this.request('getBriefings', {}, { useCache: false });
+  },
+  addBriefing(data) {
+    this.clearCache();
+    return this.request('addBriefing', data);
+  },
+  updateBriefing(data) {
+    this.clearCache();
+    return this.request('updateBriefing', data);
+  },
+  deleteBriefing(id) {
+    this.clearCache();
+    return this.request('deleteBriefing', { id });
+  },
+  getBriefingResponses(briefingId) {
+    return this.request('getBriefingResponses', { briefingId }, { useCache: true });
+  },
+  saveBriefingResponse(data) {
+    this.clearCache();
+    return this.request('saveBriefingResponse', data);
+  },
+  migrateUsersAddBriefingPermissions() {
+    return this.request('MIGRATE_USERS_ADD_BRIEFING_PERMISSIONS');
+  },
+  migrateBriefingsAddFields() {
+    return this.request('MIGRATE_BRIEFINGS_ADD_FIELDS');
+  },
+
   // Role/Permissions update (re-uses updateUser)
   updateUserPermissions(userId, permissions) {
     this.clearCache();
     return this.request('updateUser', { ID: userId, Permissions: permissions });
   },
 
-  // Helper moved from components for consistency
-  isOverdue(task) {
-    // Disabled as per user request (ล่าช้า)
+  isOverdue() {
+    // Disabled as per previous requirement for Tasks
     return false;
+  },
+
+  isBriefingOverdue(briefing) {
+    if (!briefing || briefing.Status === 'เสร็จสิ้น' || !briefing.DueDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(briefing.DueDate);
+    due.setHours(0, 0, 0, 0);
+    return today > due;
   }
 };

@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBriefingNotifications } from '../hooks/useBriefingNotifications';
+import { NotificationPermissionModal } from './NotificationPermissionModal';
 
 export const Layout = () => {
+  useBriefingNotifications();
+
   const { user, logout, getPositionName, getPositionColor } = useAuth();
   const location = useLocation();
 
@@ -12,6 +16,11 @@ export const Layout = () => {
     { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
     { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> }
   ];
+
+  const perms = user?.Permissions || {};
+  if (perms.canViewBriefingPage || user?.Role === 'Admin') {
+    navItems.splice(2, 0, { name: 'บรีฟงาน', path: '/briefing', icon: <NotebookTabs size={20} /> });
+  }
 
   if (user?.Role === 'Admin' || user?.Role === 'Head') {
     navItems.push({ name: 'บุคคลในทีม', path: '/team', icon: <Users size={20} /> });
@@ -121,6 +130,8 @@ export const Layout = () => {
           <Outlet />
         </main>
       </div>
+      
+      <NotificationPermissionModal />
     </div>
   );
 };

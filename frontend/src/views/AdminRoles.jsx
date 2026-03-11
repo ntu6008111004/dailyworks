@@ -8,6 +8,8 @@ const DEFAULT_PERMISSIONS = {
   showDailySummary: true,
   showMonthlySummary: true,
   showFullTaskDetail: true,
+  canCreateBriefing: false,
+  canViewBriefingPage: false,
 };
 
 const PERMISSION_LABELS = [
@@ -29,6 +31,18 @@ const PERMISSION_LABELS = [
     desc: 'ถ้าปิด → แสดงเฉพาะชื่อโปรเจค/หัวข้อ ไม่แสดง Custom Fields',
     color: 'emerald',
   },
+  {
+    key: 'canCreateBriefing',
+    label: 'สร้างบรีฟงานได้',
+    desc: 'สามารถสร้างและมอบหมายงานบรีฟได้',
+    color: 'orange',
+  },
+  {
+    key: 'canViewBriefingPage',
+    label: 'เข้าถึงหน้าบรีฟงาน',
+    desc: 'สามารถเปิดดูหน้าสรุปงานบรีฟได้',
+    color: 'sky',
+  },
 ];
 
 const colorMap = {
@@ -47,6 +61,11 @@ const colorMap = {
     ring: 'ring-emerald-300',
     badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
+  orange: {
+    checked: 'bg-orange-600 border-orange-600',
+    ring: 'ring-orange-300',
+    badge: 'bg-orange-50 text-orange-700 border-orange-200',
+  },
 };
 
 export const AdminRoles = () => {
@@ -58,6 +77,7 @@ export const AdminRoles = () => {
     (async () => {
       try {
         await apiService.migrateUsersAddPermissions();
+        await apiService.migrateUsersAddBriefingPermissions();
       } catch (err) {
         console.error('Migration failed:', err);
       }
