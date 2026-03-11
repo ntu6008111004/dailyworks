@@ -10,6 +10,7 @@ import { AdminMasterData } from './views/AdminMasterData';
 import { AdminRoles } from './views/AdminRoles';
 import { MyProfile } from './views/MyProfile';
 import { MyTeam } from './views/MyTeam';
+import { Briefing } from './views/Briefing';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
@@ -33,6 +34,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="timeline" element={<Timeline />} />
+            <Route path="briefing" element={<Briefing />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="team" element={<MyTeam />} />
             <Route path="admin/users" element={<AdminUsers />} />

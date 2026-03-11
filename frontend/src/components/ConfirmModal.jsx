@@ -1,11 +1,20 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, RefreshCw } from 'lucide-react';
 
-export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type = 'danger', closeOnOutsideClick = true }) => {
+export const ConfirmModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  type = 'danger', 
+  isLoading = false,
+  closeOnOutsideClick = true 
+}) => {
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
-    if (closeOnOutsideClick && e.target === e.currentTarget) {
+    if (!isLoading && closeOnOutsideClick && e.target === e.currentTarget) {
       onClose();
     }
   };
@@ -39,15 +48,18 @@ export const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, type 
         <div className="flex gap-3 justify-center">
           <button
             onClick={onClose}
-            className="flex-1 px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            disabled={isLoading}
+            className="flex-1 px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ยกเลิก
           </button>
           <button
-            onClick={() => { onConfirm(); onClose(); }}
-            className={`flex-1 px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-colors shadow-sm focus:ring-4 ${colors[type]}`}
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={`flex-1 px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-colors shadow-sm focus:ring-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${colors[type]}`}
           >
-            ตกลง
+            {isLoading && <RefreshCw size={16} className="animate-spin" />}
+            {isLoading ? 'กำลังดำเนินการ...' : 'ตกลง'}
           </button>
         </div>
       </div>

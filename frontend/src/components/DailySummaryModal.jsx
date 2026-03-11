@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { X, Copy, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
+import { useAuth } from '../context/AuthContext';
 import { CustomDatePicker } from './CustomDatePicker';
 
 export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsideClick = true }) => {
+  const { getPositionName } = useAuth();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [copied, setCopied] = useState(false);
 
@@ -26,12 +28,17 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
       const tStart = format(new Date(t.StartDate), 'yyyy-MM-dd');
       const tDue = format(new Date(t.DueDate), 'yyyy-MM-dd');
       return date >= tStart && date <= tDue;
-    } catch (e) {
+    } catch {
       return false;
     }
   });
 
-  let summaryText = `สรุปผลการปฏิบัติงาน\nวันที่ ${format(new Date(date), 'dd MMMM yyyy', { locale: th })}\n\n`;
+  const posId = user?.Position || user?.CustomFields?.Position;
+  const positionName = getPositionName(posId);
+
+  let summaryText = `ชื่อ: ${user?.Name || '-'}\n`;
+  summaryText += `ตำแหน่ง: ${positionName || '-'}\n`;
+  summaryText += `สรุปผลการปฏิบัติงาน\nวันที่ ${format(new Date(date), 'dd MMMM yyyy', { locale: th })}\n\n`;
   
   if (activeTasks.length === 0) {
     summaryText += "- ไม่มีข้อมูลงานในวันนี้ -";

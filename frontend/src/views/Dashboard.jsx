@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -104,9 +104,25 @@ export const Dashboard = () => {
     });
   }, [tasks, canSeeAll, userRole, userName, userDept, filterUser, filterDepartment, filterYear, startDate, endDate]);
 
-  const { doneTasks } = useMemo(() => {
+  const { doneTasks, chartData } = useMemo(() => {
     const done = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
-    return { doneTasks: done };
+    
+    // Group tasks by staff for the chart
+    const staffStats = filteredTasks.reduce((acc, task) => {
+      const name = task.StaffName || 'ไม่ระบุ';
+      if (!acc[name]) {
+        acc[name] = { name, total: 0, done: 0 };
+      }
+      acc[name].total += 1;
+      if (task.Status === 'เสร็จสิ้น') acc[name].done += 1;
+      return acc;
+    }, {});
+
+    const sortedData = Object.values(staffStats)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    return { doneTasks: done, chartData: sortedData };
   }, [filteredTasks]);
 
   return (
@@ -267,6 +283,53 @@ export const Dashboard = () => {
         </div>
       </div>
 
+      {/* Chart Section */}
+      <div className="glass p-6 rounded-3xl border border-slate-200/60 shadow-sm animate-in fade-in zoom-in-95 duration-500">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">สัดส่วนงานแยกตามรายบุคคล</h3>
+            <p className="text-sm text-slate-500">แสดงปริมาณงานทั้งหมดของพนักงานแบบรายบุคคล</p>
+          </div>
+        </div>
+        
+        <div className="h-[400px] w-full">
+          {chartData && chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="total"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={130}
+                  innerRadius={80}
+                  paddingAngle={5}
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {chartData.map((entry, index) => {
+                    const COLORS = [
+                      '#2563eb', '#8b5cf6', '#ec4899', '#f97316', '#eab308', 
+                      '#22c55e', '#06b6d4', '#64748b', '#f43f5e', '#84cc16'
+                    ];
+                    return <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />;
+                  })}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <Activity size={40} className="mb-2 opacity-20" />
+              <p>ไม่มีข้อมูลสำหรับแสดงกราฟ</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       <StatusTasksModal 
         key={selectedStatus || 'none'}
         isOpen={isStatusModalOpen}
@@ -274,6 +337,7 @@ export const Dashboard = () => {
         status={selectedStatus}
         userRole={userRole}
         tasks={
+          selectedStatus === 'ทั้งหมด' ? filteredTasks :
           selectedStatus === 'เสร็จสิ้น' ? doneTasks :
           filteredTasks.filter(t => t.Status === selectedStatus)
         }

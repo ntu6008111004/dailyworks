@@ -100,6 +100,7 @@ export const Tasks = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
 
   // Filters
@@ -306,21 +307,26 @@ export const Tasks = () => {
   const handleDeleteTask = async () => {
     if (!deleteConfirmId) return;
     
-    // Optimistic Delete
+    setIsDeleting(true);
     const targetId = deleteConfirmId;
-    setTasks(prev => prev.filter(t => t.ID !== targetId));
-    apiService.mutateSummaryCache('delete', targetId);
-    setDeleteConfirmId(null);
     
     try {
       await apiService.deleteTask(targetId);
+      
+      // Update local state after success
+      setTasks(prev => prev.filter(t => t.ID !== targetId));
+      apiService.mutateSummaryCache('delete', targetId);
+      
       toast.success('ลบงานเรียบร้อย');
       const newPage = tasks.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
       if (newPage !== currentPage) fetchPage(newPage, true);
+      
+      setDeleteConfirmId(null);
     } catch (error) {
       console.error(error);
-      toast.error('บันทึกล้มเหลว (ลองใหม่อีกครั้ง)');
-      fetchPage(currentPage, true); // Rollback by silently refetching
+      toast.error('ลบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -592,6 +598,7 @@ export const Tasks = () => {
         isOpen={!!deleteConfirmId}
         onClose={() => setDeleteConfirmId(null)}
         onConfirm={handleDeleteTask}
+        isLoading={isDeleting}
         title="ยืนยันการลบข้อมูล"
         message="คุณมั่นใจหรือไม่ว่าต้องการลบงานนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้"
         type="danger"
