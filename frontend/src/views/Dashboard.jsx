@@ -17,7 +17,6 @@ export const Dashboard = () => {
   const [filterYear, setFilterYear] = useState('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [overduePage, setOverduePage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
 
@@ -105,22 +104,9 @@ export const Dashboard = () => {
     });
   }, [tasks, canSeeAll, userRole, userName, userDept, filterUser, filterDepartment, filterYear, startDate, endDate]);
 
-  const { overdueTasks, doneTasks, heatmapData } = useMemo(() => {
-    const overdue = filteredTasks.filter(t => apiService.isOverdue(t));
+  const { doneTasks } = useMemo(() => {
     const done = filteredTasks.filter(t => t.Status === 'เสร็จสิ้น');
-    
-    const workload = filteredTasks.reduce((acc, task) => {
-      if (!acc[task.StaffName]) acc[task.StaffName] = 0;
-      acc[task.StaffName]++;
-      return acc;
-    }, {});
-    
-    const heatmap = Object.keys(workload).map(name => ({
-      name,
-      tasks: workload[name]
-    })).sort((a, b) => b.tasks - a.tasks);
-
-    return { overdueTasks: overdue, doneTasks: done, heatmapData: heatmap };
+    return { doneTasks: done };
   }, [filteredTasks]);
 
   return (
@@ -266,21 +252,8 @@ export const Dashboard = () => {
         </div>
         
         <div 
-          onClick={() => { setSelectedStatus('เกินกำหนด'); setIsStatusModalOpen(true); }}
-          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-red-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-red-200"
-        >
-          <div className="p-3 bg-red-100 text-red-600 rounded-xl">
-            <AlertCircle size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500">เกินกำหนด</p>
-            <p className="text-2xl font-bold text-red-600">{overdueTasks.length}</p>
-          </div>
-        </div>
-
-        <div 
           onClick={() => { setSelectedStatus('เสร็จสิ้น'); setIsStatusModalOpen(true); }}
-          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-green-200"
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-green-200 lg:col-span-2"
         >
           <div className="p-3 bg-green-100 text-green-600 rounded-xl">
             <CheckCircle2 size={24} />
@@ -289,81 +262,11 @@ export const Dashboard = () => {
             <p className="text-sm font-medium text-slate-500">เสร็จสิ้น</p>
             <div className="flex items-baseline gap-2">
               <p className="text-2xl font-bold text-slate-900">{doneTasks.length}</p>
-              {doneTasks.filter(t => overdueTasks.some(ot => ot.ID === t.ID)).length > 0 && (
-                <span className="text-[10px] text-red-500 font-medium">
-                  (ล่าช้า {doneTasks.filter(t => overdueTasks.some(ot => ot.ID === t.ID)).length})
-                </span>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Workload Heatmap */}
-        <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60">
-          <h3 className="text-lg font-bold text-slate-900 mb-6">ความหนาแน่นของงานแต่ละบุคคล</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={heatmapData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '0.75rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Bar dataKey="tasks" radius={[4, 4, 0, 0]}>
-                  {heatmapData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.tasks > 2 ? '#ef4444' : '#3b82f6'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Overdue Alerts */}
-        <div className="glass p-6 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Clock className="text-red-500" size={20} />
-              แจ้งเตือนงานเกินกำหนด
-            </h3>
-            {overdueTasks.length > 5 && (
-              <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
-                 <button disabled={overduePage === 1} onClick={() => setOverduePage(p => p - 1)} className="px-2 py-1 bg-white rounded shadow-sm text-xs disabled:opacity-50 text-slate-700 font-medium transition-opacity">ก่อนหน้า</button>
-                 <span className="px-2 py-1 text-xs font-medium text-slate-600">หน้า {overduePage}</span>
-                 <button disabled={overduePage * 5 >= overdueTasks.length} onClick={() => setOverduePage(p => p + 1)} className="px-2 py-1 bg-white rounded shadow-sm text-xs disabled:opacity-50 text-slate-700 font-medium transition-opacity">ถัดไป</button>
-              </div>
-            )}
-          </div>
-          <div className="space-y-4 flex-1">
-            {overdueTasks.length === 0 ? (
-              <p className="text-slate-500 text-center py-8">เยี่ยมมาก! ไม่มีงานที่เกินกำหนด</p>
-            ) : (
-              overdueTasks.slice((overduePage - 1) * 5, overduePage * 5).map(task => (
-                <div key={task.ID} className="p-4 rounded-xl border border-red-200 bg-red-50 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-bold text-red-900 line-clamp-1">{task.Detail}</h4>
-                    <p className="text-xs text-red-700 bg-red-100/50 w-fit px-1.5 py-0.5 rounded mt-0.5">ID: #{String(task.ID).slice(-4)} | {task.StaffName}</p>
-                  </div>
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                      task.Status === 'เสร็จสิ้น' ? 'bg-green-100 text-green-800' :
-                      task.Status === 'รอตรวจ' ? 'bg-purple-100 text-purple-800' :
-                      task.Status === 'รอแก้ไข' ? 'bg-amber-100 text-amber-800' :
-                      task.Status === 'กำลังทำ' ? 'bg-blue-100 text-blue-800' :
-                      'bg-slate-100 text-slate-800'
-                    }`}>
-                      {task.Status}
-                    </span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      ล่าช้า
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
       <StatusTasksModal 
         key={selectedStatus || 'none'}
         isOpen={isStatusModalOpen}
@@ -371,8 +274,6 @@ export const Dashboard = () => {
         status={selectedStatus}
         userRole={userRole}
         tasks={
-          selectedStatus === 'ทั้งหมด' ? filteredTasks : 
-          selectedStatus === 'เกินกำหนด' ? overdueTasks :
           selectedStatus === 'เสร็จสิ้น' ? doneTasks :
           filteredTasks.filter(t => t.Status === selectedStatus)
         }
