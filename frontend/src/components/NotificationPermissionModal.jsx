@@ -14,10 +14,28 @@ export const NotificationPermissionModal = () => {
     }
   }, []);
 
+  const [showInstructions, setShowInstructions] = useState(false);
+
+
+  useEffect(() => {
+    // Only show the prompt if permission is 'default' and hasn't been dismissed
+    const hasDismissed = localStorage.getItem('hideNotiPrompt');
+    if (Notification.permission === 'default' && !hasDismissed) {
+      // Delay showing it slightly to not clash with initial page load
+      const timer = setTimeout(() => setIsOpen(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const handleAllow = async () => {
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted' || permission === 'denied') {
+      if (Notification.permission === 'denied') {
+        setShowInstructions(true);
+        return;
+      }
+
+      const result = await Notification.requestPermission();
+      if (result === 'granted' || result === 'denied') {
         setIsOpen(false);
       }
     } catch (err) {
@@ -48,23 +66,39 @@ export const NotificationPermissionModal = () => {
           </div>
           <h3 className="text-xl font-bold text-white mb-2">เปิดการแจ้งเตือน</h3>
           <p className="text-blue-100 text-sm leading-relaxed">
-            ไม่พลาดทุกความเคลื่อนไหว! รับการแจ้งเตือนทันทีเมื่อมีการอัปเดต หรือสั่งแก้ไขบรีฟงานของคุณ
+            {showInstructions 
+              ? "ดูเหมือนคุณจะบล็อกการแจ้งเตือนไว้ กรุณาตรวจสอบการตั้งค่าของบราวเซอร์เพื่อเปิดรับแจ้งเตือนครับ"
+              : "เพื่อไม่ให้คุณพลาดงานใหม่ๆ เมื่อกด 'อนุญาต' จะมีหน้าต่างของบราวเซอร์เด้งขึ้นมา ให้เลือก 'อนุญาต (Allow)' อีกครั้งนะครับ"}
           </p>
         </div>
         <div className="p-6 bg-white flex flex-col gap-3">
-          <button 
-            onClick={handleAllow}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
-          >
-            อนุญาตการแจ้งเตือน
-          </button>
+          {!showInstructions ? (
+            <button 
+              onClick={handleAllow}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all active:scale-95"
+            >
+              อนุญาตการแจ้งเตือน
+            </button>
+          ) : (
+            <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <p className="text-xs text-slate-500 mb-2 font-medium">ขั้นตอนการเปิด:</p>
+              <ul className="text-[11px] text-slate-600 text-left space-y-1 list-disc pl-4">
+                <li>ไปที่ <b>การตั้งค่าบราวเซอร์</b> (รูปแม่กุญแจ หรือจุด 3 จุด)</li>
+                <li>หาหัวข้อ <b>สิทธิ์/การแจ้งเตือน (Notifications)</b></li>
+                <li>เลือกเป็น <b>อนุญาต (Allow)</b></li>
+                <li>รีเฟรชหน้าเว็บนี้อีกครั้ง</li>
+              </ul>
+            </div>
+          )}
+
           <button 
             onClick={handleDismiss}
             className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-xl font-bold transition-all"
           >
-            ไว้ก่อน
+            {showInstructions ? "รับทราบ" : "ไว้ก่อน"}
           </button>
         </div>
+
       </div>
     </div>
   );
