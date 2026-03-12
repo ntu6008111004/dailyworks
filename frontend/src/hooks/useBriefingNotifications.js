@@ -8,12 +8,8 @@ export const useBriefingNotifications = () => {
   const lastUpdateRef = useRef({}); // Store max UpdatedAt for each briefing
   const isInitializedRef = useRef(false);
 
-  useEffect(() => {
-    // Request permission once
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
+  // Permission will be requested via NotificationPermissionModal
+
 
   useEffect(() => {
     if (!user?.ID) return;
