@@ -144,6 +144,7 @@ export const Tasks = () => {
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
   const filteredUsers = allUsers.filter(u => {
     if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
+    if (u.Role === 'Admin') return false;
     return filterDepartment === 'All' || u.Department === filterDepartment;
   });
 

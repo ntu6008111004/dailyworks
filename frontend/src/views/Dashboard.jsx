@@ -76,6 +76,7 @@ export const Dashboard = () => {
 
   const uniqueUsers = useMemo(() => {
     return [...new Set(allUsers.filter(u => {
+      if (u.Role === 'Admin') return false;
       if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
       return filterDepartment === 'All' || u.Department === filterDepartment;
     }).map(u => u.Name))].filter(Boolean);

@@ -5,12 +5,13 @@ export const NotificationPermissionModal = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Only show the prompt if permission is 'default' and hasn't been dismissed
-    const hasDismissed = localStorage.getItem('hideNotiPrompt');
-    if (Notification.permission === 'default' && !hasDismissed) {
-      // Delay showing it slightly to not clash with initial page load
-      const timer = setTimeout(() => setIsOpen(true), 1500);
-      return () => clearTimeout(timer);
+    if ('Notification' in window) {
+      const hasDismissed = localStorage.getItem('hideNotiPrompt');
+      if (Notification.permission === 'default' && !hasDismissed) {
+        // Delay showing it slightly to not clash with initial page load
+        const timer = setTimeout(() => setIsOpen(true), 1500);
+        return () => clearTimeout(timer);
+      }
     }
   }, []);
 
@@ -18,17 +19,23 @@ export const NotificationPermissionModal = () => {
 
 
   useEffect(() => {
-    // Only show the prompt if permission is 'default' and hasn't been dismissed
-    const hasDismissed = localStorage.getItem('hideNotiPrompt');
-    if (Notification.permission === 'default' && !hasDismissed) {
-      // Delay showing it slightly to not clash with initial page load
-      const timer = setTimeout(() => setIsOpen(true), 1500);
-      return () => clearTimeout(timer);
+    if ('Notification' in window) {
+      const hasDismissed = localStorage.getItem('hideNotiPrompt');
+      if (Notification.permission === 'default' && !hasDismissed) {
+        // Delay showing it slightly to not clash with initial page load
+        const timer = setTimeout(() => setIsOpen(true), 1500);
+        return () => clearTimeout(timer);
+      }
     }
   }, []);
 
   const handleAllow = async () => {
     try {
+      if (!('Notification' in window)) {
+        setIsOpen(false);
+        return;
+      }
+
       if (Notification.permission === 'denied') {
         setShowInstructions(true);
         return;

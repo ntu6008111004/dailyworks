@@ -41,28 +41,34 @@ const READONLY_COLORS = {
 
 export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   const { user } = useAuth();
+  const isAdmin = user?.Role === 'Admin';
+  // Check if current user is Head of the creator's department
+  const creator = allUsers.find(u => String(u.ID) === String(briefing?.CreatorID));
+  const isDeptHead = user?.Role === 'Head' && creator?.Department === user?.Department;
+
   const [saving, setSaving] = useState(false);
   const [responses, setResponses] = useState([]);
   const [isLoadingResponses, setIsLoadingResponses] = useState(true);
   const [reviewerNote, setReviewerNote] = useState('');
   const [reviewerImages, setReviewerImages] = useState([]);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState(() => {
-    if (briefing?.Assignees?.some(id => String(id) === String(user?.ID))) {
-      return String(user?.ID);
+    const userId = String(user?.ID || '');
+    if (briefing?.Assignees?.some(id => String(id) === userId)) {
+      return userId;
     }
     return briefing?.Assignees?.length > 0 ? String(briefing.Assignees[0]) : null;
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [focusedSide, setFocusedSide] = useState(() => {
+    const userId = String(user?.ID || '');
     // If Assignee is viewing their own tasks, right is active. Admin defaults to left.
-    if (briefing?.Assignees?.some(id => String(id) === String(user?.ID))) return null;
+    if (briefing?.Assignees?.some(id => String(id) === userId)) return null;
     return 'left';
   });
   const [isDragging, setIsDragging] = useState(false);
   
   const isCreator = !briefing || String(briefing.CreatorID) === String(user?.ID);
-  const isAdmin = user?.Role === 'Admin';
-  const canEditCore = !briefing || isCreator || isAdmin;
+  const canEditCore = !briefing || isCreator || isAdmin || isDeptHead;
   
   const [formData, setFormData] = useState({
     Title: briefing?.Title || '',
@@ -107,9 +113,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       setResponses(data || []);
       
       // Select the current user if they are an assignee, otherwise select first assignee
+      const userId = String(user?.ID || '');
       if (isAssignee) {
-        setSelectedAssigneeId(String(user?.ID));
-        const resp = data.find(r => String(r.UserID) === String(user?.ID));
+        setSelectedAssigneeId(userId);
+        const resp = data.find(r => String(r.UserID) === userId);
         if (resp) {
           const imgs = [];
           [1,2,3,4,5,6].forEach(i => { if (resp[`ResultImage${i}`]) imgs.push(resp[`ResultImage${i}`]); });
@@ -129,7 +136,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     } finally {
       setIsLoadingResponses(false);
     }
-  }, [briefing?.ID, isAssignee, user?.ID, briefing?.Assignees]);
+  }, [briefing?.ID, isAssignee, briefing?.Assignees]);
 
   useEffect(() => {
     if (briefing?.ID) {
@@ -153,7 +160,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       if (files.length > 0) {
         const news = await Promise.all(files.map(processImage));
         // If we're an assignee and on our tab, or if we're the creator
-        if (selectedAssigneeId === String(user?.ID)) {
+        if (selectedAssigneeId === String(user?.ID || '')) {
           if (myResponse.ResultImages.length + news.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
           setMyResponse(prev => ({ ...prev, ResultImages: [...prev.ResultImages, ...news] }));
           toast.success('วางรูปภาพสำเร็จ (ผลการทำงาน)', { position: 'bottom-right' });
@@ -202,7 +209,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     try {
       // Auto status trigger: If first time recording, set status to 'รอตรวจ' (Waiting for Review)
       let currentStatus = myResponse.Status;
-      const isFirstRecord = !responses.find(r => String(r.UserID) === String(user?.ID));
+      const isFirstRecord = !responses.find(r => String(r.UserID) === String(user?.ID || ''));
       const hasContent = myResponse.ResultImages.length > 0 || myResponse.URL1 || myResponse.URL2 || myResponse.Note;
       
       if (currentStatus === 'รอแก้ไข') {
@@ -214,7 +221,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
       const payload = {
         BriefingID: briefing.ID,
-        UserID: user?.ID,
+        UserID: String(user?.ID || ''),
         URL1: myResponse.URL1,
         URL2: myResponse.URL2,
         Status: currentStatus,
@@ -366,7 +373,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
     
-    if (String(user?.ID) === selectedAssigneeId && myResponse) {
+    if (String(effectiveUserId) === selectedAssigneeId && myResponse) {
       if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
       const processed = await Promise.all(files.map(processImage));
       setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
@@ -397,7 +404,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       }
     }
     if (files.length > 0) {
-      if (String(user?.ID) === selectedAssigneeId && myResponse) {
+      if (String(effectiveUserId) === selectedAssigneeId && myResponse) {
         if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
         const processed = await Promise.all(files.map(processImage));
         setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
