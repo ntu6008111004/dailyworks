@@ -7,11 +7,14 @@ export const CustomSelect = ({
   options, 
   placeholder = 'เลือก...', 
   className = '',
-  label = '' 
+  label = '',
+  searchable = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -31,8 +34,12 @@ export const CustomSelect = ({
       
       // If less than 250px below and more space above, drop up
       setDropUp(spaceBelow < 250 && spaceAbove > spaceBelow);
+      setSearchTerm(''); // clear search on open
     }
     setIsOpen(!isOpen);
+    if (!isOpen && searchable) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
   };
 
   const selectedOption = options.find(opt => 
@@ -42,6 +49,13 @@ export const CustomSelect = ({
   const displayLabel = selectedOption 
     ? (typeof selectedOption === 'object' ? selectedOption.label : selectedOption)
     : placeholder;
+
+  const filteredOptions = isOpen && searchable && searchTerm
+    ? options.filter(opt => {
+        const lbl = typeof opt === 'object' ? opt.label : opt;
+        return lbl.toLowerCase().includes(searchTerm.toLowerCase());
+      })
+    : options;
 
   const handleSelect = (val) => {
     onChange(val);
@@ -73,8 +87,23 @@ export const CustomSelect = ({
             ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}
           `}
         >
+          {searchable && (
+            <div className="p-2 border-b border-slate-100">
+              <input
+                ref={inputRef}
+                type="text"
+                className="w-full px-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                placeholder="ค้นหา..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
           <div className="max-h-60 overflow-y-auto custom-scrollbar">
-            {options.map((opt, index) => {
+            {filteredOptions.length === 0 ? (
+              <div className="p-3 text-sm text-center text-slate-400">ไม่พบข้อมูล</div>
+            ) : filteredOptions.map((opt, index) => {
               const optVal = typeof opt === 'object' ? opt.value : opt;
               const optLabel = typeof opt === 'object' ? opt.label : opt;
               const isSelected = optVal === value;

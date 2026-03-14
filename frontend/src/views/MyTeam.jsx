@@ -44,7 +44,8 @@ export const MyTeam = () => {
   };
 
   const departments = useMemo(() => {
-    const depts = new Set(allUsers.map(u => u.Department).filter(Boolean));
+    const nonAdmins = allUsers.filter(u => u.Role !== 'Admin');
+    const depts = new Set(nonAdmins.map(u => u.Department).filter(Boolean));
     return ['All', ...Array.from(depts).sort()];
   }, [allUsers]);
 
@@ -55,13 +56,14 @@ export const MyTeam = () => {
   }, []);
 
   const { teamMembers, stats } = useMemo(() => {
-    // 1. Filter users based on department
-    let filteredUsers = allUsers;
+    // 1. Filter users based on department (exclude Admins)
+    const nonAdminUsers = allUsers.filter(u => u.Role !== 'Admin');
+    let filteredUsers = nonAdminUsers;
     if (filterDepartment !== 'All') {
-      filteredUsers = allUsers.filter(u => u.Department === filterDepartment);
+      filteredUsers = nonAdminUsers.filter(u => u.Department === filterDepartment);
     } else if (!isAdmin) {
       // Non-admins (Heads) only see their department
-      filteredUsers = allUsers.filter(u => u.Department === userDept);
+      filteredUsers = nonAdminUsers.filter(u => u.Department === userDept);
     }
 
     // 2. Map stats per member

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -81,6 +81,17 @@ export const Briefing = () => {
     window.addEventListener('remote-briefing-update', onRemoteUpdate);
     return () => window.removeEventListener('remote-briefing-update', onRemoteUpdate);
   }, []);
+
+  const handleClearFilters = () => {
+    setFilterStatus('All');
+    setFilterDepartment('All');
+    setFilterUser('All');
+    setSearchTerm('');
+    setSearchQuery('');
+    setStartDate('');
+    setEndDate('');
+    toast.success('ล้างตัวกรองทั้งหมดแล้ว', { position: 'bottom-right' });
+  };
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -92,10 +103,14 @@ export const Briefing = () => {
 
   const filteredBriefings = useMemo(() => {
     return briefings.filter(b => {
-      // 1. Accessibility Logic: Only Creator or Assignees can see (Admins see all)
+      // 1. Accessibility Logic: Admins see all, Heads see department, others see own/assigned
       const isCreator = String(b.CreatorID) === String(user?.ID);
       const isAssignee = b.Assignees?.some(id => String(id) === String(user?.ID));
-      if (!isAdmin && !isCreator && !isAssignee) return false;
+      
+      const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
+      const isDeptHead = user?.Role === 'Head' && creator?.Department === user?.Department;
+
+      if (!isAdmin && !isCreator && !isAssignee && !isDeptHead) return false;
 
       // 2. Search Query
       if (searchQuery && !b.Detail?.toLowerCase().includes(searchQuery.toLowerCase()) && !b.RunningID?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -221,6 +236,14 @@ export const Briefing = () => {
                  <Calendar size={20} />
                </button>
             </div>
+            <button 
+              onClick={handleClearFilters}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-100 rounded-xl font-medium transition-all active:scale-95"
+              title="ล้างตัวกรองทั้งหมด"
+            >
+              <FilterX size={20} />
+              ล้างการค้นหา
+            </button>
             {canCreate && (
               <button 
                 onClick={() => { setEditingBriefing(null); setIsModalOpen(true); }}
@@ -263,11 +286,21 @@ export const Briefing = () => {
             onChange={setFilterDepartment}
             options={['All', ...new Set(allUsers.map(u => u.Department).filter(Boolean))].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
           />
-          <CustomSelect 
-            value={filterUser} 
-            onChange={setFilterUser}
-            options={['All', ...allUsers].map(u => ({ label: u === 'All' ? 'ทุกคน' : u.Name, value: u === 'All' ? 'All' : u.ID }))}
-          />
+          <div className="flex gap-2">
+            <CustomSelect 
+              className="flex-1"
+              value={filterUser} 
+              onChange={setFilterUser}
+              options={(() => {
+                let availableUsers = allUsers.filter(u => u.Role !== 'Admin');
+                if (user?.Role === 'Head') {
+                  availableUsers = availableUsers.filter(u => u.Department === user.Department);
+                }
+                return ['All', ...availableUsers].map(u => ({ label: u === 'All' ? 'ทุกคน' : u.Name, value: u === 'All' ? 'All' : u.ID }));
+              })()}
+              searchable={true}
+            />
+          </div>
           <div className="flex gap-2">
             <CustomDatePicker value={startDate} onChange={setStartDate} placeholder="ตั้งแต่" />
             <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="ถึง" />
@@ -472,7 +505,7 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, statusColor, prio
         </div>
       </div>
       
-      {(user?.Role === 'Admin' || String(briefing.CreatorID) === String(user?.ID)) && (
+      {(user?.Role === 'Admin' || String(briefing.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && allUsers.find(u => String(u.ID) === String(briefing.CreatorID))?.Department === user?.Department)) && (
         <button 
           onClick={onDelete}
           className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border border-slate-100 bg-white/80 backdrop-blur-sm shadow-sm z-20"

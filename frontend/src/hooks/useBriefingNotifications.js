@@ -51,7 +51,7 @@ export const useBriefingNotifications = () => {
               const body = `บรีฟงาน #${briefing.RunningID} มีการอัปเดต/มอบหมายใหม่`;
 
               // Trigger OS Notification if permitted
-              if (Notification.permission === 'granted') {
+              if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification(title, {
                   body: body,
                   icon: '/favicon.ico'
