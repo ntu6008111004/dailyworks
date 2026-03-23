@@ -342,7 +342,7 @@ function getTasks(doc) {
   });
 
   try {
-    cache.put("tasks_full", JSON.stringify(result), 120); // 2 mins
+    cache.put("tasks_full", JSON.stringify(result), 15); // 15 seconds (reduced from 120s)
   } catch (e) {}
   return result;
 }
@@ -431,7 +431,7 @@ function getTasksSummary(doc) {
   });
 
   try {
-    cache.put("tasks_summary", JSON.stringify(result), 120); // 2 mins
+    cache.put("tasks_summary", JSON.stringify(result), 15); // 15 seconds (reduced from 120s)
   } catch (e) {}
   return result;
 }

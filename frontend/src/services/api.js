@@ -3,7 +3,7 @@ const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
 // Simple in-memory cache and request deduplication
 const cache = new Map();
 const pendingRequests = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 15 * 1000; // 15 seconds (reduced from 5 mins)
 
 export const apiService = {
   executorId: 'System',
@@ -58,7 +58,11 @@ export const apiService = {
 
     const fetchPromise = (async () => {
       try {
-        const response = await fetch(GAS_URL, {
+        // Add cache-busting timestamp to URL
+        const urlWithBuster = new URL(GAS_URL);
+        urlWithBuster.searchParams.set('t', Date.now());
+
+        const response = await fetch(urlWithBuster.toString(), {
           method: 'POST',
           headers: {
             'Content-Type': 'text/plain', // Avoid CORS preflight options
@@ -111,7 +115,7 @@ export const apiService = {
   },
 
   getInitData(userId) {
-    return this.request('init', { userId }, { useCache: true });
+    return this.request('init', { userId }, { useCache: false });
   },
 
   getTaskById(id) {
