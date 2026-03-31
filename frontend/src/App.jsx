@@ -15,6 +15,8 @@ import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
 
+import { UpdateNotifier } from './components/UpdateNotifier';
+
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
   if (!user) {
@@ -27,6 +29,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <UpdateNotifier />
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
