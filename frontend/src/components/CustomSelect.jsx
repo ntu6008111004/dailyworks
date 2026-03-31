@@ -8,7 +8,8 @@ export const CustomSelect = ({
   placeholder = 'เลือก...', 
   className = '',
   label = '',
-  searchable = false
+  searchable = false,
+  borderDashed = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
@@ -68,7 +69,8 @@ export const CustomSelect = ({
       <button
         type="button"
         onClick={handleToggle}
-        className={`w-full flex items-center justify-between px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm transition-all outline-none text-left
+        className={`w-full flex items-center justify-between px-4 py-2 bg-white rounded-xl text-sm transition-all outline-none text-left
+          ${borderDashed ? 'border-2 border-dashed border-slate-400' : 'border border-slate-200'}
           ${isOpen ? 'ring-2 ring-blue-500 border-blue-500 shadow-sm' : 'hover:border-slate-300 hover:bg-slate-50'}
         `}
       >
