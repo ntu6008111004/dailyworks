@@ -34,6 +34,7 @@ export const Briefing = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [openStatusId, setOpenStatusId] = useState(null);
   const itemsPerPage = 10;
 
   const userRole = user?.Role || user?.role;
@@ -101,17 +102,21 @@ export const Briefing = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const filteredBriefings = useMemo(() => {
+  const visibleBriefings = useMemo(() => {
     return briefings.filter(b => {
-      // 1. Accessibility Logic: Admins see all, Heads see department, others see own/assigned
+      // Accessibility Logic: Admins see all, Heads see department, others see own/assigned
       const isCreator = String(b.CreatorID) === String(user?.ID);
       const isAssignee = b.Assignees?.some(id => String(id) === String(user?.ID));
       
       const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
       const isDeptHead = user?.Role === 'Head' && creator?.Department === user?.Department;
 
-      if (!isAdmin && !isCreator && !isAssignee && !isDeptHead) return false;
+      return isAdmin || isCreator || isAssignee || isDeptHead;
+    });
+  }, [briefings, user, isAdmin, allUsers]);
 
+  const filteredBriefings = useMemo(() => {
+    return visibleBriefings.filter(b => {
       // 2. Search Query
       if (searchQuery && !b.Detail?.toLowerCase().includes(searchQuery.toLowerCase()) && !b.RunningID?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
@@ -140,7 +145,7 @@ export const Briefing = () => {
 
       return true;
     }).sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt));
-  }, [briefings, user, isAdmin, searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
+  }, [visibleBriefings, searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -151,15 +156,15 @@ export const Briefing = () => {
   const currentBriefings = filteredBriefings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const stats = useMemo(() => {
-    const total = briefings.length;
-    const overdue = briefings.filter(b => apiService.isBriefingOverdue(b)).length;
-    const byStatus = briefings.reduce((acc, b) => {
+    const total = visibleBriefings.length;
+    const overdue = visibleBriefings.filter(b => apiService.isBriefingOverdue(b)).length;
+    const byStatus = visibleBriefings.reduce((acc, b) => {
       acc[b.Status] = (acc[b.Status] || 0) + 1;
       return acc;
     }, {});
 
     return { total, overdue, byStatus };
-  }, [briefings]);
+  }, [visibleBriefings]);
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
@@ -175,6 +180,67 @@ export const Briefing = () => {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleStatusChange = async (briefing, newStatus) => {
+    const oldStatus = briefing.Status;
+    try {
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: newStatus, syncState: 'syncing' } : b));
+      await apiService.updateBriefing({ ID: briefing.ID, Status: newStatus });
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, syncState: 'success' } : b));
+      setTimeout(() => {
+        setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, syncState: null } : b));
+      }, 1500);
+      toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
+    } catch (error) {
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: oldStatus, syncState: null } : b));
+      toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  const StatusDropdown = ({ briefing, currentStatus, isOpen, onToggle }) => {
+    const dropdownRef = React.useRef(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+          if (isOpen) onToggle(null);
+        }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen, onToggle]);
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(isOpen ? null : briefing.ID); }}
+          className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[currentStatus] || statusColors['รอดำเนินการ']}`}
+        >
+          <span>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : currentStatus}</span>
+          <RefreshCw size={10} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        
+        {isOpen && (
+          <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-200 p-1 py-1.5 z-[110]">
+            {Object.entries(statusColors).filter(([s]) => s !== 'Overdue').map(([status, color]) => (
+              <button
+                key={status}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(null);
+                  if (status !== currentStatus) handleStatusChange(briefing, status);
+                }}
+                className="w-full text-left px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 transition-colors mb-0.5 last:mb-0 flex items-center gap-1.5"
+              >
+                <div className={`w-2 h-2 rounded-full ${color.split(' ')[0]}`}></div>
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const statusColors = {
@@ -276,13 +342,14 @@ export const Briefing = () => {
             <input 
               type="text"
               placeholder="ค้นหาเลขบรีฟ หรือรายละเอียด..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-dashed border-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <CustomSelect 
             value={filterDepartment} 
+            borderDashed
             onChange={setFilterDepartment}
             options={['All', ...new Set(allUsers.map(u => u.Department).filter(Boolean))].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
           />
@@ -290,6 +357,7 @@ export const Briefing = () => {
             <CustomSelect 
               className="flex-1"
               value={filterUser} 
+              borderDashed
               onChange={setFilterUser}
               options={(() => {
                 let availableUsers = allUsers.filter(u => u.Role !== 'Admin');
@@ -301,9 +369,9 @@ export const Briefing = () => {
               searchable={true}
             />
           </div>
-          <div className="flex gap-2">
-            <CustomDatePicker value={startDate} onChange={setStartDate} placeholder="ตั้งแต่" />
-            <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="ถึง" />
+          <div className="flex gap-2 text-black">
+            <CustomDatePicker value={startDate} onChange={setStartDate} placeholder="ตั้งแต่" borderDashed />
+            <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="ถึง" borderDashed />
           </div>
         </div>
       </div>
@@ -326,6 +394,9 @@ export const Briefing = () => {
                 onDelete={(e) => { e.stopPropagation(); setDeleteConfirmId(b.ID); }}
                 statusColor={statusColors[apiService.isBriefingOverdue(b) ? 'Overdue' : b.Status]}
                 priorityColor={priorityColors[b.Priority]}
+                StatusDropdown={StatusDropdown}
+                openStatusId={openStatusId}
+                setOpenStatusId={setOpenStatusId}
               />
             ))}
             {filteredBriefings.length === 0 && (
@@ -410,7 +481,8 @@ const StatCard = ({ label, value, color, icon, onClick, active }) => (
   </button>
 );
 
-const BriefingCard = ({ briefing, allUsers, onClick, onDelete, statusColor, priorityColor, user }) => {
+// eslint-disable-next-line no-unused-vars
+const BriefingCard = ({ briefing, allUsers, onClick, onDelete, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
   const creator = allUsers.find(u => String(u.ID) === String(briefing.CreatorID));
   const assigneesCount = briefing.Assignees?.length || 0;
   const isOverdue = apiService.isBriefingOverdue(briefing);
@@ -430,7 +502,9 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, statusColor, prio
     <div 
       onClick={onClick}
       style={cardStyle}
-      className="group relative bg-white p-5 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/5 transition-all cursor-pointer flex flex-col gap-4 overflow-hidden"
+      className={`group relative bg-white p-5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-4 mb-1 ${
+        openStatusId === briefing.ID ? 'z-50 shadow-2xl border-blue-400 overflow-visible' : 'z-0 border-slate-200 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/5 overflow-hidden'
+      }`}
     >
       {isOverdue && (
         <div className="absolute top-0 right-0 z-10">
@@ -463,14 +537,31 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, statusColor, prio
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mt-auto">
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${statusColor}`}>
-          {isOverdue ? 'เกินกำหนด' : briefing.Status}
-        </span>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
-          <Calendar size={13} />
-          {format(new Date(briefing.DueDate), 'd MMM yy', { locale: th })}
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-auto">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusDropdown 
+            briefing={briefing} 
+            currentStatus={briefing.Status} 
+            isOpen={openStatusId === briefing.ID}
+            onToggle={setOpenStatusId}
+          />
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
+            <Calendar size={13} />
+            {format(new Date(briefing.DueDate), 'd MMM yy', { locale: th })}
+          </div>
         </div>
+
+        {/* Sync Indicators - Small & discrete for briefings */}
+        {briefing.syncState === 'syncing' && (
+          <div className="flex items-center gap-1 text-[9px] font-bold text-blue-600 animate-pulse">
+            <RefreshCw size={10} className="animate-spin" /> คลังข้อมูล...
+          </div>
+        )}
+        {briefing.syncState === 'success' && (
+          <div className="flex items-center gap-1 text-[9px] font-bold text-green-600">
+            <CheckCircle2 size={10} /> เรียบร้อย
+          </div>
+        )}
       </div>
 
       <div className="pt-4 border-t border-slate-100 flex items-center justify-between">

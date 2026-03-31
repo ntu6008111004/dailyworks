@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -102,6 +102,7 @@ export const Tasks = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
+  const [openStatusId, setOpenStatusId] = useState(null);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('All');
@@ -341,6 +342,68 @@ export const Tasks = () => {
     'ล่าช้า': 'bg-red-100 text-red-800 border-2 border-red-500 shadow-sm font-bold',
   };
 
+  const handleStatusChange = async (task, newStatus) => {
+    const oldStatus = task.Status;
+    try {
+      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
+      apiService.mutateSummaryCache('update', { ID: task.ID, Status: newStatus });
+      await apiService.updateTask({ ID: task.ID, Status: newStatus });
+      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: 'success' } : t));
+      setTimeout(() => {
+        setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: null } : t));
+      }, 1500);
+      toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
+    } catch (error) {
+      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: oldStatus, syncState: null } : t));
+      toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  const StatusDropdown = ({ task, currentStatus, isOpen, onToggle }) => {
+    const dropdownRef = React.useRef(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+          if (isOpen) onToggle(null);
+        }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen, onToggle]);
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={() => onToggle(isOpen ? null : task.ID)}
+          className={`px-2.5 py-0.5 text-xs font-semibold rounded-full flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[currentStatus] || statusColors['ยังไม่เริ่ม']}`}
+        >
+          <span>{currentStatus}</span>
+          <ChevronDown size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        
+        {isOpen && (
+          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-200 p-1 py-1.5 z-[110]">
+            {Object.entries(statusColors).map(([status, color]) => (
+              <button
+                key={status}
+                onClick={() => {
+                  onToggle(null);
+                  if (status !== currentStatus) handleStatusChange(task, status);
+                }}
+                className="w-full text-left px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 transition-colors mb-0.5 last:mb-0 flex items-center gap-1.5"
+              >
+                <div className={`w-2 h-2 rounded-full ${color.split(' ')[0]}`}></div>
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -381,7 +444,7 @@ export const Tasks = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="glass p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-end relative z-20">
+      <div className="glass p-4 rounded-2xl border-2 border-dashed border-slate-400 flex flex-col md:flex-row gap-4 items-end relative z-20">
         <div className="flex-1 w-full relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
           <input
@@ -389,25 +452,26 @@ export const Tasks = () => {
             placeholder="ค้นหางาน หรือชื่อโปรเจค..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full pl-10 pr-4 py-2 border-2 border-dashed border-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
 
         <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ตั้งแต่:</span>
-            <CustomDatePicker selectedDate={localStartDate} onChange={(date) => setLocalStartDate(date)} className="sm:w-36" />
+            <CustomDatePicker selectedDate={localStartDate} onChange={(date) => setLocalStartDate(date)} className="sm:w-36" borderDashed />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ถึง:</span>
-            <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} className="sm:w-36" />
+            <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} className="sm:w-36" borderDashed />
           </div>
 
           {(canSeeAll || userRole === 'Head') && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap text-black">
               {canSeeAll && (
                 <CustomSelect
                   value={filterDepartment}
+                  borderDashed
                   onChange={(val) => { setFilterDepartment(val); setFilterUser('All'); }}
                   options={['All', ...uniqueDepartments].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
                   className="w-full sm:w-36"
@@ -415,6 +479,7 @@ export const Tasks = () => {
               )}
               <CustomSelect
                 value={filterUser}
+                borderDashed
                 onChange={(val) => setFilterUser(val)}
                 options={[{ label: 'พนง.ทั้งหมด', value: 'All' }, ...uniqueUserOptions]}
                 className="w-full sm:w-40"
@@ -424,6 +489,7 @@ export const Tasks = () => {
 
           <CustomSelect
             value={filterStatus}
+            borderDashed
             onChange={(val) => setFilterStatus(val)}
             options={['All', ...Object.keys(statusColors).filter(s => s !== 'ล่าช้า' && s !== 'เกินกำหนด')].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
             className="w-full sm:w-48"
@@ -464,8 +530,8 @@ export const Tasks = () => {
             <>
               {tasks.map(task => (
                 <div key={task.ID} className={`glass px-4 py-3 rounded-2xl border transition-all group flex flex-col md:flex-row gap-4 relative ${
-                  task.syncState === 'pending' ? 'opacity-70 border-blue-200' : 'border-slate-200/60 hover:shadow-md'
-                }`}>
+                  openStatusId === task.ID ? 'z-50 shadow-lg' : 'z-0'
+                } ${task.syncState === 'pending' ? 'opacity-70 border-blue-200' : 'border-slate-200/60 hover:shadow-md'}`}>
                   
                   {/* Sync Indicators */}
                   {task.syncState === 'pending' && (
@@ -499,9 +565,12 @@ export const Tasks = () => {
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0 mt-2 md:mt-0 pt-2 lg:pt-0">
-                        <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[task.Status]}`}>
-                          {task.Status}
-                        </span>
+                        <StatusDropdown 
+                          task={task} 
+                          currentStatus={task.Status} 
+                          isOpen={openStatusId === task.ID}
+                          onToggle={setOpenStatusId}
+                        />
                       </div>
                     </div>
 

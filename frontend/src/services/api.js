@@ -62,11 +62,19 @@ export const apiService = {
         const urlWithBuster = new URL(GAS_URL);
         urlWithBuster.searchParams.set('t', Date.now());
 
+        const headers = {
+          'Content-Type': 'text/plain', // Avoid CORS preflight options
+        };
+
+        // If a modern API key is configured, add it to headers
+        const apiKey = import.meta.env.VITE_API_KEY;
+        if (apiKey) {
+          headers['x-api-key'] = apiKey;
+        }
+
         const response = await fetch(urlWithBuster.toString(), {
           method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain', // Avoid CORS preflight options
-          },
+          headers: headers,
           body: JSON.stringify({ 
             action, 
             data, 

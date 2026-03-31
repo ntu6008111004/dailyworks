@@ -11,7 +11,9 @@ const CustomInput = React.forwardRef(({ value, onClick, onClear, className, plac
       value={value}
       onClick={onClick}
       readOnly
-      className={`w-full px-4 py-2 pl-4 pr-10 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer bg-white ${className || ''}`}
+      className={`w-full px-4 py-2 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer bg-white 
+        ${className?.includes('border-2 border-dashed') ? 'border-2 border-dashed border-slate-400' : 'border border-slate-200'}
+        ${className || ''}`}
       placeholder={placeholder || "dd/mm/yyyy"}
     />
     <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -32,7 +34,7 @@ const CustomInput = React.forwardRef(({ value, onClick, onClear, className, plac
   </div>
 ));
 
-export const CustomDatePicker = ({ selectedDate, value, onChange, label, required, className, placeholder }) => {
+export const CustomDatePicker = ({ selectedDate, value, onChange, label, required, className, placeholder, borderDashed = false }) => {
   // Use 'value' if 'selectedDate' is not provided (for compatibility)
   const activeDate = selectedDate || value;
 
@@ -84,7 +86,7 @@ export const CustomDatePicker = ({ selectedDate, value, onChange, label, require
         dateFormat="dd/MM/yyyy"
         customInput={
           <CustomInput 
-            className={className} 
+            className={`${className || ''} ${borderDashed ? 'border-2 border-dashed border-slate-400' : ''}`} 
             placeholder={placeholder} 
             onClear={handleClear}
           />
