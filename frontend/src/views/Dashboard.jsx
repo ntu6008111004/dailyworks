@@ -117,6 +117,7 @@ export const Dashboard = () => {
 
     const statusData = [
       { name: 'ยังไม่เริ่ม', value: statusCounts['ยังไม่เริ่ม'] || 0, color: '#94a3b8' },
+      { name: 'กำลังทำ', value: statusCounts['กำลังทำ'] || 0, color: '#3b82f6' },
       { name: 'รอแก้ไข', value: statusCounts['รอแก้ไข'] || 0, color: '#fbbf24' },
       { name: 'รอตรวจ', value: statusCounts['รอตรวจ'] || 0, color: '#c084fc' },
       { name: 'เสร็จสิ้น', value: statusCounts['เสร็จสิ้น'] || 0, color: '#22c55e' }
@@ -224,7 +225,7 @@ export const Dashboard = () => {
 
         <div 
           onClick={() => { setSelectedStatus('ยังไม่เริ่ม'); setIsStatusModalOpen(true); }}
-          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-slate-300 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-slate-200"
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-slate-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-slate-200"
         >
           <div className="p-3 bg-slate-100 text-slate-600 rounded-xl">
             <PlayCircle size={24} />
@@ -233,6 +234,21 @@ export const Dashboard = () => {
             <p className="text-sm font-medium text-slate-500">ยังไม่เริ่ม</p>
             <p className="text-2xl font-bold text-slate-900">
               {filteredTasks.filter(t => t.Status === 'ยังไม่เริ่ม').length}
+            </p>
+          </div>
+        </div>
+
+        <div 
+          onClick={() => { setSelectedStatus('กำลังทำ'); setIsStatusModalOpen(true); }}
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-blue-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-blue-200"
+        >
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
+            <Clock size={24} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-500">กำลังทำ</p>
+            <p className="text-2xl font-bold text-blue-600">
+              {filteredTasks.filter(t => t.Status === 'กำลังทำ').length}
             </p>
           </div>
         </div>
@@ -269,7 +285,7 @@ export const Dashboard = () => {
         
         <div 
           onClick={() => { setSelectedStatus('เสร็จสิ้น'); setIsStatusModalOpen(true); }}
-          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-green-200 lg:col-span-2"
+          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-green-200"
         >
           <div className="p-3 bg-green-100 text-green-600 rounded-xl">
             <CheckCircle2 size={24} />
