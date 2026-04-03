@@ -71,7 +71,15 @@ export const AdminUsers = () => {
           ctx.drawImage(img, 0, 0, width, height);
           
           // Highly compressed WebP for profile pic (~10-30kb)
-          resolve(canvas.toDataURL('image/webp', 0.5));
+          const currentQuality = 0.5;
+          const dataUrl = canvas.toDataURL('image/webp', currentQuality);
+          
+          if (dataUrl.length > 41000) {
+            // Already very small dimensions (150x150), so just drop quality if it's somehow still too big
+            resolve(canvas.toDataURL('image/webp', 0.1));
+          } else {
+            resolve(dataUrl);
+          }
         };
         img.src = reader.result;
       };

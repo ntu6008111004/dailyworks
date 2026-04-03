@@ -56,7 +56,15 @@ export const MyProfile = () => {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           
-          resolve(canvas.toDataURL('image/webp', 0.5));
+          const currentQuality = 0.5;
+          const dataUrl = canvas.toDataURL('image/webp', currentQuality);
+          
+          if (dataUrl.length > 41000) {
+            // Drop quality if somehow 150x150 is still too big
+            resolve(canvas.toDataURL('image/webp', 0.1));
+          } else {
+            resolve(dataUrl);
+          }
         };
         img.src = reader.result;
       };

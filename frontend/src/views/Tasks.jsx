@@ -529,9 +529,9 @@ export const Tasks = () => {
           ) : (
             <>
               {tasks.map(task => (
-                <div key={task.ID} className={`glass px-4 py-3 rounded-2xl border transition-all group flex flex-col md:flex-row gap-4 relative ${
-                  openStatusId === task.ID ? 'z-50 shadow-lg' : 'z-0'
-                } ${task.syncState === 'pending' ? 'opacity-70 border-blue-200' : 'border-slate-200/60 hover:shadow-md'}`}>
+                <div key={task.ID} className={`glass px-4 py-3 rounded-2xl border-2 border-dashed shadow-md transition-all group flex flex-col md:flex-row gap-4 relative ${
+                  openStatusId === task.ID ? 'z-50 shadow-2xl border-blue-400' : 'z-0 border-slate-300 hover:border-blue-400'
+                } ${task.syncState === 'pending' ? 'opacity-70 border-blue-200' : 'hover:shadow-xl hover:shadow-blue-500/10'}`}>
                   
                   {/* Sync Indicators */}
                   {task.syncState === 'pending' && (
