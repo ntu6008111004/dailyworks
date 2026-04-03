@@ -136,7 +136,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     } finally {
       setIsLoadingResponses(false);
     }
-  }, [briefing?.ID, isAssignee, briefing?.Assignees]);
+  }, [briefing?.ID, isAssignee, briefing?.Assignees, user?.ID]);
 
   useEffect(() => {
     if (briefing?.ID) {
@@ -302,16 +302,16 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
             
             const dataUrl = canvas.toDataURL('image/webp', currentQuality);
             
-            // Limit to 47000 characters
-            if (dataUrl.length > 47000) {
-              if (currentQuality > 0.4) {
+            // Limit to 41000 characters (Safe margin for GAS/Sheet storage)
+            if (dataUrl.length > 41000) {
+              if (currentQuality > 0.15) {
                 // Lower quality slightly to preserve sharpness
                 currentQuality -= 0.1;
                 compress();
-              } else if (currentMaxDim > 600) {
-                // If quality is low, shrink dimensions down to 600px
-                currentMaxDim -= 200;
-                currentQuality = 0.7; // Reset quality for new dimension
+              } else if (currentMaxDim > 300) {
+                // If quality is very low, shrink dimensions down to 300px
+                currentMaxDim -= 100;
+                currentQuality = 0.6; // Reset quality for new dimension
                 compress();
               } else {
                 // Return best effort
@@ -373,7 +373,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
     
-    if (String(effectiveUserId) === selectedAssigneeId && myResponse) {
+    if (String(user?.ID) === selectedAssigneeId && myResponse) {
       if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
       const processed = await Promise.all(files.map(processImage));
       setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
@@ -404,7 +404,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       }
     }
     if (files.length > 0) {
-      if (String(effectiveUserId) === selectedAssigneeId && myResponse) {
+      if (String(user?.ID) === selectedAssigneeId && myResponse) {
         if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
         const processed = await Promise.all(files.map(processImage));
         setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));

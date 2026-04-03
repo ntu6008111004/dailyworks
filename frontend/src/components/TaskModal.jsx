@@ -72,39 +72,44 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
           const img = new Image();
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            const MAX_DIM = 600;
+            
+            let currentMaxDim = 600;
+            let currentQuality = 0.5;
 
-            if (width > height) {
-              if (width > MAX_DIM) {
-                height = Math.round(height * (MAX_DIM / width));
-                width = MAX_DIM;
+            const compress = () => {
+              let curWidth = img.width;
+              let curHeight = img.height;
+              
+              if (curWidth > curHeight) { 
+                if (curWidth > currentMaxDim) { curHeight *= currentMaxDim / curWidth; curWidth = currentMaxDim; } 
+              } else { 
+                if (curHeight > currentMaxDim) { curWidth *= currentMaxDim / curHeight; curHeight = currentMaxDim; } 
               }
-            } else {
-              if (height > MAX_DIM) {
-                width = Math.round(width * (MAX_DIM / height));
-                height = MAX_DIM;
+              
+              canvas.width = curWidth;
+              canvas.height = curHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, curWidth, curHeight);
+              
+              const dataUrl = canvas.toDataURL('image/webp', currentQuality);
+              
+              if (dataUrl.length > 41000) {
+                if (currentQuality > 0.15) {
+                  currentQuality -= 0.1;
+                  compress();
+                } else if (currentMaxDim > 300) {
+                  currentMaxDim -= 100;
+                  currentQuality = 0.6;
+                  compress();
+                } else {
+                  resolve({ file, preview: dataUrl });
+                }
+              } else {
+                resolve({ file, preview: dataUrl });
               }
-            }
+            };
 
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            const compressedBase64 = canvas.toDataURL('image/webp', 0.4);
-
-            if (compressedBase64.length > 49000) {
-              const smallCanvas = document.createElement('canvas');
-              smallCanvas.width = width * 0.7;
-              smallCanvas.height = height * 0.7;
-              const sctx = smallCanvas.getContext('2d');
-              sctx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
-              resolve({ file, preview: smallCanvas.toDataURL('image/webp', 0.3) });
-            } else {
-              resolve({ file, preview: compressedBase64 });
-            }
+            compress();
           };
           img.src = reader.result;
         };

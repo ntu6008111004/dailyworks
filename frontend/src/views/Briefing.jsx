@@ -502,8 +502,8 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, priorityColor, us
     <div 
       onClick={onClick}
       style={cardStyle}
-      className={`group relative bg-white p-5 rounded-2xl border transition-all cursor-pointer flex flex-col gap-4 mb-1 ${
-        openStatusId === briefing.ID ? 'z-50 shadow-2xl border-blue-400 overflow-visible' : 'z-0 border-slate-200 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/5 overflow-hidden'
+      className={`group relative bg-white p-5 rounded-2xl border-2 border-dashed shadow-md transition-all cursor-pointer flex flex-col gap-4 mb-1 ${
+        openStatusId === briefing.ID ? 'z-50 shadow-2xl border-blue-400 overflow-visible' : 'z-0 border-slate-300 hover:border-blue-400 hover:shadow-xl hover:shadow-blue-500/10 overflow-hidden'
       }`}
     >
       {isOverdue && (
