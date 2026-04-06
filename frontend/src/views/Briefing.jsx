@@ -27,6 +27,7 @@ export const Briefing = () => {
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('All');
+  const [filterPostStatus, setFilterPostStatus] = useState('All');
   const [filterDepartment, setFilterDepartment] = useState('All');
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +86,7 @@ export const Briefing = () => {
 
   const handleClearFilters = () => {
     setFilterStatus('All');
+    setFilterPostStatus('All');
     setFilterDepartment('All');
     setFilterUser('All');
     setSearchTerm('');
@@ -127,6 +129,9 @@ export const Briefing = () => {
         return false;
       }
 
+      const pStatus = b.PostStatus || 'ยังไม่โพส';
+      if (filterPostStatus !== 'All' && pStatus !== filterPostStatus) return false;
+
       // 4. Department (Based on Creator)
       if (filterDepartment !== 'All') {
         const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
@@ -145,12 +150,12 @@ export const Briefing = () => {
 
       return true;
     }).sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt));
-  }, [visibleBriefings, searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
+  }, [visibleBriefings, searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterStatus, filterDepartment, filterUser, startDate, endDate]);
+  }, [searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate]);
 
   const totalPages = Math.ceil(filteredBriefings.length / itemsPerPage);
   const currentBriefings = filteredBriefings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -162,8 +167,13 @@ export const Briefing = () => {
       acc[b.Status] = (acc[b.Status] || 0) + 1;
       return acc;
     }, {});
+    const byPostStatus = visibleBriefings.reduce((acc, b) => {
+      const p = b.PostStatus || 'ยังไม่โพส';
+      acc[p] = (acc[p] || 0) + 1;
+      return acc;
+    }, {});
 
-    return { total, overdue, byStatus };
+    return { total, overdue, byStatus, byPostStatus };
   }, [visibleBriefings]);
 
   const handleDelete = async () => {
@@ -195,6 +205,27 @@ export const Briefing = () => {
     } catch (error) {
       setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: oldStatus, syncState: null } : b));
       toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  const handlePostStatusToggle = async (briefing) => {
+    const pStatus = briefing.PostStatus || 'ยังไม่โพส';
+    const newStatus = pStatus === 'ยังไม่โพส' ? 'โพสแล้ว' : 'ยังไม่โพส';
+    const oldStatus = pStatus;
+    const oldPostDate = briefing.PostDate;
+    const newPostDate = newStatus === 'โพสแล้ว' ? new Date().toISOString().split('T')[0] : briefing.PostDate;
+
+    try {
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, PostStatus: newStatus, PostDate: newPostDate, syncState: 'syncing' } : b));
+      await apiService.updateBriefing({ ID: briefing.ID, PostStatus: newStatus, PostDate: newPostDate });
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, syncState: 'success' } : b));
+      setTimeout(() => {
+        setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, syncState: null } : b));
+      }, 1500);
+      toast.success('อัปเดตสถานะโพสต์เป็น ' + newStatus);
+    } catch (error) {
+      setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, PostStatus: oldStatus, PostDate: oldPostDate, syncState: null } : b));
+      toast.error('อัปเดตสถานะโพสต์ไม่สำเร็จ: ' + error.message);
     }
   };
 
@@ -323,14 +354,29 @@ export const Briefing = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => setFilterStatus('All')} active={filterStatus === 'All'} />
-          <StatCard label="รอดำเนินการ" value={stats.byStatus['รอดำเนินการ'] || 0} color="bg-slate-500" icon={<Clock size={16}/>} onClick={() => setFilterStatus('รอดำเนินการ')} active={filterStatus === 'รอดำเนินการ'} />
-          <StatCard label="กำลังทำ" value={stats.byStatus['กำลังทำ'] || 0} color="bg-blue-600" icon={<RefreshCw size={16}/>} onClick={() => setFilterStatus('กำลังทำ')} active={filterStatus === 'กำลังทำ'} />
-          <StatCard label="รอตรวจ" value={stats.byStatus['รอตรวจ'] || 0} color="bg-[#f472b6]" icon={<PieChart size={16}/>} onClick={() => setFilterStatus('รอตรวจ')} active={filterStatus === 'รอตรวจ'} />
-          <StatCard label="รอแก้ไข" value={stats.byStatus['รอแก้ไข'] || 0} color="bg-yellow-400 text-yellow-950" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('รอแก้ไข')} active={filterStatus === 'รอแก้ไข'} />
-          <StatCard label="เสร็จสิ้น" value={stats.byStatus['เสร็จสิ้น'] || 0} color="bg-[#198754]" icon={<CheckCircle2 size={16}/>} onClick={() => setFilterStatus('เสร็จสิ้น')} active={filterStatus === 'เสร็จสิ้น'} />
-          <StatCard label="เกินกำหนด" value={stats.overdue} color="bg-rose-600" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('Overdue')} active={filterStatus === 'Overdue'} />
+        <div className="flex flex-col gap-4">
+          <div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => { setFilterStatus('All'); setFilterPostStatus('All'); }} active={filterStatus === 'All' && filterPostStatus === 'All'} />
+              <StatCard label="รอดำเนินการ" value={stats.byStatus['รอดำเนินการ'] || 0} color="bg-slate-500" icon={<Clock size={16}/>} onClick={() => setFilterStatus('รอดำเนินการ')} active={filterStatus === 'รอดำเนินการ'} />
+              <StatCard label="กำลังทำ" value={stats.byStatus['กำลังทำ'] || 0} color="bg-blue-600" icon={<RefreshCw size={16}/>} onClick={() => setFilterStatus('กำลังทำ')} active={filterStatus === 'กำลังทำ'} />
+              <StatCard label="รอตรวจ" value={stats.byStatus['รอตรวจ'] || 0} color="bg-[#f472b6]" icon={<PieChart size={16}/>} onClick={() => setFilterStatus('รอตรวจ')} active={filterStatus === 'รอตรวจ'} />
+              <StatCard label="รอแก้ไข" value={stats.byStatus['รอแก้ไข'] || 0} color="bg-yellow-400 text-yellow-950" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('รอแก้ไข')} active={filterStatus === 'รอแก้ไข'} />
+              <StatCard label="เสร็จสิ้น" value={stats.byStatus['เสร็จสิ้น'] || 0} color="bg-[#198754]" icon={<CheckCircle2 size={16}/>} onClick={() => setFilterStatus('เสร็จสิ้น')} active={filterStatus === 'เสร็จสิ้น'} />
+              <StatCard label="เกินกำหนด" value={stats.overdue} color="bg-rose-600" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('Overdue')} active={filterStatus === 'Overdue'} />
+            </div>
+          </div>
+          
+          <hr className="border-t border-slate-200 border-dashed" />
+          
+          <div>
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">สถานะการโพสต์</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => { setFilterPostStatus('All'); setFilterStatus('All'); }} active={filterPostStatus === 'All' && filterStatus === 'All'} />
+              <StatCard label="ยังไม่โพส" value={stats.byPostStatus['ยังไม่โพส'] || 0} color="bg-slate-600" icon={<Clock size={16}/>} onClick={() => setFilterPostStatus('ยังไม่โพส')} active={filterPostStatus === 'ยังไม่โพส'} />
+              <StatCard label="โพสแล้ว" value={stats.byPostStatus['โพสแล้ว'] || 0} color="bg-green-600" icon={<CheckCircle2 size={16}/>} onClick={() => setFilterPostStatus('โพสแล้ว')} active={filterPostStatus === 'โพสแล้ว'} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -392,6 +438,7 @@ export const Briefing = () => {
                   setIsModalOpen(true); 
                 }}
                 onDelete={(e) => { e.stopPropagation(); setDeleteConfirmId(b.ID); }}
+                onPostStatusToggle={() => handlePostStatusToggle(b)}
                 statusColor={statusColors[apiService.isBriefingOverdue(b) ? 'Overdue' : b.Status]}
                 priorityColor={priorityColors[b.Priority]}
                 StatusDropdown={StatusDropdown}
@@ -482,7 +529,7 @@ const StatCard = ({ label, value, color, icon, onClick, active }) => (
 );
 
 // eslint-disable-next-line no-unused-vars
-const BriefingCard = ({ briefing, allUsers, onClick, onDelete, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
+const BriefingCard = ({ briefing, allUsers, onClick, onDelete, onPostStatusToggle, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
   const creator = allUsers.find(u => String(u.ID) === String(briefing.CreatorID));
   const assigneesCount = briefing.Assignees?.length || 0;
   const isOverdue = apiService.isBriefingOverdue(briefing);
@@ -537,34 +584,76 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, priorityColor, us
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 mt-auto">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusDropdown 
-            briefing={briefing} 
-            currentStatus={briefing.Status} 
-            isOpen={openStatusId === briefing.ID}
-            onToggle={setOpenStatusId}
-          />
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
-            <Calendar size={13} />
-            {format(new Date(briefing.DueDate), 'd MMM yy', { locale: th })}
+      <div className="flex flex-col gap-3 mt-auto">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusDropdown 
+              briefing={briefing} 
+              currentStatus={briefing.Status} 
+              isOpen={openStatusId === briefing.ID}
+              onToggle={setOpenStatusId}
+            />
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
+              <Calendar size={13} />
+              {format(new Date(briefing.DueDate), 'd MMM yy', { locale: th })}
+            </div>
+          </div>
+  
+          {/* Sync Indicators - Small & discrete for briefings */}
+          {briefing.syncState === 'syncing' && (
+            <div className="flex items-center gap-1 text-[9px] font-bold text-blue-600 animate-pulse">
+              <RefreshCw size={10} className="animate-spin" /> คลังข้อมูล...
+            </div>
+          )}
+          {briefing.syncState === 'success' && (
+            <div className="flex items-center gap-1 text-[9px] font-bold text-green-600">
+              <CheckCircle2 size={10} /> เรียบร้อย
+            </div>
+          )}
+        </div>
+        
+        <hr className="border-t border-slate-100 border-dashed" />
+        
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">สถานะโพส:</span>
+            {(() => {
+              const isAdmin = user?.Role === 'Admin';
+              const perms = user?.Permissions || {};
+              const canManagePostStatus = isAdmin || perms.canManagePostStatus;
+              const pStatus = briefing.PostStatus || 'ยังไม่โพส';
+              
+              if (canManagePostStatus) {
+                return (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPostStatusToggle();
+                    }}
+                    className={`px-3 py-1 text-[10px] font-bold rounded-full border shadow-sm transition-all hover:scale-105 active:scale-95 ${pStatus === 'โพสแล้ว' ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-600 border-slate-600 text-white'}`}
+                  >
+                    {pStatus}
+                  </button>
+                );
+              } else {
+                return (
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${pStatus === 'โพสแล้ว' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                    {pStatus}
+                  </span>
+                );
+              }
+            })()}
+            {briefing.PostDate && briefing.PostStatus === 'โพสแล้ว' && (
+              <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                <Calendar size={10} />
+                {format(new Date(briefing.PostDate), 'd MMM', { locale: th })}
+              </span>
+            )}
           </div>
         </div>
-
-        {/* Sync Indicators - Small & discrete for briefings */}
-        {briefing.syncState === 'syncing' && (
-          <div className="flex items-center gap-1 text-[9px] font-bold text-blue-600 animate-pulse">
-            <RefreshCw size={10} className="animate-spin" /> คลังข้อมูล...
-          </div>
-        )}
-        {briefing.syncState === 'success' && (
-          <div className="flex items-center gap-1 text-[9px] font-bold text-green-600">
-            <CheckCircle2 size={10} /> เรียบร้อย
-          </div>
-        )}
       </div>
 
-      <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+      <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-1">
         <div className="flex items-center gap-2">
           {creator?.ProfileImage ? (
             <img src={creator.ProfileImage} alt="" className="w-6 h-6 rounded-full border border-slate-200" title={`สร้างโดย ${creator.Name}`} />

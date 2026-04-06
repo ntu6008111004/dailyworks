@@ -10,6 +10,7 @@ const DEFAULT_PERMISSIONS = {
   showFullTaskDetail: true,
   canCreateBriefing: false,
   canViewBriefingPage: false,
+  canManagePostStatus: false,
 };
 
 const PERMISSION_LABELS = [
@@ -42,6 +43,12 @@ const PERMISSION_LABELS = [
     label: 'เข้าถึงหน้าบรีฟงาน',
     desc: 'สามารถเปิดดูหน้าสรุปงานบรีฟได้',
     color: 'sky',
+  },
+  {
+    key: 'canManagePostStatus',
+    label: 'จัดการสถานะโพสต์',
+    desc: 'สามารถเปลี่ยนสถานะ "ยังไม่โพส"/"โพสแล้ว" ในบรีฟงาน',
+    color: 'emerald',
   },
 ];
 
