@@ -45,6 +45,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   // Check if current user is Head of the creator's department
   const creator = allUsers.find(u => String(u.ID) === String(briefing?.CreatorID));
   const isDeptHead = user?.Role === 'Head' && creator?.Department === user?.Department;
+  const perms = user?.Permissions || {};
+  const canManagePostStatus = isAdmin || perms.canManagePostStatus;
 
   const [saving, setSaving] = useState(false);
   const [responses, setResponses] = useState([]);
@@ -80,7 +82,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     DueDate: briefing?.DueDate || new Date().toISOString().split('T')[0],
     Assignees: briefing?.Assignees || [],
     RefURL: briefing?.RefURL || '',
-    CardColor: briefing?.CardColor || ''
+    CardColor: briefing?.CardColor || '',
+    PostStatus: briefing?.PostStatus || 'ยังไม่โพส',
+    PostUrl: briefing?.PostUrl || '',
+    PostDate: briefing?.PostDate || new Date().toISOString().split('T')[0]
   });
 
   const [refImages, setRefImages] = useState(() => {
@@ -557,6 +562,55 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                         </div>
                     </div>
                   </div>
+
+                  {canManagePostStatus && (
+                    <div className="flex flex-col gap-4 pt-4 border-t border-slate-200 border-dashed">
+                      <div className="space-y-2">
+                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">สถานะการโพสต์ (แยก)</label>
+                         <div className="flex gap-2">
+                            {['ยังไม่โพส', 'โพสแล้ว'].map(s => {
+                              const isActive = formData.PostStatus === s;
+                              return (
+                                <button 
+                                  key={s} 
+                                  type="button"
+                                  onClick={() => setFormData({...formData, PostStatus: s})}
+                                  disabled={!canEditCore || saving}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${isActive ? (s === 'โพสแล้ว' ? 'bg-green-600 border-green-600 text-white shadow-md' : 'bg-slate-600 border-slate-600 text-white shadow-md') : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}
+                                >
+                                  {s}
+                                </button>
+                              );
+                            })}
+                         </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {formData.PostStatus === 'โพสแล้ว' && (
+                          <div className="space-y-2 col-span-1">
+                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">URL ที่โพสต์</label>
+                             <input 
+                              type="text"
+                              value={formData.PostUrl}
+                              onChange={e => setFormData({...formData, PostUrl: e.target.value})}
+                              placeholder="https://..."
+                              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs"
+                              readOnly={!canEditCore}
+                             />
+                          </div>
+                        )}
+                        <div className="col-span-1">
+                          <CustomDatePicker 
+                            label="วันที่โพสต์" 
+                            selectedDate={formData.PostDate} 
+                            onChange={v => setFormData({...formData, PostDate: v})} 
+                            readonly={!canEditCore}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
 
                   <div className="grid grid-cols-2 gap-4">
                      <CustomDatePicker 

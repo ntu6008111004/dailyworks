@@ -1383,6 +1383,7 @@ function addBriefing(doc, data, executorId) {
     if (h === "CreatedAt" || h === "UpdatedAt") return new Date();
     if (h === "LastUpdatedBy") return executorId;
     if (h === "Status") return data.Status || "รอดำเนินการ";
+    if (h === "PostStatus") return data.PostStatus || "ยังไม่โพส";
     return data[h] || "";
   });
 
@@ -1630,6 +1631,8 @@ function migrateUsersAddBriefingPermissions(doc) {
       perms.canViewBriefingPage = role === "Admin" || role === "Head";
     if (perms.canCreateBriefing === undefined)
       perms.canCreateBriefing = role === "Admin" || role === "Head";
+    if (perms.canManagePostStatus === undefined)
+      perms.canManagePostStatus = false;
 
     sheet.getRange(i + 1, permsIdx + 1).setValue(JSON.stringify(perms));
   }
@@ -1706,6 +1709,9 @@ function migrateBriefingsAddFields(doc) {
             "UpdatedAt",
             "CompletedAt",
             "CardColor",
+            "PostStatus",
+            "PostUrl",
+            "PostDate",
           ]
         : [
             "ID",
