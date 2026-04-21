@@ -350,24 +350,36 @@ export const Tasks = () => {
   const handleDeleteTask = async () => {
     if (!deleteConfirmId) return;
     
-    setIsDeleting(true);
     const targetId = deleteConfirmId;
+    const oldTasks = [...tasks]; // Save for rollback if needed
+    
+    // 1. Optimistic Update: Remove from UI immediately
+    setTasks(prev => prev.filter(t => t.ID !== targetId));
+    apiService.mutateSummaryCache('delete', targetId);
+    setDeleteConfirmId(null);
     
     try {
+      setIsDeleting(true);
       await apiService.deleteTask(targetId);
-      
-      // Update local state after success
-      setTasks(prev => prev.filter(t => t.ID !== targetId));
-      apiService.mutateSummaryCache('delete', targetId);
-      
       toast.success('ลบงานเรียบร้อย');
-      const newPage = tasks.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
-      if (newPage !== currentPage) fetchPage(newPage, true);
       
-      setDeleteConfirmId(null);
+      // Silently refresh count/pagination if needed
+      if (tasks.length === 1 && currentPage > 1) {
+        fetchPage(currentPage - 1, true);
+      }
     } catch (error) {
       console.error(error);
-      toast.error('ลบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      
+      if (error.message === 'Task not found') {
+        // If not found, it means it was already deleted (maybe by another user or manually)
+        // We stay with the removal and clear cache to stay in sync
+        apiService.clearCache();
+        toast.success('ลบเสร็จสิ้น (ข้อมูลถูกลบไปก่อนหน้าแล้ว)');
+      } else {
+        // Rollback for real errors (network, server error etc)
+        setTasks(oldTasks);
+        toast.error('ลบไม่สำเร็จ: ' + error.message);
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -416,7 +428,7 @@ export const Tasks = () => {
     return (
       <div className="relative" ref={dropdownRef}>
         <button
-          onClick={() => onToggle(isOpen ? null : task.ID)}
+          onClick={(e) => { e.stopPropagation(); onToggle(isOpen ? null : task.ID); }}
           className={`px-2.5 py-0.5 text-xs font-semibold rounded-full flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[currentStatus] || statusColors['ยังไม่เริ่ม']}`}
         >
           <span>{currentStatus}</span>
@@ -724,7 +736,11 @@ export const Tasks = () => {
                     {tasks.map((task, index) => {
                       const rowNumber = totalCount - ((currentPage - 1) * ITEMS_PER_PAGE) - index;
                       return (
-                        <tr key={task.ID} className="hover:bg-blue-50/20 transition-colors group border-b border-slate-100 last:border-0">
+                        <tr 
+                          key={task.ID} 
+                          onClick={() => handleEditTask(task)}
+                          className="hover:bg-blue-50/20 transition-colors group border-b border-slate-100 last:border-0 cursor-pointer"
+                        >
                           <td className="px-4 py-3 text-center">
                             <span className="text-[11px] font-bold text-slate-400">{rowNumber}</span>
                           </td>
@@ -779,14 +795,14 @@ export const Tasks = () => {
                           <td className="px-4 py-3 text-right pr-6">
                              <div className="flex justify-end gap-1.5">
                                 <button 
-                                  onClick={() => handleEditTask(task)}
+                                  onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
                                   className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
                                   title="แก้ไข"
                                 >
                                   <Edit2 size={14} />
                                 </button>
                                 <button 
-                                  onClick={() => requestDelete(task.ID)}
+                                  onClick={(e) => { e.stopPropagation(); requestDelete(task.ID); }}
                                   className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
                                   title="ลบ"
                                 >
@@ -848,6 +864,16 @@ export const Tasks = () => {
           onSave={handleSaveSettings}
         />
       )}
+      
+      <ConfirmModal
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteTask}
+        title="ยืนยันการลบ"
+        message="คุณต้องการลบงานนี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้"
+        loading={isDeleting}
+        type="danger"
+      />
     </div>
   );
 };

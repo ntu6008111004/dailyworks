@@ -84,18 +84,22 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                   <div className="divide-y divide-slate-100">
                     {empTasks.map(task => (
                       <div key={task.ID} className="p-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                          <h4 className="text-sm font-bold text-slate-900">{task.Detail}</h4>
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5 ">
-                            {task.CustomFields?.Project && (
-                              <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-semibold">
-                                {task.CustomFields.Project}
-                              </span>
-                            )}
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-semibold ${statusColors[task.Status]}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span className="text-[16px] font-extrabold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-xl border border-indigo-100 tracking-tight leading-tight shadow-sm">
+                              {task.CustomFields?.Project || 'ทั่วไป'}
+                            </span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm ${headerColor}`}>
                               {task.Status}
                             </span>
-                            <span className="text-xs text-slate-400">ID: #{String(task.ID).slice(-4)}</span>
+                          </div>
+                          
+                          <p className="text-[11px] text-slate-500 line-clamp-1 opacity-80" title={task.Detail}>
+                            {task.Detail}
+                          </p>
+                          
+                          <div className="flex items-center gap-2 mt-1 opacity-60">
+                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">ID: #{String(task.ID).slice(-4)}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg shrink-0 w-fit">
