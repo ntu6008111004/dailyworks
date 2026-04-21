@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -18,12 +18,26 @@ export const Briefing = () => {
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
   
+  // UI Settings & Persistence
+  const [uiSettings, setUiSettings] = useState(() => {
+    const saved = localStorage.getItem('briefing_ui_settings');
+    return saved ? JSON.parse(saved) : {
+      defaultView: 'list',
+      itemsPerPage: 10
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('briefing_ui_settings', JSON.stringify(uiSettings));
+  }, [uiSettings]);
+
   // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingBriefing, setEditingBriefing] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'timeline'
+  const [viewMode, setViewMode] = useState(uiSettings.defaultView); // 'list', 'table', or 'timeline'
 
   // Filters
   const [filterStatus, setFilterStatus] = useState('All');
@@ -36,7 +50,8 @@ export const Briefing = () => {
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [openStatusId, setOpenStatusId] = useState(null);
-  const itemsPerPage = 10;
+
+  const itemsPerPage = uiSettings.itemsPerPage;
 
   const userRole = user?.Role || user?.role;
   const isAdmin = userRole === 'Admin';
@@ -293,6 +308,55 @@ export const Briefing = () => {
     'Low': 'text-blue-500 bg-blue-50',
   };
 
+  const PaginationSection = () => {
+    if (totalPages <= 1 && filteredBriefings.length <= 10) return null;
+    
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">แสดงหน้าละ:</span>
+          <select 
+            value={uiSettings.itemsPerPage}
+            onChange={(e) => setUiSettings(prev => ({ ...prev, itemsPerPage: Number(e.target.value) }))}
+            className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          >
+            {[10, 20, 30, 40, 50, 100].map(num => (
+              <option key={num} value={num}>{num} รายการ</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all bg-white shadow-sm"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-blue-200">{currentPage}</span>
+            <span className="text-xs font-bold text-slate-400">/</span>
+            <span className="text-xs font-bold text-slate-500">{totalPages || 1}</span>
+          </div>
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all bg-white shadow-sm"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:block">
+          ทั้งหมด {filteredBriefings.length} รายการ
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลบรีฟงาน..." />
@@ -322,15 +386,32 @@ export const Briefing = () => {
                <div className="w-[1px] bg-slate-200 mx-1 my-2"></div>
                <button 
                 onClick={() => setViewMode('list')}
+                title="มุมมองการ์ด"
                 className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                >
-                 <LayoutList size={20} />
+                 <LayoutGrid size={20} />
+               </button>
+               <button 
+                onClick={() => setViewMode('table')}
+                title="มุมมองตาราง"
+                className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                 <List size={20} />
                </button>
                <button 
                 onClick={() => setViewMode('timeline')}
+                title="มุมมองไทม์ไลน์"
                 className={`p-2 rounded-lg transition-all ${viewMode === 'timeline' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                >
                  <Calendar size={20} />
+               </button>
+               <div className="w-[1px] bg-slate-200 mx-1 my-2"></div>
+               <button 
+                onClick={() => setIsSettingsOpen(true)}
+                title="ตั้งค่าแสดงผล"
+                className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+               >
+                 <Settings size={20} />
                </button>
             </div>
             <button 
@@ -454,30 +535,156 @@ export const Briefing = () => {
               </div>
             )}
           </div>
-          
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-8 pb-4">
-              <button 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all bg-white shadow-sm"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-slate-500">หน้า</span>
-                <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">{currentPage}</span>
-                <span className="text-sm font-bold text-slate-500">จาก {totalPages}</span>
+          <PaginationSection />
+        </div>
+      ) : viewMode === 'table' ? (
+        <div className="relative z-10 space-y-6">
+           <div className="glass overflow-hidden rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/30 transition-all animate-in fade-in duration-500">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-16 text-center">ลำดับ</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">เลขบรีฟ / หัวข้องาน</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-20">ผู้มอบหมาย</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-24">คนรับผิดชอบ</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-28">กำหนดส่ง</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-36">สถานะงาน</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-24">โพสต์</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-24">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {currentBriefings.map((b, index) => {
+                      const rowNumber = filteredBriefings.length - ((currentPage - 1) * itemsPerPage) - index;
+                      const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
+                      const isOverdue = apiService.isBriefingOverdue(b);
+                      const pStatus = b.PostStatus || 'ยังไม่โพส';
+                      const canManagePostStatus = isAdmin || perms.canManagePostStatus;
+                      
+                      const rowStyle = b.CardColor ? { borderLeft: `4px solid ${b.CardColor}` } : {};
+
+                      return (
+                        <tr 
+                          key={b.ID} 
+                          style={rowStyle}
+                          onClick={() => { 
+                            if (user?.ID) localStorage.setItem(`lastViewedBriefing_${user.ID}_${b.ID}`, new Date().toISOString());
+                            setEditingBriefing(b); 
+                            setIsModalOpen(true); 
+                          }}
+                          className="hover:bg-blue-50/20 transition-colors group cursor-pointer border-b border-slate-100 last:border-0"
+                        >
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] font-bold text-slate-400">{rowNumber}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">
+                                    {b.RunningID}
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${priorityColors[b.Priority]}`}>
+                                    {b.Priority === 'High' ? 'สูง' : b.Priority === 'Medium' ? 'กลาง' : b.Priority === 'Low' ? 'ต่ำ' : b.Priority}
+                                  </span>
+                                </div>
+                                <h4 className="text-xs font-bold text-slate-800 line-clamp-1">{b.Title || b.Detail}</h4>
+                                {b.Title && <p className="text-[10px] text-slate-400 line-clamp-1">{b.Detail}</p>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                             <div className="flex justify-center">
+                               {creator?.ProfileImage ? (
+                                 <img src={creator.ProfileImage} alt="" className="w-7 h-7 rounded-full border border-slate-200" title={creator.Name} />
+                               ) : (
+                                 <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500" title={creator?.Name}>
+                                   {(creator?.Name || 'U').charAt(0)}
+                                 </div>
+                               )}
+                             </div>
+                          </td>
+                          <td className="px-4 py-3">
+                              <div className="flex justify-center -space-x-2 overflow-hidden">
+                                 {b.Assignees?.slice(0, 3).map((assigneeId, i) => {
+                                   const assignee = allUsers.find(u => String(u.ID) === String(assigneeId));
+                                   if (!assignee) return null;
+                                   return assignee.ProfileImage ? (
+                                     <img key={i} src={assignee.ProfileImage} alt="" className="w-7 h-7 rounded-full border-2 border-white object-cover bg-white" title={assignee.Name} />
+                                   ) : (
+                                     <div key={i} className="w-7 h-7 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center text-[10px] text-blue-600 font-bold" title={assignee.Name}>
+                                       {assignee.Name?.charAt(0) || 'U'}
+                                     </div>
+                                   );
+                                 })}
+                                 {b.Assignees?.length > 3 && (
+                                   <div className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[8px] text-slate-500 font-bold z-10">+{b.Assignees.length - 3}</div>
+                                 )}
+                              </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                             <div className="flex flex-col items-center">
+                                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                                   <Calendar size={12} className={isOverdue ? 'text-red-500' : 'text-blue-500'} />
+                                   {format(new Date(b.DueDate), 'dd/MM/yyyy', { locale: th })}
+                                </div>
+                             </div>
+                          </td>
+                          <td className="px-4 py-3">
+                             <div className="flex justify-center scale-90 origin-center">
+                               <StatusDropdown 
+                                  briefing={b} 
+                                  currentStatus={b.Status} 
+                                  isOpen={openStatusId === b.ID}
+                                  onToggle={setOpenStatusId}
+                                />
+                             </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                             <div className="flex justify-center">
+                                {canManagePostStatus ? (
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); handlePostStatusToggle(b); }}
+                                     className={`px-2 py-0.5 text-[9px] font-bold rounded-full border transition-all ${pStatus === 'โพสแล้ว' ? 'bg-green-600 border-green-600 text-white' : 'bg-slate-600 border-slate-600 text-white'}`}
+                                   >
+                                     {pStatus}
+                                   </button>
+                                ) : (
+                                  <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${pStatus === 'โพสแล้ว' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                    {pStatus}
+                                  </span>
+                                )}
+                             </div>
+                          </td>
+                          <td className="px-4 py-3 text-right pr-6">
+                             <div className="flex justify-end gap-1.5">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setEditingBriefing(b); setIsModalOpen(true); }}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                                  title="แก้ไข"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                {(isAdmin || String(b.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department)) && (
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(b.ID); }}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                    title="ลบ"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all bg-white shadow-sm"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          )}
+              <div className="bg-slate-50/30 p-4 border-t border-slate-100">
+                <PaginationSection />
+              </div>
+           </div>
         </div>
       ) : (
         <div className="glass p-6 rounded-3xl border border-slate-200/60 shadow-sm animate-in zoom-in-95 duration-300 min-h-[500px]">
@@ -486,6 +693,15 @@ export const Briefing = () => {
             onBriefingClick={(b) => { setEditingBriefing(b); setIsModalOpen(true); }}
           />
         </div>
+      )}
+
+      {isSettingsOpen && (
+        <BriefingSettingsModal 
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={uiSettings}
+          onSave={setUiSettings}
+        />
       )}
 
       {isModalOpen && (
@@ -694,6 +910,92 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, onPostStatusToggl
           <Trash2 size={14} />
         </button>
       )}
+    </div>
+  );
+};
+
+// --- Settings Modal Component ---
+const BriefingSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
+  const [localSettings, setLocalSettings] = useState(settings);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-200">
+              <Settings size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">ตั้งค่าการแสดงผล</h3>
+              <p className="text-xs text-slate-500">ปรับแต่งมุมมองบรีฟของคุณ</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-slate-200 shadow-sm">
+            <X size={20} className="text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-8">
+          {/* Default View Selection */}
+          <div className="space-y-4">
+            <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              มุมมองเริ่มต้นตอนเปิดหน้า
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setLocalSettings(prev => ({ ...prev, defaultView: 'list' }))}
+                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${localSettings.defaultView === 'list' ? 'border-blue-600 bg-blue-50/50 ring-4 ring-blue-500/10' : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'}`}
+              >
+                <LayoutGrid size={24} className={localSettings.defaultView === 'list' ? 'text-blue-600' : 'text-slate-400'} />
+                <span className={`text-xs font-bold ${localSettings.defaultView === 'list' ? 'text-blue-700' : 'text-slate-500'}`}>Card (การ์ด)</span>
+              </button>
+              <button 
+                onClick={() => setLocalSettings(prev => ({ ...prev, defaultView: 'table' }))}
+                className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${localSettings.defaultView === 'table' ? 'border-blue-600 bg-blue-50/50 ring-4 ring-blue-500/10' : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'}`}
+              >
+                <List size={24} className={localSettings.defaultView === 'table' ? 'text-blue-600' : 'text-slate-400'} />
+                <span className={`text-xs font-bold ${localSettings.defaultView === 'table' ? 'text-blue-700' : 'text-slate-500'}`}>Table (ตาราง)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Items Per Page */}
+          <div className="space-y-4">
+            <label className="text-sm font-bold text-slate-700">จำนวนรายการต่อหน้า</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[10, 20, 30, 40, 50, 100].map(num => (
+                <button
+                  key={num}
+                  onClick={() => setLocalSettings(prev => ({ ...prev, itemsPerPage: num }))}
+                  className={`py-2 px-3 rounded-xl border-2 text-xs font-bold transition-all ${localSettings.itemsPerPage === num ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-100 hover:border-slate-200 bg-slate-50 text-slate-500'}`}
+                >
+                  {num} รายการ
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border-2 border-slate-200 font-bold text-slate-600 hover:bg-white transition-all">
+            ยกเลิก
+          </button>
+          <button 
+            onClick={() => {
+              onSave(localSettings);
+              onClose();
+            }}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95"
+          >
+            บันทึกการตั้งค่า
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
