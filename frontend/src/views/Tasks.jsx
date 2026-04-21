@@ -436,7 +436,7 @@ export const Tasks = () => {
         </button>
         
         {isOpen && (
-          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-200 p-1 py-1.5 z-[110]">
+          <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-2xl border border-slate-200 p-1 py-1.5 z-[200]">
             {Object.entries(statusColors).map(([status, color]) => (
               <button
                 key={status}
@@ -720,8 +720,8 @@ export const Tasks = () => {
               </div>
             </>
           ) : (
-            <div className="glass overflow-hidden rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/30 transition-all animate-in fade-in duration-500">
-              <div className="overflow-x-auto">
+            <div className="glass rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/30 transition-all animate-in fade-in duration-500 relative z-0">
+              <div className="overflow-x-auto overflow-y-visible">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
                     <tr>
@@ -739,7 +739,7 @@ export const Tasks = () => {
                         <tr 
                           key={task.ID} 
                           onClick={() => handleEditTask(task)}
-                          className="hover:bg-blue-50/20 transition-colors group border-b border-slate-100 last:border-0 cursor-pointer"
+                          className={`hover:bg-blue-50/20 transition-colors group border-b border-slate-100 last:border-0 cursor-pointer ${openStatusId === task.ID ? 'relative z-[100] bg-blue-50/10' : ''}`}
                         >
                           <td className="px-4 py-3 text-center">
                             <span className="text-[11px] font-bold text-slate-400">{rowNumber}</span>
