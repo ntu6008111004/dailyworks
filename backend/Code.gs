@@ -534,8 +534,12 @@ function getTasksPaged(doc, params) {
     }
 
     // Date range filter
-    if (startDate && t.StartDate && t.StartDate < startDate) return false;
-    if (endDate && t.StartDate && t.StartDate > endDate) return false;
+    if (startDate || endDate) {
+      var compareDate = t.DueDate || t.StartDate || "";
+      if (!compareDate) return false; // If date range is active, skip tasks with no date
+      if (startDate && compareDate < startDate) return false;
+      if (endDate && compareDate > endDate) return false;
+    }
 
     return true;
   });

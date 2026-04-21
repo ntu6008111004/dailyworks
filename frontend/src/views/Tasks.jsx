@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, ChevronDown, Settings, List, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { apiService } from '../services/api';
 import toast from 'react-hot-toast';
@@ -90,6 +90,19 @@ const Pagination = ({ currentPage, totalPages, totalCount, pageSize, onPageChang
 export const Tasks = () => {
   const { user } = useAuth();
 
+  // UI Settings & View Modes
+  const [uiSettings, setUiSettings] = useState(() => {
+    const saved = localStorage.getItem('tasks_ui_settings');
+    if (saved) return JSON.parse(saved);
+    return {
+      defaultView: 'list', // 'list' | 'table'
+      showCardDetail: true,
+      showTableDetail: false,
+    };
+  });
+  const [viewMode, setViewMode] = useState(uiSettings.defaultView);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
   // Task data (paged)
   const [tasks, setTasks] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -110,8 +123,18 @@ export const Tasks = () => {
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [localSearch, setLocalSearch] = useState('');
-  const [localStartDate, setLocalStartDate] = useState('');
-  const [localEndDate, setLocalEndDate] = useState('');
+  const [localStartDate, setLocalStartDate] = useState(() => {
+    if (uiSettings.defaultView === 'table') {
+      return format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    }
+    return '';
+  });
+  const [localEndDate, setLocalEndDate] = useState(() => {
+    if (uiSettings.defaultView === 'table') {
+      return format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    }
+    return '';
+  });
 
   // Debounce search input to avoid excessive API calls
   useEffect(() => {
@@ -140,6 +163,12 @@ export const Tasks = () => {
   const userPerms = user?.Permissions && typeof user.Permissions === 'object'
     ? { ...DEFAULT_PERMS, ...user.Permissions }
     : DEFAULT_PERMS;
+
+  const handleSaveSettings = (newSettings) => {
+    setUiSettings(newSettings);
+    localStorage.setItem('tasks_ui_settings', JSON.stringify(newSettings));
+    toast.success('บันทึกการตั้งค่าเรียบร้อยแล้ว');
+  };
 
   // ─── Derived filter lists ────────────────────────────────────────────────────
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
@@ -179,7 +208,8 @@ export const Tasks = () => {
   const fetchPage = useCallback(async (page, isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const result = await apiService.getTasksPaged(page, ITEMS_PER_PAGE, buildFilters());
+      const limit = viewMode === 'table' ? 1000 : ITEMS_PER_PAGE;
+      const result = await apiService.getTasksPaged(page, limit, buildFilters());
       setTasks(result.tasks || []);
       setTotalCount(result.totalCount || 0);
       setTotalPages(result.totalPages || 1);
@@ -190,7 +220,7 @@ export const Tasks = () => {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [buildFilters]);
+  }, [buildFilters, viewMode]);
 
   // Initial mount: also fetch users list and all tasks for summary modals
   useEffect(() => {
@@ -227,6 +257,17 @@ export const Tasks = () => {
     fetchPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate]);
+
+  // Lock to current month when switching to Table View
+  useEffect(() => {
+    if (viewMode === 'table') {
+      const now = new Date();
+      const start = startOfMonth(now);
+      const end = endOfMonth(now);
+      setLocalStartDate(format(start, 'yyyy-MM-dd'));
+      setLocalEndDate(format(end, 'yyyy-MM-dd'));
+    }
+  }, [viewMode]);
 
   const handlePageChange = (newPage) => {
     if (newPage < 1 || newPage > totalPages) return;
@@ -415,6 +456,32 @@ export const Tasks = () => {
           <p className="text-slate-500">จัดการข้อมูลบันทึกงานประจำวันของคุณ</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {/* View Toggles & Settings */}
+          <div className="bg-white p-1 rounded-xl shadow-sm border border-slate-200 flex items-center">
+            <button 
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="มุมมองการ์ด"
+            >
+              <LayoutGrid size={20} />
+            </button>
+            <button 
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+              title="มุมมองตาราง"
+            >
+              <List size={20} />
+            </button>
+            <div className="w-[1px] h-6 bg-slate-200 mx-1"></div>
+            <button 
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-2 rounded-lg transition-all text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+              title="ตั้งค่าการแสดงผล"
+            >
+              <Settings size={20} />
+            </button>
+          </div>
+
           {userPerms.showDailySummary && (
           <button
             onClick={() => setIsSummaryOpen(true)}
@@ -500,8 +567,13 @@ export const Tasks = () => {
               onClick={() => {
                 setLocalSearch('');
                 setSearchQuery('');
-                setLocalStartDate('');
-                setLocalEndDate('');
+                if (viewMode === 'table') {
+                  setLocalStartDate(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+                  setLocalEndDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+                } else {
+                  setLocalStartDate('');
+                  setLocalEndDate('');
+                }
                 setFilterDepartment('All');
                 setFilterUser('All');
                 setFilterStatus('All');
@@ -526,7 +598,7 @@ export const Tasks = () => {
               <h3 className="mt-2 text-sm font-semibold text-slate-900">ไม่พบข้อมูลงาน</h3>
               <p className="mt-1 text-sm text-slate-500">เริ่มจดบันทึกงานโดยการกดปุ่มเพิ่มงานใหม่</p>
             </div>
-          ) : (
+          ) : viewMode === 'list' ? (
             <>
               {tasks.map(task => (
                 <div key={task.ID} className={`glass px-4 py-3 rounded-2xl border-2 border-dashed shadow-md transition-all group flex flex-col md:flex-row gap-4 relative ${
@@ -558,7 +630,7 @@ export const Tasks = () => {
                             {task.CustomFields.Project}
                           </span>
                         )}
-                        {userPerms.showFullTaskDetail ? (
+                        {uiSettings.showCardDetail ? (
                           <h3 className="text-xs text-slate-600 line-clamp-3 leading-relaxed mt-2" title={task.Detail}>{task.Detail}</h3>
                         ) : (
                           <div className="h-2"></div> 
@@ -584,7 +656,7 @@ export const Tasks = () => {
                       </div>
                     </div>
 
-                    {userPerms.showFullTaskDetail && task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
+                    {uiSettings.showCardDetail && task.CustomFields && Object.keys(task.CustomFields).length > 0 && (
                       <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
                         {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images' && k !== 'Project').map(([key, value]) => (
                           <div key={key} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50/50 border border-blue-100 rounded-lg text-[11px] text-blue-800">
@@ -620,7 +692,7 @@ export const Tasks = () => {
               ))}
 
               {/* ── Pagination ── */}
-              <div className="glass p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="glass p-4 rounded-2xl border border-slate-200 shadow-sm mt-4">
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
@@ -635,6 +707,111 @@ export const Tasks = () => {
                 />
               </div>
             </>
+          ) : (
+            <div className="glass overflow-hidden rounded-2xl border border-slate-200 shadow-lg shadow-slate-200/30 transition-all animate-in fade-in duration-500">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-16 text-center">ลำดับ</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">รายละเอียดงาน</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-32">กำหนดส่ง</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-36">สถานะ</th>
+                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-28">เครื่องมือ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {tasks.map((task, index) => {
+                      const rowNumber = totalCount - ((currentPage - 1) * ITEMS_PER_PAGE) - index;
+                      return (
+                        <tr key={task.ID} className="hover:bg-blue-50/20 transition-colors group border-b border-slate-100 last:border-0">
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-[11px] font-bold text-slate-400">{rowNumber}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-1 max-w-xl">
+                               <div className="flex items-center gap-2 flex-wrap">
+                                 <span className="text-[15px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 tracking-tight">
+                                   {task.CustomFields?.Project || 'ทั่วไป'}
+                                 </span>
+                                 
+                                 {/* รายละเอียดเพิ่มเติมตามตำแหน่ง (แสดงแบบบรรทัดเดียว) */}
+                                 {task.CustomFields && Object.keys(task.CustomFields).some(k => k !== 'Images' && k !== 'Project') && (
+                                   <div className="flex items-center gap-1.5 overflow-hidden">
+                                     {Object.entries(task.CustomFields).filter(([k]) => k !== 'Images' && k !== 'Project').map(([key, value]) => (
+                                       <span key={key} className="text-[10px] text-slate-500 whitespace-nowrap bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                         <span className="font-bold">{key}:</span> {value}
+                                       </span>
+                                     ))}
+                                   </div>
+                                 )}
+                               </div>
+                               
+                               {/* รายละเอียดหลัก (แสดงเมื่อเปิดตั้งค่า) */}
+                               {uiSettings.showTableDetail && task.Detail && (
+                                 <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 opacity-80">
+                                   {task.Detail}
+                                 </p>
+                               )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                             <div className="flex flex-col items-center">
+                                <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                                   <Calendar size={12} className="text-blue-500" />
+                                   {format(new Date(task.DueDate), 'dd/MM/yyyy', { locale: th })}
+                                </div>
+                                <span className="text-[9px] text-slate-400 font-medium px-1.5 bg-slate-50 rounded border border-slate-100 mt-0.5">
+                                   {task.StaffName}
+                                </span>
+                             </div>
+                          </td>
+                          <td className="px-4 py-3">
+                             <div className="flex justify-center scale-90 origin-center">
+                              <StatusDropdown 
+                                task={task} 
+                                currentStatus={task.Status} 
+                                isOpen={openStatusId === task.ID}
+                                onToggle={setOpenStatusId}
+                              />
+                             </div>
+                          </td>
+                          <td className="px-4 py-3 text-right pr-6">
+                             <div className="flex justify-end gap-1.5">
+                                <button 
+                                  onClick={() => handleEditTask(task)}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                                  title="แก้ไข"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button 
+                                  onClick={() => requestDelete(task.ID)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                  title="ลบ"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {viewMode !== 'table' && (
+                <div className="bg-slate-50/30 p-4 border-t border-slate-100">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalCount={totalCount}
+                    pageSize={ITEMS_PER_PAGE}
+                    onPageChange={handlePageChange}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -664,16 +841,106 @@ export const Tasks = () => {
         closeOnOutsideClick={false}
       />
 
-      <ConfirmModal
-        isOpen={!!deleteConfirmId}
-        onClose={() => setDeleteConfirmId(null)}
-        onConfirm={handleDeleteTask}
-        isLoading={isDeleting}
-        title="ยืนยันการลบข้อมูล"
-        message="คุณมั่นใจหรือไม่ว่าต้องการลบงานนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้"
-        type="danger"
-        closeOnOutsideClick={false}
-      />
+      {isSettingsModalOpen && (
+        <TasksSettingsModal
+          onClose={() => setIsSettingsModalOpen(false)}
+          settings={uiSettings}
+          onSave={handleSaveSettings}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─── Settings Modal Component ────────────────────────────────────────────────
+const TasksSettingsModal = ({ onClose, settings, onSave }) => {
+  const [localSettings, setLocalSettings] = useState(settings);
+
+  const handleSave = () => {
+    onSave(localSettings);
+    onClose();
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <h2 className="text-lg font-bold text-slate-800">การตั้งค่ามุมมอง</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="space-y-3">
+            <label className="text-sm font-bold text-slate-700">มุมมองเริ่มต้น</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setLocalSettings(prev => ({ ...prev, defaultView: 'list' }))}
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                  localSettings.defaultView === 'list' 
+                    ? 'border-blue-600 bg-blue-50 text-blue-700' 
+                    : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 shadow-inner'
+                }`}
+              >
+                <LayoutGrid size={20} />
+                <span className="font-bold text-xs">แบบการ์ด</span>
+              </button>
+              <button 
+                onClick={() => setLocalSettings(prev => ({ ...prev, defaultView: 'table' }))}
+                className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                  localSettings.defaultView === 'table' 
+                    ? 'border-blue-600 bg-blue-50 text-blue-700' 
+                    : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 shadow-inner'
+                }`}
+              >
+                <List size={20} />
+                <span className="font-bold text-xs">แบบตาราง</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="text-sm font-bold text-slate-700">รายละเอียดเพิ่มเติม</label>
+            
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white rounded-lg shadow-sm">
+                   <List size={16} className="text-slate-400" />
+                </div>
+                <p className="text-sm font-bold text-slate-700">แสดงในมุมมองตาราง</p>
+              </div>
+              <button 
+                onClick={() => setLocalSettings(prev => ({ ...prev, showTableDetail: !prev.showTableDetail }))}
+                className={`w-12 h-6 rounded-full transition-all relative ${localSettings.showTableDetail ? 'bg-blue-600' : 'bg-slate-300'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${localSettings.showTableDetail ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex gap-3">
+          <button 
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-200/50 rounded-xl transition-colors"
+          >
+            ยกเลิก
+          </button>
+          <button 
+            onClick={handleSave}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          >
+            บันทึกการตั้งค่า
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
