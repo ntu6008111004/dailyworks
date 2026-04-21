@@ -159,9 +159,10 @@ export const Briefing = () => {
         if (!isMatchedUser) return false;
       }
 
-      // 6. Dates
-      if (startDate && new Date(b.CreatedAt) < new Date(startDate)) return false;
-      if (endDate && new Date(b.CreatedAt) > new Date(endDate)) return false;
+      // 6. Dates (Filter by DueDate)
+      const bDate = b.DueDate || b.StartDate || b.CreatedAt;
+      if (startDate && new Date(bDate) < new Date(startDate)) return false;
+      if (endDate && new Date(bDate) > new Date(endDate)) return false;
 
       return true;
     }).sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt));

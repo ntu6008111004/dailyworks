@@ -123,8 +123,18 @@ export const Tasks = () => {
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [localSearch, setLocalSearch] = useState('');
-  const [localStartDate, setLocalStartDate] = useState('');
-  const [localEndDate, setLocalEndDate] = useState('');
+  const [localStartDate, setLocalStartDate] = useState(() => {
+    if (uiSettings.defaultView === 'table') {
+      return format(startOfMonth(new Date()), 'yyyy-MM-dd');
+    }
+    return '';
+  });
+  const [localEndDate, setLocalEndDate] = useState(() => {
+    if (uiSettings.defaultView === 'table') {
+      return format(endOfMonth(new Date()), 'yyyy-MM-dd');
+    }
+    return '';
+  });
 
   // Debounce search input to avoid excessive API calls
   useEffect(() => {
@@ -198,7 +208,8 @@ export const Tasks = () => {
   const fetchPage = useCallback(async (page, isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
-      const result = await apiService.getTasksPaged(page, ITEMS_PER_PAGE, buildFilters());
+      const limit = viewMode === 'table' ? 1000 : ITEMS_PER_PAGE;
+      const result = await apiService.getTasksPaged(page, limit, buildFilters());
       setTasks(result.tasks || []);
       setTotalCount(result.totalCount || 0);
       setTotalPages(result.totalPages || 1);
@@ -209,7 +220,7 @@ export const Tasks = () => {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [buildFilters]);
+  }, [buildFilters, viewMode]);
 
   // Initial mount: also fetch users list and all tasks for summary modals
   useEffect(() => {
@@ -556,8 +567,13 @@ export const Tasks = () => {
               onClick={() => {
                 setLocalSearch('');
                 setSearchQuery('');
-                setLocalStartDate('');
-                setLocalEndDate('');
+                if (viewMode === 'table') {
+                  setLocalStartDate(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+                  setLocalEndDate(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+                } else {
+                  setLocalStartDate('');
+                  setLocalEndDate('');
+                }
                 setFilterDepartment('All');
                 setFilterUser('All');
                 setFilterStatus('All');
@@ -715,7 +731,7 @@ export const Tasks = () => {
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-1 max-w-xl">
                                <div className="flex items-center gap-2 flex-wrap">
-                                 <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+                                 <span className="text-[15px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100 tracking-tight">
                                    {task.CustomFields?.Project || 'ทั่วไป'}
                                  </span>
                                  
@@ -733,7 +749,7 @@ export const Tasks = () => {
                                
                                {/* รายละเอียดหลัก (แสดงเมื่อเปิดตั้งค่า) */}
                                {uiSettings.showTableDetail && task.Detail && (
-                                 <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 opacity-80">
+                                 <p className="text-xs text-slate-500 line-clamp-1 mt-0.5 opacity-80">
                                    {task.Detail}
                                  </p>
                                )}
@@ -784,15 +800,17 @@ export const Tasks = () => {
                   </tbody>
                 </table>
               </div>
-              <div className="bg-slate-50/30 p-4 border-t border-slate-100">
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalCount={totalCount}
-                  pageSize={ITEMS_PER_PAGE}
-                  onPageChange={handlePageChange}
-                />
-              </div>
+              {viewMode !== 'table' && (
+                <div className="bg-slate-50/30 p-4 border-t border-slate-100">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalCount={totalCount}
+                    pageSize={ITEMS_PER_PAGE}
+                    onPageChange={handlePageChange}
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
