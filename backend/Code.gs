@@ -568,7 +568,7 @@ function getTasksPaged(doc, params) {
 
 function getTaskById(doc, id) {
   const tasks = getTasks(doc); // This uses cache if available
-  const task = tasks.find((t) => t.ID === id);
+  const task = tasks.find((t) => String(t.ID) === String(id));
   if (!task) throw new Error("Task not found");
   return task;
 }
@@ -627,7 +627,7 @@ function updateTask(doc, data, executorId) {
   if (idIndex === -1) throw new Error("ID column not found");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] === data.ID) {
+    if (String(rows[i][idIndex]) === String(data.ID)) {
       headers.forEach((header, j) => {
         if (header === "CustomFields" && data[header]) {
           sheet.getRange(i + 1, j + 1).setValue(JSON.stringify(data[header]));
@@ -668,7 +668,7 @@ function deleteTask(doc, id, executorId) {
   const idIndex = rows[0].indexOf("ID");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] === id) {
+    if (String(rows[i][idIndex]) === String(id)) {
       sheet.deleteRow(i + 1);
       clearTasksCache();
       logActivity(
@@ -784,7 +784,7 @@ function updateUser(doc, data, executorId) {
   if (idIndex === -1) throw new Error("ID column not found in Users sheet");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] == data.ID) {
+    if (String(rows[i][idIndex]) === String(data.ID)) {
       const oldRow = rows[i];
       const nameIdx = headers.indexOf("Name");
       const deptIdx = headers.indexOf("Department");
@@ -877,7 +877,7 @@ function deleteUser(doc, id, executorId) {
   if (idIndex === -1) throw new Error("ID column not found");
 
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][idIndex] == id) {
+    if (String(rows[i][idIndex]) === String(id)) {
       sheet.deleteRow(i + 1);
       logActivity(
         doc,

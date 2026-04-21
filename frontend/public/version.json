@@ -1,6 +1,10 @@
 {
-  "timestamp": 1776752395066,
+  "timestamp": 1776759000000,
   "changelog": [
+    "🛠️ Deletion Fix: กู้คืนระบบลบข้อมูลและปรับปรุงการยืนยันการลบให้เสถียรขึ้น",
+    "🔗 Row Click Editor: สามารถคลิกที่แถวตารางเพื่อเปิดหน้าแก้ไขได้ทันที",
+    "⚡ Optimistic Delete: ระบบลบงานแบบทันใจ (Sync) พร้อมล้าง Cache อัตโนมัติ",
+    "🎨 Dashboard UI: ปรับปรุงการแสดงผลรายการงานใน Dashboard ให้สวยงามแบบ UI Designer",
     "📊 Table View: ระบบตารางแบบ Compact ทั้งหน้างาน (Tasks) และบรีฟงาน (Briefing)",
     "⚙️ View Persistence: ระบบจดจำมุมมองหลัก (Default View) แยกรายผู้ใช้",
     "📑 Pro Pagination: เลือกจำนวนรายการต่อหน้าได้ (10-100) พร้อมระบบแบ่งหน้าใหม่",
