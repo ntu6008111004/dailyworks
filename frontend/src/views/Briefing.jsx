@@ -630,7 +630,7 @@ export const Briefing = () => {
                                 </div>
                              </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                              <div className="flex justify-center scale-90 origin-center">
                                <StatusDropdown 
                                   briefing={b} 
@@ -640,7 +640,7 @@ export const Briefing = () => {
                                 />
                              </div>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                              <div className="flex justify-center">
                                 {canManagePostStatus ? (
                                    <button 
@@ -656,7 +656,7 @@ export const Briefing = () => {
                                 )}
                              </div>
                           </td>
-                          <td className="px-4 py-3 text-right pr-6">
+                          <td className="px-4 py-3 text-right pr-6" onClick={(e) => e.stopPropagation()}>
                              <div className="flex justify-end gap-1.5">
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); setEditingBriefing(b); setIsModalOpen(true); }}

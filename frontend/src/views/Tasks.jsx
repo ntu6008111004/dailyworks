@@ -436,11 +436,15 @@ export const Tasks = () => {
         </button>
         
         {isOpen && (
-          <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-2xl border border-slate-200 p-1 py-1.5 z-[200]">
+          <div 
+            className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl shadow-2xl border border-slate-200 p-1 py-1.5 z-[200]"
+            onClick={(e) => e.stopPropagation()}
+          >
             {Object.entries(statusColors).map(([status, color]) => (
               <button
                 key={status}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   onToggle(null);
                   if (status !== currentStatus) handleStatusChange(task, status);
                 }}
@@ -782,7 +786,7 @@ export const Tasks = () => {
                                 </span>
                              </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                              <div className="flex justify-center scale-90 origin-center">
                               <StatusDropdown 
                                 task={task} 
@@ -792,7 +796,7 @@ export const Tasks = () => {
                               />
                              </div>
                           </td>
-                          <td className="px-4 py-3 text-right pr-6">
+                          <td className="px-4 py-3 text-right pr-6" onClick={(e) => e.stopPropagation()}>
                              <div className="flex justify-end gap-1.5">
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
