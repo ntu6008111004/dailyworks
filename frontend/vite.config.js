@@ -26,7 +26,7 @@ const generateVersionPlugin = () => ({
     
     fs.writeFileSync(
       path.resolve(versionDir, 'version.json'), 
-      JSON.stringify({ timestamp: versionTimestamp, changelog }, null, 2)
+      JSON.stringify({ lastUpdated: versionTimestamp, changelog }, null, 2)
     );
   }
 })

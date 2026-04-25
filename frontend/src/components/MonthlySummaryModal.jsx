@@ -129,8 +129,8 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
 
         <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">สรุปผลงานรายเดือน</h2>
-            <p className="text-[11px] font-extrabold text-sky-600 uppercase tracking-widest mt-1">Monthly Productivity Insight</p>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">สรุปผลงานรายเดือน</h2>
+            <p className="text-[11px] font-bold text-sky-600 uppercase tracking-widest mt-1">Monthly Productivity Insight</p>
           </div>
           <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all border border-slate-200">
             <X size={22} />
@@ -141,17 +141,17 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
           {/* Left Column: Month Selector & Chart */}
           <div className="w-full lg:w-5/12 space-y-8">
             <div className="group">
-              <label className="block text-[14px] font-black text-slate-900 mb-2 uppercase tracking-wider ml-1">เลือกเดือนที่ต้องการสรุป</label>
+              <label className="block text-[14px] font-bold text-slate-900 mb-2 uppercase tracking-wider ml-1">เลือกเดือนที่ต้องการสรุป</label>
               <input
                 type="month"
                 value={monthStr}
                 onChange={(e) => setMonthStr(e.target.value)}
-                className="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 outline-none transition-all font-black text-slate-900"
+                className="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 outline-none transition-all font-semibold text-slate-900"
               />
             </div>
 
             <div className="ios-glass-pill p-6 border-white/40 h-[320px] flex flex-col">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 text-center">สถิติสถานะงาน</h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">สถิติสถานะงาน</h3>
               <div className="flex-1">
                 {stats.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -170,7 +170,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
                           boxShadow: '0 10px 20px rgba(0,0,0,0.05)',
                           padding: '10px 14px'
                         }} 
-                        itemStyle={{fontWeight: 900, fontSize: '12px', color: '#1e293b'}} 
+                        itemStyle={{fontWeight: 600, fontSize: '12px', color: '#1e293b'}} 
                       />
                       <Legend 
                         verticalAlign="bottom" 
@@ -191,10 +191,10 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
           {/* Right Column: Text Preview */}
           <div className="w-full lg:w-7/12 flex flex-col h-full min-h-[400px]">
             <div className="flex justify-between items-center mb-3 px-1">
-              <label className="block text-[13px] font-black text-slate-500 uppercase tracking-wider">ตัวอย่างข้อความรายงาน</label>
+              <label className="block text-[13px] font-bold text-slate-500 uppercase tracking-wider">ตัวอย่างข้อความรายงาน</label>
               <button 
                 onClick={handleCopy} 
-                className={`flex items-center gap-2 px-4 py-2 text-xs font-black text-white rounded-xl transition-all shadow-md ${
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-md ${
                   copied ? 'bg-emerald-500 scale-95' : 'bg-sky-600 hover:bg-sky-700 active:scale-95'
                 }`}
               >
@@ -202,8 +202,49 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
                 {copied ? 'คัดลอกแล้ว' : 'คัดลอกข้อความ'}
               </button>
             </div>
-            <div className="w-full flex-1 px-6 py-5 bg-white/40 border border-white/50 rounded-3xl whitespace-pre-wrap text-[14px] text-slate-800 font-bold leading-relaxed shadow-inner overflow-y-auto custom-scrollbar">
-              {summaryText}
+            <div className="w-full flex-1 px-6 py-5 bg-slate-50/50 border border-slate-200 rounded-3xl whitespace-pre-wrap text-[14px] text-slate-800 leading-loose shadow-inner overflow-y-auto custom-scrollbar">
+              <div className="font-bold mb-6">
+                ชื่อ: {user?.Name || '-'}<br />
+                ตำแหน่ง: {getPositionName(user?.Position || user?.CustomFields?.Position) || '-'}<br />
+                สรุปผลการปฏิบัติงาน<br />
+                ประจำเดือน {format(new Date(monthStr + '-01'), 'MMMM yyyy', { locale: th })}
+                <div className="mt-2 text-sky-600">📊 มีงานทั้งหมดจำนวน {activeTasks.length} งาน</div>
+              </div>
+
+              <div className="space-y-6">
+                {(() => {
+                  const grouped = {};
+                  activeTasks.forEach(t => {
+                    if (!grouped[t.Status]) grouped[t.Status] = [];
+                    grouped[t.Status].push(t);
+                  });
+                  const statusOrder = ['เสร็จสิ้น', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'ยังไม่เริ่ม'];
+                  
+                  return statusOrder.map(status => {
+                    if (!grouped[status] || grouped[status].length === 0) return null;
+                    return (
+                      <div key={status} className="space-y-2">
+                        <div className="font-bold text-slate-900 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-slate-400" />
+                          📌 {status} ({grouped[status].length} งาน):
+                        </div>
+                        <div className="space-y-3 pl-4">
+                          {grouped[status].map((t, i) => (
+                            <div key={i} className="flex flex-col">
+                              <span className="font-bold text-slate-700">
+                                {i + 1}. {t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : ''}
+                              </span>
+                              <span className="font-normal text-slate-600 pl-4">
+                                - {t.Detail}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           </div>
         </div>
