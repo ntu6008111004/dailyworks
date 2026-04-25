@@ -39,6 +39,21 @@ export const apiService = {
     }
   },
 
+  // Patch a single task field in all page caches without clearing them
+  mutatePagesCache(taskPatch) {
+    for (const [key, entry] of cache.entries()) {
+      try {
+        const parsed = JSON.parse(key);
+        if (parsed.action === 'getTasksPaged' && Array.isArray(entry.data?.tasks)) {
+          const updated = entry.data.tasks.map(t =>
+            String(t.ID) === String(taskPatch.ID) ? { ...t, ...taskPatch } : t
+          );
+          cache.set(key, { data: { ...entry.data, tasks: updated }, timestamp: entry.timestamp });
+        }
+      } catch { /* skip non-JSON keys */ }
+    }
+  },
+
   async request(action, data = {}, options = { useCache: false }) {
     const cacheKey = options.useCache ? JSON.stringify({ action, data }) : null;
 
@@ -144,6 +159,20 @@ export const apiService = {
     if (!data.UserID && this.userId) data.UserID = this.userId;
     return this.request('updateTask', data).then(res => {
       this.clearCache();
+      return res;
+    });
+  },
+
+  // Status-only update: patches cache in-place so the UI never snaps back
+  updateTaskStatus(taskId, newStatus) {
+    const data = { ID: taskId, Status: newStatus };
+    if (this.userId) data.UserID = this.userId;
+    // Patch page caches immediately so any concurrent fetchPage returns correct data
+    this.mutatePagesCache({ ID: taskId, Status: newStatus });
+    this.mutateSummaryCache('update', { ID: taskId, Status: newStatus });
+    return this.request('updateTask', data).then(res => {
+      // Patch again with server-confirmed data (same values, keeps cache fresh)
+      this.mutatePagesCache({ ID: taskId, Status: newStatus });
       return res;
     });
   },
