@@ -397,17 +397,21 @@ export const Tasks = () => {
 
   const handleStatusChange = async (task, newStatus) => {
     const oldStatus = task.Status;
+    // Optimistic update: เปลี่ยน UI ทันที
+    setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
     try {
-      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
-      apiService.mutateSummaryCache('update', { ID: task.ID, Status: newStatus });
-      await apiService.updateTask({ ID: task.ID, Status: newStatus });
+      // ใช้ updateTaskStatus ที่ patch cache แทนการ clearCache ทั้งหมด
+      // เพื่อป้องกัน fetchPage ที่ run concurrent จากการดึงข้อมูลเก่ามาทับ
+      await apiService.updateTaskStatus(task.ID, newStatus);
       setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: 'success' } : t));
       setTimeout(() => {
         setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: null } : t));
       }, 1500);
       toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
     } catch (error) {
+      // Rollback ถ้า API ล้มเหลว
       setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: oldStatus, syncState: null } : t));
+      apiService.mutatePagesCache({ ID: task.ID, Status: oldStatus });
       toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
     }
   };

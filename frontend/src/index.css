@@ -1,6 +1,7 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @theme {
+  --font-sans: 'Inter', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-200: #bfdbfe;
@@ -20,8 +21,56 @@
   .glass {
     @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
   }
+  
+  .liquid-glass {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 
+      0 20px 40px rgba(0, 0, 0, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  }
+
+  @keyframes liquid-morph {
+    0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+    50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  }
+
+  .animate-liquid {
+    animation: liquid-morph 8s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes cat-walk {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50% { transform: translateY(-10px) rotate(4deg); }
+  }
+
+  .animate-cat {
+    animation: cat-walk 0.8s ease-in-out infinite;
+  }
+
+  @keyframes organic-rotate {
+    0% { transform: rotate(0deg) scale(1); }
+    33% { transform: rotate(120deg) scale(1.1); border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%; }
+    66% { transform: rotate(240deg) scale(0.9); border-radius: 60% 40% 30% 70% / 50% 60% 30% 60%; }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+
+  @keyframes soft-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+  }
+
+  .animate-organic {
+    animation: organic-rotate 4s infinite linear;
+  }
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  @apply bg-slate-50 text-slate-800 antialiased font-sans;
 }

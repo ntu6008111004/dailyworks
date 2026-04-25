@@ -130,6 +130,7 @@ export const AuthProvider = ({ children }) => {
       apiService.setUserSession(null, 'System');
     }
     // Only re-run when actual identity fields change, not the whole user object
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.ID, user?.id, user?.Username, user?.Name, user?.name, refreshInitData]);
 
   const login = async (username, password) => {

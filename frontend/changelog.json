@@ -1,6 +1,5 @@
 [
-  "📑 Dropdown Layering Fix: แก้ไขเมนูสถานะในหน้าตารางถูกแถวลำดับหลังบังและถูกตัดขอบ",
-  "🛠️ Deletion Fix: กู้คืนระบบลบข้อมูลและปรับปรุงการยืนยันการลบให้เสถียรขึ้น",
-  "🔗 Row Click Editor: สามารถคลิกที่แถวตารางเพื่อเปิดหน้าแก้ไขได้ทันที",
-  "⚡ Optimistic Delete: ระบบลบงานแบบทันใจ (Sync) พร้อมล้าง Cache อัตโนมัติ"
+  "✨ Loading Modal Redesign: อัปเกรดเป็นธีม iOS 26 Liquid Glass พร้อม Water Blob และแมว Chibi วิ่งไล่กัน",
+  "📱 Premium Typography: เปลี่ยนฟอนต์ระบบเป็น Noto Sans Thai + Inter ให้ฟีลลิ่ง iPhone",
+  "🔄 Status Sync Fix: แก้ไขปัญหาเปลี่ยนสถานะแล้ว UI ดีดกลับ (Patch cache in-place)"
 ]
