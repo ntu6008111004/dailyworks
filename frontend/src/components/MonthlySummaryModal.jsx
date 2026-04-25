@@ -120,65 +120,97 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
 
   return (
     <div 
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm"
+      className="ios-glass-overlay p-4 sm:p-6 !z-[60]"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-sky-50/50 rounded-t-3xl">
-          <h2 className="text-xl font-bold text-sky-900">สรุปงานรายเดือน</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-            <X size={20} />
+      <div className="ios-soft-card w-full max-w-5xl flex flex-col max-h-full relative shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Accent Line */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500" />
+
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">สรุปผลงานรายเดือน</h2>
+            <p className="text-[11px] font-extrabold text-sky-600 uppercase tracking-widest mt-1">Monthly Productivity Insight</p>
+          </div>
+          <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all border border-slate-200">
+            <X size={22} />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col md:flex-row gap-8">
-          <div className="w-full md:w-1/2 space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">เลือกเดือนที่ต้องการสรุป</label>
+        <div className="p-8 overflow-y-auto flex-1 flex flex-col lg:flex-row gap-10 custom-scrollbar">
+          {/* Left Column: Month Selector & Chart */}
+          <div className="w-full lg:w-5/12 space-y-8">
+            <div className="group">
+              <label className="block text-[14px] font-black text-slate-900 mb-2 uppercase tracking-wider ml-1">เลือกเดือนที่ต้องการสรุป</label>
               <input
                 type="month"
                 value={monthStr}
                 onChange={(e) => setMonthStr(e.target.value)}
-                className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none transition-all"
+                className="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 outline-none transition-all font-black text-slate-900"
               />
             </div>
 
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 h-64">
-              {stats.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={stats} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {stats.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{borderRadius: '0.75rem', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} itemStyle={{fontWeight: 600}} />
-                    <Legend verticalAlign="bottom" height={36}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400 text-sm">ไม่มีข้อมูลเพื่อสร้างกราฟ</div>
-              )}
+            <div className="ios-glass-pill p-6 border-white/40 h-[320px] flex flex-col">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 text-center">สถิติสถานะงาน</h3>
+              <div className="flex-1">
+                {stats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={stats} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={8} dataKey="value" stroke="none">
+                        {stats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{
+                          background: 'rgba(255,255,255,0.8)', 
+                          backdropFilter: 'blur(10px)', 
+                          borderRadius: '16px', 
+                          border: '1px solid rgba(255,255,255,0.5)',
+                          boxShadow: '0 10px 20px rgba(0,0,0,0.05)',
+                          padding: '10px 14px'
+                        }} 
+                        itemStyle={{fontWeight: 900, fontSize: '12px', color: '#1e293b'}} 
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={40} 
+                        formatter={(val) => <span className="text-[11px] font-bold text-slate-500 uppercase tracking-tighter">{val}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                    <p className="text-sm font-bold uppercase tracking-widest opacity-50">No Data Available</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="w-full md:w-1/2 flex flex-col">
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-slate-700">ตัวอย่างข้อความสำหรับส่งไลน์</label>
-              <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-sm focus:ring-4 focus:ring-sky-100">
-                {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
-                {copied ? 'คัดลอกสำเร็จ' : 'คัดลอกข้อความ'}
+          {/* Right Column: Text Preview */}
+          <div className="w-full lg:w-7/12 flex flex-col h-full min-h-[400px]">
+            <div className="flex justify-between items-center mb-3 px-1">
+              <label className="block text-[13px] font-black text-slate-500 uppercase tracking-wider">ตัวอย่างข้อความรายงาน</label>
+              <button 
+                onClick={handleCopy} 
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-black text-white rounded-xl transition-all shadow-md ${
+                  copied ? 'bg-emerald-500 scale-95' : 'bg-sky-600 hover:bg-sky-700 active:scale-95'
+                }`}
+              >
+                {copied ? <CheckCircle size={16} /> : <Copy size={16} />}
+                {copied ? 'คัดลอกแล้ว' : 'คัดลอกข้อความ'}
               </button>
             </div>
-            <div className="w-full flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl min-h-[300px] whitespace-pre-wrap text-sm text-slate-800 font-mono overflow-y-auto">
+            <div className="w-full flex-1 px-6 py-5 bg-white/40 border border-white/50 rounded-3xl whitespace-pre-wrap text-[14px] text-slate-800 font-bold leading-relaxed shadow-inner overflow-y-auto custom-scrollbar">
               {summaryText}
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 rounded-b-3xl">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors">
-            ปิดหน้าต่าง
+        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50 flex justify-end">
+          <button onClick={onClose} className="px-8 py-3 text-sm font-black text-slate-500 hover:text-slate-800 hover:bg-white rounded-2xl border border-slate-200 transition-all">
+            ปิดหน้าต่างข้อมูล
           </button>
         </div>
       </div>

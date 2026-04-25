@@ -463,27 +463,29 @@ export const Briefing = () => {
       </div>
 
       {/* Filters Area */}
-      <div className="relative z-40 glass p-4 rounded-2xl border border-slate-200/60 space-y-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+      <div className="relative z-40 ios-filter-glass px-6 py-3.5 rounded-2xl space-y-4 shadow-md">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1 relative group w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
             <input 
               type="text"
               placeholder="ค้นหาเลขบรีฟ หรือรายละเอียด..."
-              className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-dashed border-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+              className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-semibold text-sm text-slate-900"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <CustomSelect 
-            value={filterDepartment} 
-            borderDashed
-            onChange={setFilterDepartment}
-            options={['All', ...new Set(allUsers.map(u => u.Department).filter(Boolean))].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
-          />
-          <div className="flex gap-2">
+          <div className="w-full lg:w-36">
             <CustomSelect 
-              className="flex-1"
+              value={filterDepartment} 
+              borderDashed
+              onChange={setFilterDepartment}
+              options={['All', ...new Set(allUsers.map(u => u.Department).filter(Boolean))].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
+            />
+          </div>
+          <div className="w-full lg:w-44">
+            <CustomSelect 
+              className="w-full"
               value={filterUser} 
               borderDashed
               onChange={setFilterUser}
@@ -497,7 +499,7 @@ export const Briefing = () => {
               searchable={true}
             />
           </div>
-          <div className="flex gap-2 text-black">
+          <div className="w-full lg:w-[370px] flex gap-2 text-black">
             <CustomDatePicker value={startDate} onChange={setStartDate} placeholder="ตั้งแต่" borderDashed />
             <CustomDatePicker value={endDate} onChange={setEndDate} placeholder="ถึง" borderDashed />
           </div>
@@ -545,14 +547,14 @@ export const Briefing = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-16 text-center">ลำดับ</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">เลขบรีฟ / หัวข้องาน</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-20">ผู้มอบหมาย</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-24">คนรับผิดชอบ</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-28">กำหนดส่ง</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-36">สถานะงาน</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-24">โพสต์</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-24">จัดการ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16 text-center">ลำดับ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">เลขบรีฟ / หัวข้องาน</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-20">ผู้มอบหมาย</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-24">คนรับผิดชอบ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-28">กำหนดส่ง</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-36">สถานะงาน</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-24">โพสต์</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right pr-6 w-24">จัดการ</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white">

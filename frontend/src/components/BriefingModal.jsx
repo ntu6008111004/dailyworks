@@ -432,33 +432,35 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-hidden"
+      className="ios-glass-overlay p-4 !z-50"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onPaste={handlePaste}
     >
-      <div className={`bg-white rounded-[2rem] w-full max-w-5xl h-[90vh] shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 border-4 transition-colors ${isDragging ? 'border-blue-500' : 'border-transparent'}`}>
+      <div className={`ios-soft-card w-full max-w-5xl h-[92vh] flex flex-col border-4 transition-colors ${isDragging ? 'border-blue-500' : 'border-transparent'}`}>
+        {/* Top Accent Line */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
         
         {/* Header */}
-        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50 rounded-t-[2rem]">
+        <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+             <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-200">
                <NotebookTabs size={24} />
              </div>
              <div>
-               <h2 className="text-xl font-bold text-slate-800">
+               <h2 className="text-xl font-bold text-slate-900">
                  {briefing ? `บรีฟงาน #${briefing.RunningID}` : 'สร้างบรีฟงานใหม่'}
                </h2>
-                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium font-inter">
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold font-inter">
                   {briefing && (
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} /> {format(new Date(briefing.CreatedAt), 'dd/MM/yyyy')}
+                    <span className="flex items-center gap-1 uppercase tracking-wider">
+                      <Calendar size={10} /> {format(new Date(briefing.CreatedAt), 'dd/MM/yyyy')}
                     </span>
                   )}
                   {saving && (
                     <span className="flex items-center gap-1.5 text-blue-600 font-bold animate-pulse ml-2 px-2 py-0.5 bg-blue-50 rounded-lg">
-                      <RefreshCw size={12} className="animate-spin" /> กำลังบันทึก...
+                      <RefreshCw size={10} className="animate-spin" /> กำลังบันทึก...
                     </span>
                   )}
                 </div>
@@ -503,21 +505,21 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
               
               <section className="space-y-4">
                 <div className="space-y-2">
-                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">หัวเรื่อง / โปรเจค</label>
+                   <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider block ml-0.5">หัวเรื่อง / โปรเจค</label>
                    <input 
                     type="text"
                     value={formData.Title}
                     onChange={e => setFormData({...formData, Title: e.target.value})}
                     placeholder="ใส่หัวเรื่องงานบรีฟ..."
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none font-bold"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-base"
                     readOnly={!canEditCore}
                    />
                 </div>
 
-                <div className="flex flex-col gap-4 p-5 bg-slate-50 border border-slate-200 rounded-3xl">
-                  <div className="flex flex-wrap items-center gap-6">
+                <div className="flex flex-col gap-5 p-6 bg-slate-50 border border-slate-100 rounded-3xl">
+                  <div className="flex flex-wrap items-center gap-8">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">ระดับความสำคัญ</label>
+                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">ระดับความสำคัญ</label>
                        <div className="flex gap-1.5">
                           {['High', 'Medium', 'Low'].map(p => (
                             <button 
@@ -534,7 +536,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                     </div>
 
                     <div className="space-y-2">
-                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">สถานะภาพรวม</label>
+                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">สถานะภาพรวม</label>
                         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                           {['รอดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'เสร็จสิ้น', 'ยกเลิกงาน'].map(s => {
                             const isActive = formData.Status === s;
@@ -629,7 +631,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">รายละเอียดการบรีฟ</h3>
+                  <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider ml-0.5">รายละเอียดการบรีฟ</h3>
                 </div>
                 
                 {canEditCore ? (
@@ -637,10 +639,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                     value={formData.Detail}
                     onChange={e => setFormData({...formData, Detail: e.target.value})}
                     placeholder="ใส่รายละเอียดสิ่งที่ต้องการให้ทำ..."
-                    className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none"
+                    className="w-full min-h-[100px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none font-medium text-slate-800 text-sm"
                   />
                 ) : (
-                  <div className="p-5 bg-blue-50/50 border border-blue-100 rounded-2xl text-slate-700 leading-relaxed whitespace-pre-line font-medium italic">
+                  <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-slate-700 leading-relaxed whitespace-pre-line font-medium italic text-sm">
                     {briefing?.Detail}
                   </div>
                 )}
@@ -648,25 +650,25 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
               {canEditCore && (
                 <section className="space-y-3">
-                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">หมายเหตุ (ภายใน)</label>
+                   <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider ml-0.5">หมายเหตุ (ภายใน)</label>
                    <textarea 
                     value={formData.CreatorNote}
                     onChange={e => setFormData({...formData, CreatorNote: e.target.value})}
                     placeholder="โน้ตช่วยจำ หรือคำแนะนำเพิ่มเติม..."
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm italic"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm italic"
                    />
                 </section>
               )}
 
               {/* Reference Images */}
-              <section className="space-y-4">
+               <section className="space-y-4">
                 <div className="flex items-center justify-between">
-                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                     <ImageIcon size={14} className="text-blue-500" />
+                   <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-0.5">
+                     <ImageIcon size={16} className="text-blue-500" />
                      รูปภาพอ้างอิง (Ref Images)
                    </h3>
                    {canEditCore && (
-                     <label className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">
+                     <label className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer transition-colors border border-blue-100 uppercase tracking-wider">
                        เพิ่มรูปภาพ ({refImages.length}/6)
                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleRefImageAdd} disabled={refImages.length >= 6} />
                      </label>
@@ -694,8 +696,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                 </div>
 
                 <div className="space-y-2 mt-4">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <LinkIcon size={12} className="text-blue-500" /> ลิงก์อ้างอิง (Reference URL)
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-1">
+                    <LinkIcon size={14} className="text-blue-500" /> ลิงก์อ้างอิง (Reference URL)
                   </label>
                   <div className="flex gap-2">
                     <input 
@@ -720,12 +722,12 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                 </div>
               </section>
 
-              {/* Assignments & Dates */}
-              <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50/80 p-6 rounded-3xl border border-slate-100">
+               {/* Assignments & Dates */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
                  <div className="space-y-4">
                     <div className="space-y-3">
-                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <User size={14} className="text-indigo-500" />
+                      <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-0.5">
+                        <User size={16} className="text-indigo-500" />
                         ผู้ได้รับมอบหมาย
                       </label>
                        {canEditCore ? (
@@ -771,7 +773,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
                     {canEditCore && (
                       <div className="space-y-3">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">ระบุสีของ Card (Palette)</label>
+                        <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider ml-1">ระบุสีของ Card (Palette)</label>
                         <div className="flex flex-wrap gap-2">
                           {BRIEFING_PALETTE.map(c => (
                             <button

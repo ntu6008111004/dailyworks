@@ -59,42 +59,52 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
 
   return (
     <div 
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm"
+      className="ios-glass-overlay p-4 sm:p-6 !z-[60]"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-blue-50/50 rounded-t-3xl">
-          <h2 className="text-xl font-bold text-blue-900">สรุปงานประจำวันส่งไลน์</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-            <X size={20} />
+      <div className="ios-soft-card w-full max-w-lg flex flex-col max-h-full relative shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Accent Line */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-blue-500" />
+
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">สรุปงานประจำวัน</h2>
+            <p className="text-[11px] font-extrabold text-emerald-600 uppercase tracking-widest mt-1">LINE Report Generator</p>
+          </div>
+          <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all border border-slate-200">
+            <X size={22} />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          <CustomDatePicker
-            label="เลือกวันที่ต้องการสรุป"
-            selectedDate={date}
-            onChange={(newDate) => setDate(newDate)}
-          />
+        <div className="p-8 overflow-y-auto flex-1 space-y-8 custom-scrollbar">
+          <div className="ios-glass-pill p-2 pl-4 flex items-center bg-white/40">
+            <CustomDatePicker
+              label="เลือกวันที่"
+              selectedDate={date}
+              onChange={(newDate) => setDate(newDate)}
+            />
+          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">ตัวอย่างข้อความ</label>
-            <div className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl min-h-[150px] whitespace-pre-wrap text-sm text-slate-800 font-mono">
+          <div className="space-y-3">
+            <label className="block text-[13px] font-black text-slate-500 mb-2 uppercase tracking-wider ml-1">ตัวอย่างข้อความที่จะส่ง</label>
+            <div className="w-full px-6 py-5 bg-white/40 border border-white/50 rounded-3xl min-h-[180px] whitespace-pre-wrap text-sm text-slate-800 font-bold leading-relaxed shadow-inner">
               {summaryText}
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 rounded-b-3xl">
+        <div className="px-8 py-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-4">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors"
+            className="px-6 py-3 text-sm font-black text-slate-500 hover:text-slate-800 hover:bg-white rounded-2xl border border-slate-200 transition-all"
           >
             ปิดหน้าต่าง
           </button>
           <button
             onClick={handleCopy}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-xl transition-colors shadow-sm focus:ring-4 focus:ring-green-100"
+            className={`flex items-center justify-center gap-3 px-8 py-3 text-sm font-black text-white rounded-2xl transition-all shadow-lg ${
+              copied ? 'bg-emerald-500 scale-95' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+            }`}
           >
             {copied ? (
               <>

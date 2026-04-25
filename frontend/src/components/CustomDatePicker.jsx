@@ -11,12 +11,12 @@ const CustomInput = React.forwardRef(({ value, onClick, onClear, className, plac
       value={value}
       onClick={onClick}
       readOnly
-      className={`w-full px-4 py-2 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all cursor-pointer bg-white 
-        ${className?.includes('border-2 border-dashed') ? 'border-2 border-dashed border-slate-400' : 'border border-slate-200'}
+      className={`w-full px-3.5 py-2.5 pl-3.5 pr-16 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none transition-all cursor-pointer bg-white font-semibold text-slate-900 text-sm
+        ${className?.includes('border-2 border-dashed') ? 'border border-slate-300' : 'border border-slate-200'}
         ${className || ''}`}
       placeholder={placeholder || "dd/mm/yyyy"}
     />
-    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
       {value && onClear && (
         <button
           onClick={(e) => {
@@ -29,7 +29,7 @@ const CustomInput = React.forwardRef(({ value, onClick, onClear, className, plac
           <X size={14} />
         </button>
       )}
-      <Calendar size={18} className="text-slate-400 pointer-events-none" />
+      <Calendar size={16} className="text-slate-400 pointer-events-none" />
     </div>
   </div>
 ));
