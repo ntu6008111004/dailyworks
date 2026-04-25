@@ -98,7 +98,7 @@ export const UpdateNotifier = () => {
   if (!updateInfo || isHidden) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md p-4 flex items-center justify-center z-[9999]">
+    <div className="ios-glass-overlay !z-[9999] p-4">
       <div className="ios-soft-card max-w-md w-full relative">
         {/* Top Glow Accent */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400" />

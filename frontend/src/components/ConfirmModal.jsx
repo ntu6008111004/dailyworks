@@ -33,7 +33,7 @@ export const ConfirmModal = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm p-4 !z-[70] flex items-center justify-center"
+      className="ios-glass-overlay p-4 !z-[70]"
       onClick={handleBackdropClick}
     >
       <div className="ios-soft-card w-full max-w-sm p-8 text-center relative">
