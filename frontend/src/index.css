@@ -1,7 +1,97 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+/* 
+  KANIT LOCAL FONT CONFIGURATION
+  Directly using files from public/fonts/Kanit/
+*/
+
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-ThinItalic.ttf') format('truetype');
+  font-weight: 100;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-ExtraLight.ttf') format('truetype');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-MediumItalic.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Kanit';
+  src: url('/fonts/Kanit/Kanit-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 @theme {
-  --font-sans: 'Inter', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-sans: 'Kanit', system-ui, sans-serif;
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-200: #bfdbfe;
@@ -13,13 +103,27 @@
   --color-brand-800: #1e40af;
   --color-brand-900: #1e3a8a;
   --color-brand-950: #172554;
-
   --radius-2xl: 1rem;
 }
 
 @layer utilities {
   .glass {
-    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
+    background-color: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+  }
+
+  .ios-filter-glass {
+    background-color: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 
+      0 10px 25px -5px rgba(0, 0, 0, 0.05),
+      0 8px 10px -6px rgba(0, 0, 0, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.5);
   }
   
   .liquid-glass {
@@ -69,8 +173,132 @@
   .animate-organic {
     animation: organic-rotate 4s infinite linear;
   }
+
+  /* ═══ iOS 26 Liquid Glass System ═══ */
+  .ios-glass-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: linear-gradient(135deg, rgba(255,255,255,0.40), rgba(230,235,248,0.50) 50%, rgba(255,255,255,0.40));
+    backdrop-filter: blur(60px) saturate(210%);
+    -webkit-backdrop-filter: blur(60px) saturate(210%);
+    display: flex; align-items: center; justify-content: center; p: 4;
+    animation: iosFadeIn 0.5s ease-out;
+  }
+
+  .ios-glass-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(50px) saturate(200%);
+    -webkit-backdrop-filter: blur(50px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 40px;
+    box-shadow: 
+      0 25px 70px rgba(0, 0, 0, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+    animation: iosCardUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .ios-soft-card {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 1);
+    border-radius: 36px;
+    box-shadow: 
+      0 30px 100px rgba(0, 0, 0, 0.1),
+      0 10px 30px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    animation: iosCardUp 0.5s cubic-bezier(0.2, 1, 0.3, 1);
+  }
+
+  .ios-glass-pill {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 50px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  }
+
+  .ios-glass-btn {
+    background: linear-gradient(145deg, #7c3aed, #9333ea);
+    color: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ios-glass-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(139, 92, 246, 0.4);
+    filter: brightness(1.1);
+  }
+  .ios-glass-btn:active {
+    transform: translateY(0) scale(0.97);
+  }
+
+  /* Dropdown specific glass - More opaque for readability */
+  .ios-dropdown-glass {
+    background-color: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 
+      0 10px 40px rgba(0, 0, 0, 0.1),
+      0 1px 3px rgba(0, 0, 0, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  }
+
+  @keyframes iosFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes iosCardUp { 
+    from { opacity: 0; transform: translateY(30px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* DatePicker overrides for Liquid Glass */
+  .react-datepicker {
+    font-family: 'Kanit' !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    backdrop-filter: blur(20px) !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.1) !important;
+    padding: 10px !important;
+  }
+  .react-datepicker__header {
+    background-color: transparent !important;
+    border-bottom: 1px solid rgba(0,0,0,0.05) !important;
+    padding-top: 10px !important;
+  }
+  .react-datepicker__day--selected {
+    background-color: #3b82f6 !important;
+    border-radius: 10px !important;
+  }
+  .react-datepicker__day:hover {
+    border-radius: 10px !important;
+    background-color: rgba(59, 130, 246, 0.1) !important;
+  }
+}
+
+/* FORCE KANIT ON EVERYTHING & OPTIMIZE LEGIBILITY */
+*, *::before, *::after {
+  font-family: 'Kanit', sans-serif !important;
+  letter-spacing: 0.02em; /* Increase space between letters */
+  line-height: 1.5;        /* Increase space between lines */
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased font-sans;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+  color: #1e293b;
+  text-rendering: optimizeLegibility;
+}
+
+/* Specific optimizations for headings and small text */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: 0.01em; /* Tighter for big text */
+  line-height: 1.4;
+}
+
+p, span, td, li {
+  font-weight: 400; /* Ensure it's not too light */
 }

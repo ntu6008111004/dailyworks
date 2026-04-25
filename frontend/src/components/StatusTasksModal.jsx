@@ -54,59 +54,77 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
   const headerColor = statusColors[status] || statusColors['ทั้งหมด'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200">
-        <div className={`px-6 py-4 border-b border-slate-100 flex items-center justify-between rounded-t-3xl ${headerColor.replace('text-', 'bg-opacity-50 text-')}`}>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            รายการงาน: {status} 
-            <span className="text-sm font-medium bg-white/50 px-2 py-0.5 rounded-full">{tasks.length}</span>
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-full transition-colors">
-            <X size={20} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 ios-glass-overlay animate-in fade-in duration-300">
+      <div className="ios-soft-card w-full max-w-4xl flex flex-col max-h-[92vh] shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className={`px-8 py-6 border-b border-slate-100 flex items-center justify-between ${headerColor.replace('bg-', 'bg-opacity-5 bg-')}`}>
+          <div className="flex flex-col">
+            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+              รายการงาน: {status} 
+              <span className="text-sm font-black bg-blue-50 text-blue-600 px-4 py-1.5 rounded-full border border-blue-100 shadow-sm">{tasks.length} งาน</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 font-extrabold uppercase tracking-wider mt-1">รายการบันทึกงานในระบบตามสถานะที่เลือก</p>
+          </div>
+          <button onClick={onClose} className="p-2.5 bg-white/30 hover:bg-white/50 rounded-full transition-all active:scale-90 border border-white/40 shadow-sm">
+            <X size={20} className="text-slate-700" />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
           {tasks.length === 0 ? (
-             <div className="flex items-center justify-center h-48 text-slate-400">
-               ไม่มีงานในสถานะนี้
+             <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-4">
+               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                 <Calendar size={32} />
+               </div>
+               <p className="font-bold">ไม่มีงานในสถานะนี้</p>
              </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-8 pb-4">
               {Object.entries(groupedTasks).map(([employee, empTasks]) => (
-                <div key={employee} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div key={employee} className="ios-glass-pill p-1 rounded-3xl overflow-hidden border border-white/40 shadow-sm bg-white/30">
                   {userRole !== 'Staff' && Object.keys(groupedTasks).length > 1 && (
-                    <div className="bg-slate-100/80 px-4 py-2 border-b border-slate-200 font-bold text-slate-800 flex justify-between items-center">
-                      <span>{employee}</span>
-                      <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">{empTasks.length} งาน</span>
+                    <div className="bg-white/40 px-5 py-3 border-b border-white/20 font-bold text-slate-800 flex justify-between items-center backdrop-blur-md">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">
+                          {employee.charAt(0)}
+                        </div>
+                        <span>{employee}</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-100 uppercase tracking-widest">{empTasks.length} งาน</span>
                     </div>
                   )}
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-white/10">
                     {empTasks.map(task => (
-                      <div key={task.ID} className="p-4 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <span className="text-[16px] font-extrabold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-xl border border-indigo-100 tracking-tight leading-tight shadow-sm">
+                      <div key={task.ID} className="p-5 hover:bg-white/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-5 group">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[14px] font-bold text-indigo-700 bg-white/60 px-3 py-1 rounded-xl border border-white shadow-sm leading-tight">
                               {task.CustomFields?.Project || 'ทั่วไป'}
                             </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm ${headerColor}`}>
+                            <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider shadow-sm border border-white/20 ${headerColor}`}>
                               {task.Status}
                             </span>
                           </div>
                           
-                          <p className="text-[11px] text-slate-500 line-clamp-1 opacity-80" title={task.Detail}>
+                          <p className="text-sm text-slate-700 line-clamp-2 leading-relaxed font-medium" title={task.Detail}>
                             {task.Detail}
                           </p>
                           
-                          <div className="flex items-center gap-2 mt-1 opacity-60">
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">ID: #{String(task.ID).slice(-4)}</span>
+                          <div className="flex items-center gap-3 opacity-60">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded">ID: #{String(task.ID).slice(-4)}</span>
+                            {task.CustomFields?.Department && (
+                              <span className="text-[9px] text-blue-600 font-bold uppercase tracking-widest">{task.CustomFields.Department}</span>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1.5 rounded-lg shrink-0 w-fit">
-                          <Calendar size={14} className="text-slate-400"/>
-                          {format(new Date(task.StartDate), 'd MMM yyyy', { locale: th })} 
-                          <span className="mx-1 text-slate-400">-</span> 
-                          {format(new Date(task.DueDate), 'd MMM yyyy', { locale: th })}
+                        
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-600 bg-white/50 px-4 py-2.5 rounded-2xl shrink-0 w-fit border border-white shadow-sm">
+                          <Calendar size={14} className="text-blue-500"/>
+                          <div className="flex flex-col">
+                            <span className="text-[8px] text-slate-400 uppercase tracking-tighter">กำหนดส่ง</span>
+                            <span>{format(new Date(task.DueDate), 'd MMM yyyy', { locale: th })}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -115,22 +133,22 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
               ))}
               
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-2 pt-2 pb-1">
-                  <p className="text-sm text-slate-500">
-                    แสดงหน้า <span className="font-bold text-slate-900">{currentPage}</span> จาก <span className="font-bold text-slate-900">{totalPages}</span>
+                <div className="flex items-center justify-between px-2 pt-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    หน้า <span className="text-blue-600">{currentPage}</span> / {totalPages}
                   </p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
-                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                      className="p-2.5 bg-white/40 border border-white/60 rounded-2xl hover:bg-white/60 disabled:opacity-30 transition-all shadow-sm active:scale-90"
                     >
                       <ChevronLeft size={20} />
                     </button>
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
-                      className="p-2 border border-slate-200 rounded-xl hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                      className="p-2.5 bg-white/40 border border-white/60 rounded-2xl hover:bg-white/60 disabled:opacity-30 transition-all shadow-sm active:scale-90"
                     >
                       <ChevronRight size={20} />
                     </button>
@@ -141,12 +159,13 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
           )}
         </div>
         
-        <div className="px-6 py-4 border-t border-slate-100 bg-white flex justify-end gap-3 rounded-b-3xl">
+        {/* Footer */}
+        <div className="px-6 py-5 border-t border-white/20 bg-white/30 backdrop-blur-xl flex justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+            className="ios-glass-btn px-8 py-3 rounded-2xl text-white font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
           >
-            ปิดหน้าต่าง
+            ตกลง รับทราบ
           </button>
         </div>
       </div>

@@ -96,47 +96,52 @@ export const UpdateNotifier = () => {
   if (!updateInfo || isHidden) return null;
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-md w-full animate-in zoom-in-95 slide-in-from-bottom-5 duration-500 border border-t-[6px] border-t-purple-500">
+    <div className="ios-glass-overlay p-4">
+      <div className="ios-glass-card max-w-md w-full relative">
+        {/* Top Glow Accent */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400" />
         
-        {/* Header Ribbon */}
-        <div className="bg-gradient-to-r from-purple-50 to-fuchsia-50 p-5 pb-4 flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-purple-100 text-purple-600 rounded-2xl animate-bounce shadow-sm">
-              <Sparkles size={24} />
+        {/* Header Section */}
+        <div className="p-6 pb-4 flex justify-between items-start">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-purple-500/10 text-purple-600 rounded-2xl shadow-inner border border-purple-500/10">
+              <Sparkles size={28} className="animate-pulse" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-purple-900 leading-tight">พบเวอร์ชันใหม่!</h3>
-              <p className="text-xs font-bold text-purple-600 mt-0.5 tracking-wider uppercase">อัปเดตล่าสุดระบบพร้อมใช้งาน</p>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-tight">พบเวอร์ชันใหม่!</h3>
+              <p className="text-[10px] font-extrabold text-purple-600 tracking-[0.15em] uppercase opacity-80">System Ready for Update</p>
             </div>
           </div>
           <button 
             onClick={handleDismiss}
-            className="text-slate-400 hover:text-slate-600 hover:bg-white p-1.5 rounded-full transition-all border border-transparent hover:border-slate-200"
-            title="เดี๋ยวก่อน"
+            className="text-slate-400 hover:text-slate-600 hover:bg-white/50 p-2 rounded-full transition-all border border-transparent hover:border-white/40"
           >
-            <X size={20} />
+            <X size={22} />
           </button>
         </div>
 
-        {/* Changelog Content */}
-        <div className="p-5 pb-6">
-          <p className="text-sm font-medium text-slate-600 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100 italic">
-            " แวะอัปเดตสักครู่ เพื่อการทำงานที่เสถียรยิ่งขึ้นและเห็นข้อมูลตรงกับทุกคนในทีม! ข้อมูลคุณจะยังคงปลอดภัย "
-          </p>
+        {/* Content Section */}
+        <div className="px-6 pb-8">
+          <div className="ios-glass-pill p-4 mb-6 italic text-slate-600 text-sm leading-relaxed border-purple-500/5 bg-white/30">
+            " แวะอัปเดตสักครู่ เพื่อการทำงานที่เสถียรยิ่งขึ้นและเห็นข้อมูลตรงกับทุกคนในทีม! "
+          </div>
 
-          <div className="space-y-2 mb-6 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 mb-8 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
             {updateInfo.changelog && updateInfo.changelog.length > 0 ? (
               updateInfo.changelog.map((log, i) => (
-                <div key={i} className="flex gap-2.5 text-sm text-slate-700 items-start">
-                  <CheckCircle2 className="text-green-500 mt-0.5 shrink-0" size={16} />
-                  <span className="leading-snug">{log}</span>
+                <div key={i} className="flex gap-3 text-[15px] text-slate-700 items-start">
+                  <div className="mt-1 w-5 h-5 flex items-center justify-center bg-green-500/10 rounded-full shrink-0">
+                    <CheckCircle2 className="text-green-600" size={14} />
+                  </div>
+                  <span className="font-medium tracking-wide">{log}</span>
                 </div>
               ))
             ) : (
-              <div className="flex gap-2.5 text-sm text-slate-700 items-start">
-                <CheckCircle2 className="text-green-500 mt-0.5 shrink-0" size={16} />
-                <span>ปรับปรุงประสิทธิภาพและความเสถียรของระบบ</span>
+              <div className="flex gap-3 text-[15px] text-slate-700 items-start">
+                <div className="mt-1 w-5 h-5 flex items-center justify-center bg-green-500/10 rounded-full shrink-0">
+                  <CheckCircle2 className="text-green-600" size={14} />
+                </div>
+                <span className="font-medium tracking-wide">ปรับปรุงประสิทธิภาพและความเสถียรของระบบ</span>
               </div>
             )}
           </div>
@@ -144,26 +149,30 @@ export const UpdateNotifier = () => {
           <button
             onClick={handleUpdate}
             disabled={isUpdating}
-            className={`w-full py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 text-white font-bold transition-all ${
-              isUpdating ? 'bg-purple-400 cursor-not-allowed scale-95' : 'bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-500/30 hover:shadow-purple-500/40 active:scale-95'
+            className={`w-full py-4 px-6 ios-glass-btn flex items-center justify-center gap-3 font-black text-lg transition-all ${
+              isUpdating ? 'opacity-50 grayscale cursor-not-allowed' : ''
             }`}
           >
             {isUpdating ? (
               <>
-                <RefreshCw size={20} className="animate-spin" />
+                <RefreshCw size={22} className="animate-spin" />
                 กำลังอัปเดต...
               </>
             ) : (
               <>
-                <RefreshCw size={20} />
+                <RefreshCw size={22} />
                 อัปเดตระบบเลย
               </>
             )}
           </button>
           
-          <p className="text-center text-[10px] text-slate-400 mt-4 uppercase tracking-widest font-medium">
-            Version ID: {updateInfo.timestamp}
-          </p>
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <span className="h-[1px] w-4 bg-slate-200" />
+            <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">
+              ID: {updateInfo.timestamp}
+            </p>
+            <span className="h-[1px] w-4 bg-slate-200" />
+          </div>
         </div>
       </div>
     </div>

@@ -240,48 +240,54 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-sm overflow-y-auto"
+      className="ios-glass-overlay p-4 sm:p-6 overflow-y-auto !z-50"
       onClick={handleBackdropClick}
       onPaste={handlePaste}
     >
-      <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-full animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <h2 className="text-xl font-bold text-slate-900">
-            {task ? 'แก้ไขงาน' : 'งานใหม่'}
-          </h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+      <div className="ios-soft-card w-full max-w-2xl flex flex-col max-h-full relative shadow-2xl">
+        {/* Top Accent Line */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+
+        <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              {task ? 'แก้ไขข้อมูลงาน' : 'เพิ่มงานใหม่'}
+            </h2>
+            <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">Task Management Suite</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all active:scale-90 shadow-sm border border-slate-200">
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto flex-1">
-          <form id="task-form" onSubmit={attemptSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">ชื่อโปรเจค / งานหลัก</label>
+        <div className="p-8 overflow-y-auto flex-1 custom-scrollbar bg-white/50">
+          <form id="task-form" onSubmit={attemptSubmit} className="space-y-8">
+            <div className="space-y-6">
+              <div className="group">
+                <label className="block text-[13px] font-bold text-slate-900 mb-1.5 uppercase tracking-wider ml-0.5">ชื่อโปรเจค / งานหลัก</label>
                 <input
                   type="text"
                   value={project}
                   onChange={e => setProject(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 font-medium"
-                  placeholder="เช่น ปรับปรุงระบบเครือข่าย ปี 2568, โครงการ X..."
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 font-semibold text-slate-800 text-sm"
+                  placeholder="เช่น ปรับปรุงระบบเครือข่าย ปี 2568"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">รายละเอียดงาน <span className="text-red-500">*</span></label>
+                <label className="block text-[13px] font-bold text-slate-900 mb-1.5 uppercase tracking-wider ml-0.5">รายละเอียดงาน <span className="text-red-500">*</span></label>
                 <textarea
                   required
                   value={formData.Detail}
                   onChange={e => setFormData({ ...formData, Detail: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-y min-h-[120px]"
-                  placeholder="รายละเอียดงานที่ต้องทำ..."
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all resize-y min-h-[120px] font-medium text-slate-800 leading-relaxed text-sm"
+                  placeholder="พิมพ์รายละเอียดงานที่นี่..."
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <CustomSelect
-                  label="สถานะ"
+                  label="สถานะการทำงาน"
                   value={formData.Status}
                   onChange={val => setFormData({ ...formData, Status: val })}
                   options={[
@@ -293,22 +299,22 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                   ]}
                 />
                 <CustomSelect
-                  label="ความสำคัญ"
+                  label="ความเร่งด่วน"
                   value={formData.Priority}
                   onChange={val => setFormData({ ...formData, Priority: val })}
                   options={['ต่ำ', 'ปานกลาง', 'สูง']}
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <CustomDatePicker
-                  label="วันที่เริ่ม"
+                  label="วันที่เริ่มดำเนินการ"
                   required
                   selectedDate={formData.StartDate}
                   onChange={date => setFormData({ ...formData, StartDate: date })}
                 />
                 <CustomDatePicker
-                  label="กำหนดส่ง"
+                  label="กำหนดส่งงาน"
                   required
                   selectedDate={formData.DueDate}
                   onChange={date => setFormData({ ...formData, DueDate: date })}
@@ -316,115 +322,118 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
               </div>
 
               {/* Link Input */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1.5 border-t border-slate-100 pt-4">
-                  <LinkIcon size={16} className="text-blue-500" />
-                  แนบลิงก์ (URL)
+              <div className="pt-2">
+                <label className="block text-[12px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider ml-0.5 flex items-center gap-2">
+                  <div className="w-5 h-5 flex items-center justify-center bg-blue-500/10 rounded-lg">
+                    <LinkIcon size={12} className="text-blue-600" />
+                  </div>
+                  ลิงก์อ้างอิง (URL)
                 </label>
                 <input
                   type="url"
                   placeholder="https://example.com"
                   value={link}
                   onChange={e => setLink(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none text-blue-600 font-semibold text-sm"
                 />
               </div>
 
-              {/* Image Upload */}
-              <div className="border-t border-slate-100 pt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5" title="คุณสามารถกด Ctrl+V เพื่อวางรูปภาพได้">
-                    <ImageIcon size={16} className="text-green-500" />
-                    รูปภาพประกอบ (สูงสุด 4 รูป / Ctrl+V เพื่อวาง)
+              {/* Image Upload Area */}
+              <div className="ios-glass-pill p-5 border-white/40">
+                <label className="block text-[12px] font-bold text-slate-600 mb-4 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <ImageIcon size={16} className="text-indigo-500" />
+                    รูปภาพประกอบ ({images.length + newImages.length}/4)
                   </span>
-                  <span className="text-xs text-slate-500 font-normal border px-2 py-0.5 rounded-md bg-slate-50">
-                    {images.length + newImages.length} / 4
+                  <span className="text-[9px] px-2 py-1 bg-white/50 rounded-lg text-slate-500 border border-white/60">
+                    Max 4 Pics
                   </span>
                 </label>
-                <p className="text-[11px] text-red-500 font-medium mb-3 flex items-center gap-1">
-                  * คุณสามารถ <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">ลากวาง</kbd> หรือกด <kbd className="bg-red-50 px-1 rounded border border-red-200 text-red-600 font-bold">Ctrl + V</kbd> เพื่อเพิ่มรูปได้ทันที
-                </p>
 
                 <div 
-                  className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-3 rounded-2xl transition-all ${
-                    isDragging ? 'bg-blue-50 ring-2 ring-blue-400 ring-dashed scale-[1.02]' : ''
+                  className={`grid grid-cols-2 sm:grid-cols-4 gap-4 p-2 rounded-2xl transition-all ${
+                    isDragging ? 'bg-indigo-500/10 scale-[1.02]' : ''
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
                   {images.map((url, idx) => (
-                    <div key={`old-${idx}`} className="relative group aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden cursor-pointer">
-                      <img src={url} alt={`Task ${idx}`} className="w-full h-full object-cover" onClick={() => setPreviewImage(url)} />
-                      <button type="button" onClick={(e) => { e.stopPropagation(); removeOldImage(idx); }} className="absolute top-1 right-1 p-1 bg-white/90 rounded-md text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div key={`old-${idx}`} className="relative group aspect-square rounded-2xl bg-white/30 border border-white/50 overflow-hidden shadow-sm">
+                      <img src={url} alt={`Task ${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" onClick={() => setPreviewImage(url)} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); removeOldImage(idx); }} className="absolute top-1.5 right-1.5 p-1.5 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg scale-90 group-hover:scale-100">
                         <X size={14} />
                       </button>
                     </div>
                   ))}
 
                   {newImages.map((img, idx) => (
-                    <div key={`new-${idx}`} className="relative group aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden cursor-pointer">
-                      <img src={img.preview} alt={`upload-${idx}`} className="w-full h-full object-cover" onClick={() => setPreviewImage(img.preview)} />
-                      <button type="button" onClick={(e) => { e.stopPropagation(); removeNewImage(idx); }} className="absolute top-1 right-1 p-1 bg-white/90 rounded-md text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div key={`new-${idx}`} className="relative group aspect-square rounded-2xl bg-white/30 border border-white/50 overflow-hidden shadow-sm">
+                      <img src={img.preview} alt={`upload-${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" onClick={() => setPreviewImage(img.preview)} />
+                      <button type="button" onClick={(e) => { e.stopPropagation(); removeNewImage(idx); }} className="absolute top-1.5 right-1.5 p-1.5 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg scale-90 group-hover:scale-100">
                         <X size={14} />
                       </button>
                     </div>
                   ))}
 
                   {images.length + newImages.length < 4 && (
-                    <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-300 rounded-xl hover:bg-slate-50 hover:border-blue-400 cursor-pointer transition-colors">
-                      <UploadCloud size={24} className="text-slate-400 mb-1" />
-                      <span className="text-xs text-slate-500 font-medium">เพิ่มรูปภาพ</span>
+                    <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-white/60 rounded-2xl hover:bg-white/60 hover:border-blue-400 cursor-pointer transition-all group">
+                      <div className="p-3 bg-white/50 rounded-2xl text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all">
+                        <UploadCloud size={28} />
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tighter">Add Photo</span>
                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} />
                     </label>
                   )}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-4 text-center italic">
+                  * สามารถวางรูปภาพได้ทันทีด้วย Ctrl + V
+                </p>
               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-slate-900">รายละเอียดเพิ่มเติม (ตามตำแหน่ง)</h3>
+            {/* Custom Fields Area */}
+            <div className="pt-8 border-t border-white/30">
+              <div className="flex items-center justify-between mb-6 px-1">
+                <h3 className="text-[13px] font-black text-slate-600 uppercase tracking-wider">ข้อมูลเพิ่มเติมเฉพาะงาน</h3>
                 <button
                   type="button"
                   onClick={addCustomField}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-xs font-black text-blue-600 ios-glass-pill hover:bg-blue-500/10 transition-all"
                 >
                   <Plus size={16} />
                   เพิ่มหัวข้อ
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {customFields.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                    เพิ่มข้อมูลเพิ่มเติมของงานแบบอิสระ (เช่น รหัสพัสดุ, ลิงก์แนบไฟล์...)
-                  </p>
+                  <div className="py-10 text-center border-2 border-dashed border-white/50 rounded-3xl bg-white/10">
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">No extra fields added</p>
+                  </div>
                 ) : (
                   customFields.map((field, index) => (
-                    <div key={index} className="flex items-start gap-2">
-                      <div className="flex-1 space-y-2 sm:space-y-0 sm:flex sm:gap-2">
+                    <div key={index} className="flex items-center gap-3 p-3 bg-slate-50/50 rounded-2xl border border-slate-100 shadow-sm">
+                      <input
+                        type="text"
+                        placeholder="ชื่อหัวข้อ (เช่น เลขที่ PO)"
+                        value={field.key}
+                        onChange={e => updateCustomField(index, 'key', e.target.value)}
+                        className="w-1/3 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none font-bold text-slate-800 transition-all"
+                      />
                         <input
                           type="text"
-                          placeholder="ชื่อหัวข้อ"
-                          value={field.key}
-                          onChange={e => updateCustomField(index, 'key', e.target.value)}
-                          className="w-full sm:w-1/3 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                        />
-                        <input
-                          type="text"
-                          placeholder="รายละเอียด"
+                          placeholder="รายละเอียดข้อมูล"
                           value={field.value}
                           onChange={e => updateCustomField(index, 'value', e.target.value)}
-                          className="w-full sm:w-2/3 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                          className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 outline-none text-slate-600 transition-all"
                         />
-                      </div>
                       <button
                         type="button"
                         onClick={() => removeCustomField(index)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                        className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-500/10 rounded-xl transition-all"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={20} />
                       </button>
                     </div>
                   ))
@@ -434,20 +443,20 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3">
+        <div className="px-8 py-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors"
+            className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-white rounded-xl transition-all border border-slate-200"
           >
             ยกเลิก
           </button>
           <button
             type="submit"
             form="task-form"
-            className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm focus:ring-4 focus:ring-blue-100"
+            className="px-8 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
           >
-            บันทึกงาน
+            บันทึกข้อมูลงาน
           </button>
         </div>
       </div>

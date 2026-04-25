@@ -33,33 +33,36 @@ export const ConfirmModal = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      className="ios-glass-overlay p-4 !z-[70]"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl text-center animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-center mb-4">
-          <div className={`p-4 rounded-full ${type === 'danger' ? 'bg-red-50' : type === 'success' ? 'bg-green-50' : 'bg-blue-50'}`}>
-            {icons[type]}
+      <div className="ios-glass-card w-full max-w-sm p-8 text-center relative">
+        {/* Glow Accent */}
+        <div className={`absolute top-0 inset-x-0 h-1.5 ${type === 'danger' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500'} opacity-50`} />
+
+        <div className="flex justify-center mb-5">
+          <div className={`p-4 rounded-3xl ${type === 'danger' ? 'bg-red-500/10 text-red-600' : type === 'success' ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'} border border-current/10 shadow-inner`}>
+            {React.cloneElement(icons[type], { size: 36, className: "" })}
           </div>
         </div>
-        <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
-        <p className="text-slate-500 mb-6">{message}</p>
+        <h3 className="text-2xl font-black text-slate-800 mb-2">{title}</h3>
+        <p className="text-slate-600 font-medium mb-8 leading-relaxed px-2">{message}</p>
         
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3">
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 px-5 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-6 py-3.5 text-sm font-bold text-slate-500 ios-glass-pill hover:bg-white/40 transition-all disabled:opacity-50"
           >
             ยกเลิก
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 px-5 py-2.5 text-sm font-medium text-white rounded-xl transition-colors shadow-sm focus:ring-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${colors[type]}`}
+            className={`flex-1 px-6 py-3.5 text-sm font-black text-white rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 ${colors[type]}`}
           >
-            {isLoading && <RefreshCw size={16} className="animate-spin" />}
-            {isLoading ? 'กำลังดำเนินการ...' : 'ตกลง'}
+            {isLoading ? <RefreshCw size={18} className="animate-spin" /> : null}
+            {isLoading ? 'รอสักครู่...' : 'ยืนยัน'}
           </button>
         </div>
       </div>

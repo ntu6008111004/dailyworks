@@ -1,5 +1,16 @@
 [
+  "✅ Optimized Typography: ปรับปรุงฟอนต์ Kanit ให้อ่านง่ายขึ้น (เพิ่ม Letter Spacing & Line Height)",
+  "🎨 CSS Engine Fix: แก้ไขปัญหา Layout พังจากการโหลด Tailwind ผิดพลาด",
+  "📦 Local Font Integration: เปลี่ยนมาใช้ไฟล์ฟอนต์ Kanit จากในเครื่องโดยตรง (Headless Style)",
   "✨ Loading Modal Redesign: อัปเกรดเป็นธีม iOS 26 Liquid Glass พร้อม Water Blob และแมว Chibi วิ่งไล่กัน",
-  "📱 Premium Typography: เปลี่ยนฟอนต์ระบบเป็น Noto Sans Thai + Inter ให้ฟีลลิ่ง iPhone",
-  "🔄 Status Sync Fix: แก้ไขปัญหาเปลี่ยนสถานะแล้ว UI ดีดกลับ (Patch cache in-place)"
+  "🔄 Status Sync Fix: แก้ไขปัญหาเปลี่ยนสถานะแล้ว UI ดีดกลับ (Patch cache in-place)",
+  "💧 Dropdown Transparency Fixes: ปรับปรุงความทึบแสงของเมนูตัวเลือกและแถบตัวกรองเพื่อให้อ่านง่ายขึ้น",
+  "🚀 StatusTasksModal Migration: อัปเกรดโมดัลรายการงานตามสถานะเป็นธีม iOS 26 Liquid Glass",
+  "✨ Slim & Readable UI Transformation: ปรับปรุงสัดส่วนช่องกรอกข้อมูลให้เพรียวบาง (Slim) และสมส่วนขึ้นทั่วทั้งระบบ",
+  "✍️ Typography Clarity: ปรับลดความหนาของตัวหนังสือ (Font Weight) เพื่อลดปัญหาตัวหนังสือเบลอ/หนาเกินไป (Font Bleeding)",
+  "📅 Date Picker Overflow Fix: แก้ไขปัญหาตัวอักษรวันที่ล้นช่องกรอกข้อมูล โดยการขยายพื้นที่และปรับสัดส่วน Layout",
+  "☁️ Soft Modal UI Fix: ปรับปรุง TaskModal และ BriefingModal ให้ดูสะอาดตา (Clean & Professional) และใช้งานสบายตาขึ้น",
+  "🔍 Filter Bar Optimization: ปรับปรุงการจัดวาง Filter และความชัดเจนของช่องกรอกข้อมูลเพิ่มเติม (Custom Fields)",
+  "🎯 Space Reallocation: ปรับขนาดช่องแผนก/พนักงานให้เล็กลงพอดีๆ และคืนพื้นที่ให้ช่องค้นหา (Search Box) กว้างขึ้น",
+  "🗓️ Date Width Refinement: เพิ่มความกว้างช่องวันที่อีก 15% เพื่อให้อ่านเลขปี 2026 ได้ชัดเจน ไม่โดนตัดปลาย"
 ]

@@ -531,37 +531,33 @@ export const Tasks = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="glass p-4 rounded-2xl border-2 border-dashed border-slate-400 flex flex-col md:flex-row gap-4 items-end relative z-20">
-        <div className="flex-1 w-full relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+      <div className="ios-filter-glass px-6 py-3.5 rounded-2xl flex flex-col lg:flex-row gap-3 items-center relative z-20">
+        <div className="flex-1 w-full relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
           <input
             type="text"
             placeholder="ค้นหางาน หรือชื่อโปรเจค..."
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border-2 border-dashed border-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-400 transition-all font-semibold text-sm text-slate-900"
           />
         </div>
 
-        <div className="w-full md:w-auto flex flex-col sm:flex-row gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ตั้งแต่:</span>
-            <CustomDatePicker selectedDate={localStartDate} onChange={(date) => setLocalStartDate(date)} className="sm:w-36" borderDashed />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500 font-medium whitespace-nowrap">ถึง:</span>
-            <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} className="sm:w-36" borderDashed />
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row gap-3 items-center">
+          <div className="flex items-center gap-2 w-full lg:w-[370px]">
+            <CustomDatePicker selectedDate={localStartDate} onChange={(date) => setLocalStartDate(date)} borderDashed placeholder="ตั้งแต่" />
+            <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} borderDashed placeholder="ถึง" />
           </div>
 
           {(canSeeAll || userRole === 'Head') && (
-            <div className="flex items-center gap-2 flex-wrap text-black">
+            <div className="flex items-center gap-2 text-black w-full lg:w-auto">
               {canSeeAll && (
                 <CustomSelect
                   value={filterDepartment}
                   borderDashed
                   onChange={(val) => { setFilterDepartment(val); setFilterUser('All'); }}
                   options={['All', ...uniqueDepartments].map(d => ({ label: d === 'All' ? 'ทุกแผนก' : d, value: d }))}
-                  className="w-full sm:w-36"
+                  className="w-full lg:w-32"
                 />
               )}
               <CustomSelect
@@ -569,7 +565,7 @@ export const Tasks = () => {
                 borderDashed
                 onChange={(val) => setFilterUser(val)}
                 options={[{ label: 'พนง.ทั้งหมด', value: 'All' }, ...uniqueUserOptions]}
-                className="w-full sm:w-40"
+                className="w-full lg:w-40"
               />
             </div>
           )}
@@ -579,7 +575,7 @@ export const Tasks = () => {
             borderDashed
             onChange={(val) => setFilterStatus(val)}
             options={['All', ...Object.keys(statusColors).filter(s => s !== 'ล่าช้า' && s !== 'เกินกำหนด')].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
-            className="w-full sm:w-48"
+            className="w-full lg:w-44"
           />
 
           {hasActiveFilter && (
@@ -733,11 +729,11 @@ export const Tasks = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/80 backdrop-blur-sm border-b border-slate-200/60 sticky top-0 z-10">
                     <tr>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-16 text-center">ลำดับ</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">รายละเอียดงาน</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-32">กำหนดส่ง</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-36">สถานะ</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right pr-6 w-28">เครื่องมือ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16 text-center">ลำดับ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">รายละเอียดงาน</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-32">กำหนดส่ง</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center w-36">สถานะ</th>
+                      <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right pr-6 w-28">เครื่องมือ</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white">
