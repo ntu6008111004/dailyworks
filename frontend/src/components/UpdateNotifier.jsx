@@ -19,24 +19,26 @@ export const UpdateNotifier = () => {
       if (!res.ok) return;
       const data = await res.json();
       
-      if (data.timestamp > CURRENT_VERSION && CURRENT_VERSION !== 0) {
-        const timestampStr = String(data.timestamp);
+      const serverVersion = data.lastUpdated || data.timestamp || 0;
+      
+      if (serverVersion > CURRENT_VERSION && CURRENT_VERSION !== 0) {
+        const timestampStr = String(serverVersion);
         
         // If user already dismissed this specific update in this session, don't nag
         if (sessionStorage.getItem('dismissed_update') === timestampStr) {
           return;
         }
 
-        // If user clicked update but we are still stuck on the old version (stubborn cache or dev server)
+        // If user clicked update but we are still stuck on the old version
         if (sessionStorage.getItem('attempted_update') === timestampStr) {
           if (!sessionStorage.getItem('notified_stale_update')) {
             toast.error('ยังคงแสดงผลเวอร์ชันเก่า กรุณาล้างแคชเบราว์เซอร์ด้วยตนเอง (Ctrl+F5)', { duration: 5000, position: 'bottom-right' });
             sessionStorage.setItem('notified_stale_update', 'true');
           }
-          return; // Break the infinite loop
+          return; 
         }
 
-        setUpdateInfo(data);
+        setUpdateInfo({ ...data, timestamp: serverVersion });
       }
     } catch (err) {
       console.error('Failed to check for updates:', err);

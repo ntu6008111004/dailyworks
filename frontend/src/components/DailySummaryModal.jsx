@@ -68,8 +68,8 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
 
         <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">สรุปงานประจำวัน</h2>
-            <p className="text-[11px] font-extrabold text-emerald-600 uppercase tracking-widest mt-1">LINE Report Generator</p>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">สรุปงานประจำวัน</h2>
+            <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest mt-1">LINE Report Generator</p>
           </div>
           <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all border border-slate-200">
             <X size={22} />
@@ -86,9 +86,34 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
           </div>
 
           <div className="space-y-3">
-            <label className="block text-[13px] font-black text-slate-500 mb-2 uppercase tracking-wider ml-1">ตัวอย่างข้อความที่จะส่ง</label>
-            <div className="w-full px-6 py-5 bg-white/40 border border-white/50 rounded-3xl min-h-[180px] whitespace-pre-wrap text-sm text-slate-800 font-bold leading-relaxed shadow-inner">
-              {summaryText}
+            <label className="block text-[13px] font-bold text-slate-500 mb-2 uppercase tracking-wider ml-1">ตัวอย่างข้อความที่จะส่ง</label>
+            <div className="w-full px-6 py-5 bg-slate-50/50 border border-slate-200 rounded-3xl min-h-[180px] whitespace-pre-wrap text-[14px] text-slate-800 leading-loose shadow-inner">
+              <div className="font-bold mb-4">
+                ชื่อ: {user?.Name || '-'}<br />
+                ตำแหน่ง: {positionName || '-'}<br />
+                สรุปผลการปฏิบัติงาน<br />
+                วันที่ {format(new Date(date), 'dd MMMM yyyy', { locale: th })}
+              </div>
+              
+              <div className="space-y-3">
+                {activeTasks.length === 0 ? (
+                  <p className="italic text-slate-400">- ไม่มีข้อมูลงานในวันนี้ -</p>
+                ) : (
+                  activeTasks.map((t, i) => (
+                    <div key={i} className="flex flex-col">
+                      <span className="font-bold">
+                        {i + 1}. {t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : ''}
+                      </span>
+                      <span className="font-normal text-slate-600 pl-4">
+                        - {t.Detail}
+                      </span>
+                      <span className="font-bold text-slate-500 text-[12px] pl-4">
+                        (สถานะ: {t.Status})
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
