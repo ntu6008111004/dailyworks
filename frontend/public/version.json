@@ -1,9 +1,9 @@
 {
-  "version": "1.1.28",
-  "lastUpdated": 1777129100000,
+  "version": "1.1.29",
+  "lastUpdated": 1777129500000,
   "changelog": [
-    "🛡️ Popup Visibility Fix: ปรับปรุงความทึบแสงของหน้าต่างยืนยัน (Confirm Modal) และหน้าต่างแจ้งเตือน (Update Notifier) ให้อ่านง่ายขึ้น ไม่โปร่งใสจนเกินไป",
-    "🎨 UI Consistency: เปลี่ยนมาใช้ ios-soft-card ทั่วทั้งระบบเพื่อความชัดเจนและความสวยงามแบบพรีเมียม",
-    "👁️ Contrast Enhancement: เพิ่มความเข้มของพื้นหลัง Overlay เพื่อให้ตัว Popup โดดเด่นขึ้น"
+    "🏛️ Solid Modal Overhaul: ปรับปรุง Modal ทั้งหมดในระบบ (CRUD, Noti, Version) ให้ทึบแสง 100% เพื่อความชัดเจนสูงสุด",
+    "🌑 Enhanced Overlay: ปรับปรุงพื้นหลัง Overlay ให้มืดและนุ่มนวลขึ้น ช่วยขับให้หน้าต่าง Modal โดดเด่นและอ่านง่าย",
+    "🎨 Global Style Standardization: จัดระเบียบคลาส CSS สำหรับ Modal ให้เป็นมาตรฐานเดียวกันทั่วทั้งระบบ"
   ]
 }

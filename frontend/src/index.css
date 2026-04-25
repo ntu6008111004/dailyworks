@@ -177,35 +177,31 @@
   /* ═══ iOS 26 Liquid Glass System ═══ */
   .ios-glass-overlay {
     position: fixed; inset: 0; z-index: 999;
-    background: linear-gradient(135deg, rgba(255,255,255,0.40), rgba(230,235,248,0.50) 50%, rgba(255,255,255,0.40));
-    backdrop-filter: blur(60px) saturate(210%);
-    -webkit-backdrop-filter: blur(60px) saturate(210%);
-    display: flex; align-items: center; justify-content: center; p: 4;
-    animation: iosFadeIn 0.5s ease-out;
+    background: rgba(15, 23, 42, 0.65); /* Darker, more solid overlay */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+    animation: iosFadeIn 0.4s ease-out;
   }
 
   .ios-glass-card {
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(50px) saturate(200%);
-    -webkit-backdrop-filter: blur(50px) saturate(200%);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 1);
     border-radius: 40px;
     box-shadow: 
-      0 25px 70px rgba(0, 0, 0, 0.08),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+      0 25px 70px rgba(0, 0, 0, 0.12),
+      0 10px 20px rgba(0, 0, 0, 0.05);
     overflow: hidden;
     animation: iosCardUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .ios-soft-card {
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 1);
+    background: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 1);
     border-radius: 36px;
     box-shadow: 
-      0 30px 100px rgba(0, 0, 0, 0.1),
-      0 10px 30px rgba(0, 0, 0, 0.05);
+      0 40px 120px rgba(0, 0, 0, 0.15),
+      0 10px 40px rgba(0, 0, 0, 0.08);
     overflow: hidden;
     animation: iosCardUp 0.5s cubic-bezier(0.2, 1, 0.3, 1);
   }
