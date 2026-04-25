@@ -9,6 +9,7 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
   const { getPositionName } = useAuth();
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [copied, setCopied] = useState(false);
+  const [showFullDetail, setShowFullDetail] = useState(true);
 
   if (!isOpen) return null;
 
@@ -45,7 +46,7 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
   } else {
     activeTasks.forEach((t, i) => {
       const projectStr = t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : '';
-      const detailStr = (user?.Permissions?.showFullTaskDetail !== false) ? t.Detail : '';
+      const detailStr = (showFullDetail && user?.Permissions?.showFullTaskDetail !== false) ? t.Detail : '';
       summaryText += `${i + 1}. ${projectStr}${detailStr} (สถานะ: ${t.Status})\n`;
     });
   }
@@ -86,7 +87,20 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
           </div>
 
           <div className="space-y-3">
-            <label className="block text-[13px] font-bold text-slate-500 mb-2 uppercase tracking-wider ml-1">ตัวอย่างข้อความที่จะส่ง</label>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <label className="block text-[13px] font-bold text-slate-500 uppercase tracking-wider ml-1">ตัวอย่างข้อความที่จะส่ง</label>
+              <button 
+                onClick={() => setShowFullDetail(!showFullDetail)}
+                className={`text-[11px] font-black px-4 py-1.5 rounded-full transition-all flex items-center gap-2 border ${
+                  showFullDetail 
+                    ? 'bg-blue-500/10 text-blue-600 border-blue-200' 
+                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${showFullDetail ? 'bg-blue-500 animate-pulse' : 'bg-slate-300'}`} />
+                {showFullDetail ? 'ซ่อนรายละเอียด' : 'แสดงรายละเอียด'}
+              </button>
+            </div>
             <div className="w-full px-6 py-5 bg-slate-50/50 border border-slate-200 rounded-3xl min-h-[180px] whitespace-pre-wrap text-[14px] text-slate-800 leading-loose shadow-inner">
               <div className="font-bold mb-4">
                 ชื่อ: {user?.Name || '-'}<br />
@@ -104,9 +118,11 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
                       <span className="font-bold">
                         {i + 1}. {t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : ''}
                       </span>
-                      <span className="font-normal text-slate-600 pl-4">
-                        - {t.Detail}
-                      </span>
+                      {showFullDetail && (
+                        <span className="font-normal text-slate-600 pl-4">
+                          - {t.Detail}
+                        </span>
+                      )}
                       <span className="font-bold text-slate-500 text-[12px] pl-4">
                         (สถานะ: {t.Status})
                       </span>

@@ -9,6 +9,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
   const { getPositionName } = useAuth();
   const [monthStr, setMonthStr] = useState(format(new Date(), 'yyyy-MM'));
   const [copied, setCopied] = useState(false);
+  const [showFullDetail, setShowFullDetail] = useState(true);
 
   // Filter tasks that belong to this month
   const activeTasks = useMemo(() => {
@@ -90,7 +91,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
           text += `📌 ${status} (${grouped[status].length} งาน):\n`;
           grouped[status].forEach((t, i) => {
             const projectStr = t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : '';
-            const detailStr = (user?.Permissions?.showFullTaskDetail !== false) ? t.Detail : '';
+            const detailStr = (showFullDetail && user?.Permissions?.showFullTaskDetail !== false) ? t.Detail : '';
             text += `  ${i + 1}. ${projectStr}${detailStr}\n`;
           });
           text += '\n';
@@ -101,7 +102,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
     } catch {
       return '';
     }
-  }, [activeTasks, monthStr, user, getPositionName, isOpen]);
+  }, [activeTasks, monthStr, user, getPositionName, isOpen, showFullDetail]);
 
   if (!isOpen) return null;
 
@@ -191,7 +192,20 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
           {/* Right Column: Text Preview */}
           <div className="w-full lg:w-7/12 flex flex-col h-full min-h-[400px]">
             <div className="flex justify-between items-center mb-3 px-1">
-              <label className="block text-[13px] font-bold text-slate-500 uppercase tracking-wider">ตัวอย่างข้อความรายงาน</label>
+              <div className="flex items-center gap-4">
+                <label className="block text-[13px] font-bold text-slate-500 uppercase tracking-wider">ตัวอย่างข้อความรายงาน</label>
+                <button 
+                  onClick={() => setShowFullDetail(!showFullDetail)}
+                  className={`text-[10px] font-black px-3 py-1 rounded-full transition-all flex items-center gap-2 border ${
+                    showFullDetail 
+                      ? 'bg-sky-500/10 text-sky-600 border-sky-200' 
+                      : 'bg-slate-100 text-slate-500 border-slate-200'
+                  }`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${showFullDetail ? 'bg-sky-500 animate-pulse' : 'bg-slate-300'}`} />
+                  {showFullDetail ? 'ซ่อนรายละเอียด' : 'แสดงรายละเอียด'}
+                </button>
+              </div>
               <button 
                 onClick={handleCopy} 
                 className={`flex items-center gap-2 px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-md ${
@@ -234,9 +248,11 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
                               <span className="font-bold text-slate-700">
                                 {i + 1}. {t.CustomFields?.Project ? `[${t.CustomFields.Project}] ` : ''}
                               </span>
-                              <span className="font-normal text-slate-600 pl-4">
-                                - {t.Detail}
-                              </span>
+                              {showFullDetail && (
+                                <span className="font-normal text-slate-600 pl-4">
+                                  - {t.Detail}
+                                </span>
+                              )}
                             </div>
                           ))}
                         </div>
