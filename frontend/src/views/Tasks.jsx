@@ -397,21 +397,24 @@ export const Tasks = () => {
 
   const handleStatusChange = async (task, newStatus) => {
     const oldStatus = task.Status;
+    const taskId = task.ID;
     // Optimistic update: เปลี่ยน UI ทันที
-    setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
+    setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
     try {
       // ใช้ updateTaskStatus ที่ patch cache แทนการ clearCache ทั้งหมด
       // เพื่อป้องกัน fetchPage ที่ run concurrent จากการดึงข้อมูลเก่ามาทับ
-      await apiService.updateTaskStatus(task.ID, newStatus);
-      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: 'success' } : t));
+      await apiService.updateTaskStatus(taskId, newStatus);
+      setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: 'success' } : t));
       setTimeout(() => {
-        setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, syncState: null } : t));
+        setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: null } : t));
+        // Silently fetch to ensure data is completely synced
+        fetchPage(currentPage, true);
       }, 1500);
       toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
     } catch (error) {
       // Rollback ถ้า API ล้มเหลว
-      setTasks(prev => prev.map(t => t.ID === task.ID ? { ...t, Status: oldStatus, syncState: null } : t));
-      apiService.mutatePagesCache({ ID: task.ID, Status: oldStatus });
+      setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: oldStatus, syncState: null } : t));
+      apiService.mutatePagesCache({ ID: taskId, Status: oldStatus });
       toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
     }
   };
