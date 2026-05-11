@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
@@ -247,10 +248,15 @@ export const Briefing = () => {
 
   const StatusDropdown = ({ briefing, currentStatus, isOpen, onToggle }) => {
     const dropdownRef = React.useRef(null);
+    const buttonRef = React.useRef(null);
+    const [dropdownStyles, setDropdownStyles] = useState({});
 
     useEffect(() => {
       const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        if (
+          dropdownRef.current && !dropdownRef.current.contains(event.target) &&
+          buttonRef.current && !buttonRef.current.contains(event.target)
+        ) {
           if (isOpen) onToggle(null);
         }
       };
@@ -258,9 +264,44 @@ export const Briefing = () => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen, onToggle]);
 
+    useEffect(() => {
+      const handleScrollOrResize = (e) => {
+        if (!isOpen) return;
+        if (dropdownRef.current && dropdownRef.current.contains(e.target)) return;
+        onToggle(null);
+      };
+
+      if (isOpen) {
+        window.addEventListener('scroll', handleScrollOrResize, true);
+        window.addEventListener('resize', handleScrollOrResize);
+        
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const spaceAbove = rect.top;
+          const isDropUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+          
+          setDropdownStyles({
+            position: 'fixed',
+            left: rect.left,
+            top: isDropUp ? 'auto' : rect.bottom + 4,
+            bottom: isDropUp ? window.innerHeight - rect.top + 4 : 'auto',
+            width: 128,
+            zIndex: 999999,
+          });
+        }
+      }
+
+      return () => {
+        window.removeEventListener('scroll', handleScrollOrResize, true);
+        window.removeEventListener('resize', handleScrollOrResize);
+      };
+    }, [isOpen, onToggle]);
+
     return (
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative">
         <button
+          ref={buttonRef}
           onClick={(e) => { e.stopPropagation(); onToggle(isOpen ? null : briefing.ID); }}
           className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[currentStatus] || statusColors['รอดำเนินการ']}`}
         >
@@ -268,8 +309,8 @@ export const Briefing = () => {
           <RefreshCw size={10} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
         
-        {isOpen && (
-          <div className="absolute left-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-slate-200 p-1 py-1.5 z-[110]">
+        {isOpen && createPortal(
+          <div ref={dropdownRef} style={dropdownStyles} className="bg-white/90 backdrop-blur-xl rounded-xl shadow-2xl border border-slate-200/60 p-1 py-1.5 z-[999999] animate-in fade-in zoom-in-95 duration-150">
             {Object.entries(statusColors).filter(([s]) => s !== 'Overdue').map(([status, color]) => (
               <button
                 key={status}
@@ -278,13 +319,14 @@ export const Briefing = () => {
                   onToggle(null);
                   if (status !== currentStatus) handleStatusChange(briefing, status);
                 }}
-                className="w-full text-left px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 transition-colors mb-0.5 last:mb-0 flex items-center gap-1.5"
+                className="w-full text-left px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-100 transition-colors mb-0.5 last:mb-0 flex items-center gap-1.5"
               >
                 <div className={`w-2 h-2 rounded-full ${color.split(' ')[0]}`}></div>
                 {status}
               </button>
             ))}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
