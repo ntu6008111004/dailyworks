@@ -17,5 +17,6 @@
   "🔔 Update Fix: แก้ไขระบบแจ้งเตือนเวอร์ชันใหม่ให้ทำงานได้ถูกต้อง (รองรับ timestamp/lastUpdated)",
   "🛡️ Modal Clarity Fix: แก้ไข Popup โปร่งใสเกินไป (เปลี่ยนมาใช้ ios-soft-card + เพิ่ม Contrast พื้นหลัง)",
   "🏛️ Full Solid Modal: ปรับปรุง Modal ทั้งหมดให้เป็นสีขาวทึบ 100% (Solid White) เพื่อความชัดเจนสูงสุด",
-  "📑 Task Detail Toggle: เพิ่มปุ่มเปิด-ปิดการแสดงรายละเอียดงานในหน้าสรุปรายงานประจำวันและรายเดือน (Contextual Copy)"
+  "📑 Task Detail Toggle: เพิ่มปุ่มเปิด-ปิดการแสดงรายละเอียดงานในหน้าสรุปรายงานประจำวันและรายเดือน (Contextual Copy)",
+  "🐛 Dropdown Z-Index Fix: แก้ไขปัญหาเมนูเปลี่ยนสถานะจมใต้ตารางหน้าระบบบรีฟงาน (Briefing Work) ด้วยการใช้ React Portal"
 ]

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
 export const CustomSelect = ({ 
@@ -12,20 +13,45 @@ export const CustomSelect = ({
   borderDashed = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [dropdownStyles, setDropdownStyles] = useState({});
   const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (
+        containerRef.current && !containerRef.current.contains(event.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Update position on window resize or scroll
+  useEffect(() => {
+    const handleScrollOrResize = (e) => {
+      if (!isOpen) return;
+      // Don't close if scrolling inside the dropdown
+      if (dropdownRef.current && dropdownRef.current.contains(e.target)) return;
+      
+      setIsOpen(false);
+    };
+
+    if (isOpen) {
+      window.addEventListener('scroll', handleScrollOrResize, true);
+      window.addEventListener('resize', handleScrollOrResize);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [isOpen]);
 
   const handleToggle = () => {
     if (!isOpen && containerRef.current) {
@@ -34,7 +60,17 @@ export const CustomSelect = ({
       const spaceAbove = rect.top;
       
       // If less than 250px below and more space above, drop up
-      setDropUp(spaceBelow < 250 && spaceAbove > spaceBelow);
+      const isDropUp = spaceBelow < 250 && spaceAbove > spaceBelow;
+      
+      setDropdownStyles({
+        position: 'fixed',
+        width: rect.width,
+        left: rect.left,
+        top: isDropUp ? 'auto' : rect.bottom + 8,
+        bottom: isDropUp ? window.innerHeight - rect.top + 8 : 'auto',
+        zIndex: 999999,
+      });
+      
       setSearchTerm(''); // clear search on open
     }
     setIsOpen(!isOpen);
@@ -83,11 +119,11 @@ export const CustomSelect = ({
         />
       </button>
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div 
-          className={`absolute left-0 right-0 z-[100] min-w-[200px] ios-dropdown-glass overflow-hidden rounded-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 shadow-2xl
-            ${dropUp ? 'bottom-full mb-2' : 'top-full mt-2'}
-          `}
+          ref={dropdownRef}
+          className={`ios-dropdown-glass overflow-hidden rounded-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 shadow-2xl`}
+          style={dropdownStyles}
         >
           {searchable && (
             <div className="p-2 border-b border-slate-100/50 mb-1">
@@ -111,7 +147,7 @@ export const CustomSelect = ({
               const isSelected = optVal === value;
 
               return (
-                <button
+               <button
                   key={index}
                   type="button"
                   onClick={() => handleSelect(optVal)}
@@ -125,7 +161,8 @@ export const CustomSelect = ({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
