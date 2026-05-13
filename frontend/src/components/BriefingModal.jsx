@@ -216,7 +216,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       let currentStatus = myResponse.Status;
       const isFirstRecord = !responses.find(r => String(r.UserID) === String(user?.ID || ''));
       const hasContent = myResponse.ResultImages.length > 0 || myResponse.URL1 || myResponse.URL2 || myResponse.Note;
-      
+
       if (currentStatus === 'รอแก้ไข') {
         currentStatus = 'รอตรวจ';
       }

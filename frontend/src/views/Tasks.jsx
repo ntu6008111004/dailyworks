@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, ChevronDown, Settings, List, LayoutGrid } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, ChevronDown, Settings, List, LayoutGrid, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -136,6 +136,9 @@ export const Tasks = () => {
     return '';
   });
 
+  const [sortBy, setSortBy] = useState('DueDate');
+  const [sortOrder, setSortOrder] = useState('DESC');
+
   // Debounce search input to avoid excessive API calls
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -203,14 +206,33 @@ export const Tasks = () => {
     userName,
     userDept,
     userId: String(user?.ID || user?.id || ''),
-  }), [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate, userRole, userName, userDept, user]);
+    sortBy,
+    sortOrder,
+  }), [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate, userRole, userName, userDept, user, sortBy, sortOrder]);
 
   const fetchPage = useCallback(async (page, isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
       const limit = viewMode === 'table' ? 1000 : ITEMS_PER_PAGE;
       const result = await apiService.getTasksPaged(page, limit, buildFilters());
-      setTasks(result.tasks || []);
+      
+      let pagedTasks = result.tasks || [];
+      
+      // Frontend sorting fallback to ensure UI matches the sort state
+      if (pagedTasks.length > 0) {
+        pagedTasks = [...pagedTasks].sort((a, b) => {
+          const valA = a[sortBy] ? new Date(a[sortBy]).getTime() : 0;
+          const valB = b[sortBy] ? new Date(b[sortBy]).getTime() : 0;
+          
+          if (sortOrder === 'ASC') {
+            return valA - valB;
+          } else {
+            return valB - valA;
+          }
+        });
+      }
+
+      setTasks(pagedTasks);
       setTotalCount(result.totalCount || 0);
       setTotalPages(result.totalPages || 1);
       setCurrentPage(result.currentPage || page);
@@ -252,11 +274,11 @@ export const Tasks = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch page 1 whenever any filter changes
+  // Re-fetch page 1 whenever any filter or sort changes
   useEffect(() => {
     fetchPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate]);
+  }, [searchQuery, filterStatus, filterDepartment, filterUser, localStartDate, localEndDate, sortBy, sortOrder]);
 
   // Lock to current month when switching to Table View
   useEffect(() => {
@@ -390,7 +412,6 @@ export const Tasks = () => {
     'ยังไม่เริ่ม': 'bg-slate-100 text-slate-800 border border-slate-300',
     'กำลังทำ': 'bg-blue-100 text-blue-800 border-2 border-blue-400',
     'รอตรวจ': 'bg-purple-100 text-purple-800 border-2 border-purple-400',
-    'รอแก้ไข': 'bg-amber-100 text-amber-800 border-2 border-amber-400',
     'เสร็จสิ้น': 'bg-green-100 text-green-800 border-2 border-green-500 shadow-sm font-bold',
     'ล่าช้า': 'bg-red-100 text-red-800 border-2 border-red-500 shadow-sm font-bold',
   };
@@ -577,9 +598,29 @@ export const Tasks = () => {
             value={filterStatus}
             borderDashed
             onChange={(val) => setFilterStatus(val)}
-            options={['All', ...Object.keys(statusColors).filter(s => s !== 'ล่าช้า' && s !== 'เกินกำหนด')].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
+            options={['All', ...Object.keys(statusColors).filter(s => s !== 'ล่าช้า' && s !== 'เกินกำหนด' && s !== 'รอแก้ไข')].map(s => ({ label: s === 'All' ? 'งานทั้งหมด' : s, value: s }))}
             className="w-full lg:w-44"
           />
+
+          <div className="flex items-center bg-white border border-slate-300 rounded-xl overflow-hidden shrink-0 h-[42px]">
+            <button
+              onClick={() => {
+                if (sortBy === 'DueDate') {
+                  setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC');
+                } else {
+                  setSortBy('DueDate');
+                  setSortOrder('DESC');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition-colors h-full ${sortBy === 'DueDate' ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+              title="เรียงตามวันกำหนดส่ง"
+            >
+              {sortBy === 'DueDate' ? (
+                sortOrder === 'ASC' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+              ) : <ArrowUpDown size={14} />}
+              <span>วันส่ง</span>
+            </button>
+          </div>
 
           {hasActiveFilter && (
             <button

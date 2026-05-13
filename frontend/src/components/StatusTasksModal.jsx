@@ -44,7 +44,6 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
     'ทั้งหมด': 'text-blue-900 bg-blue-100',
     'กำลังทำ': 'text-blue-900 bg-blue-100',
     'ยังไม่เริ่ม': 'text-slate-800 bg-slate-200',
-    'รอแก้ไข': 'text-amber-900 bg-amber-200',
     'รอตรวจ': 'text-purple-900 bg-purple-200',
     'เสร็จสิ้น': 'text-green-900 bg-green-200',
     'เกินกำหนด': 'text-red-900 bg-red-200',

@@ -294,7 +294,6 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                     'ยังไม่เริ่ม',
                     'กำลังทำ',
                     'รอตรวจ',
-                    'รอแก้ไข',
                     'เสร็จสิ้น'
                   ]}
                 />

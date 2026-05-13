@@ -16,7 +16,6 @@ const STATUS_COLORS = {
   'ยังไม่เริ่ม': 'bg-slate-200 text-slate-700',
   'กำลังทำ':    'bg-blue-500 text-white',
   'รอตรวจ':    'bg-purple-500 text-white',
-  'รอแก้ไข':   'bg-amber-400 text-amber-900',
   'เสร็จสิ้น': 'bg-emerald-500 text-white',
 };
 

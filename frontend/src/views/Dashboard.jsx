@@ -118,7 +118,6 @@ export const Dashboard = () => {
     const statusData = [
       { name: 'ยังไม่เริ่ม', value: statusCounts['ยังไม่เริ่ม'] || 0, color: '#94a3b8' },
       { name: 'กำลังทำ', value: statusCounts['กำลังทำ'] || 0, color: '#3b82f6' },
-      { name: 'รอแก้ไข', value: statusCounts['รอแก้ไข'] || 0, color: '#fbbf24' },
       { name: 'รอตรวจ', value: statusCounts['รอตรวจ'] || 0, color: '#c084fc' },
       { name: 'เสร็จสิ้น', value: statusCounts['เสร็จสิ้น'] || 0, color: '#22c55e' }
     ].filter(s => s.value > 0);
@@ -253,20 +252,6 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div 
-          onClick={() => { setSelectedStatus('รอแก้ไข'); setIsStatusModalOpen(true); }}
-          className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-amber-400 cursor-pointer hover:shadow-md transition-all border-y border-r border-transparent hover:border-amber-200"
-        >
-          <div className="p-3 bg-amber-100 text-amber-600 rounded-xl">
-            <AlertTriangle size={24} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-slate-500">รอแก้ไข</p>
-            <p className="text-2xl font-bold text-amber-600">
-              {filteredTasks.filter(t => t.Status === 'รอแก้ไข').length}
-            </p>
-          </div>
-        </div>
 
         <div 
           onClick={() => { setSelectedStatus('รอตรวจ'); setIsStatusModalOpen(true); }}
