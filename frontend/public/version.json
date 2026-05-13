@@ -1,5 +1,5 @@
 {
-  "lastUpdated": 1778485141546,
+  "lastUpdated": 1778665190404,
   "changelog": [
     "🐛 Dropdown Z-Index Fix: แก้ไขปัญหาเมนูเปลี่ยนสถานะจมใต้ตารางหน้าระบบบรีฟงาน (Briefing Work) ด้วยการใช้ React Portal"
   ]

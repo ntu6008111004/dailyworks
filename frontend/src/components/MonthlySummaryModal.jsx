@@ -47,7 +47,6 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
       'เสร็จสิ้น': 0,
       'กำลังทำ': 0,
       'รอตรวจ': 0,
-      'รอแก้ไข': 0,
       'ยังไม่เริ่ม': 0
     };
     activeTasks.forEach(t => {
@@ -57,7 +56,6 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
        { name: 'เสร็จสิ้น', value: s['เสร็จสิ้น'], color: '#22c55e' },
        { name: 'กำลังทำ', value: s['กำลังทำ'], color: '#3b82f6' },
        { name: 'รอตรวจ', value: s['รอตรวจ'], color: '#a855f7' },
-       { name: 'รอแก้ไข', value: s['รอแก้ไข'], color: '#f59e0b' },
        { name: 'ยังไม่เริ่ม', value: s['ยังไม่เริ่ม'], color: '#94a3b8' }
     ].filter(i => i.value > 0);
   }, [activeTasks]);
@@ -84,7 +82,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
         grouped[t.Status].push(t);
       });
 
-      const statusOrder = ['เสร็จสิ้น', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'ยังไม่เริ่ม'];
+      const statusOrder = ['เสร็จสิ้น', 'กำลังทำ', 'รอตรวจ', 'ยังไม่เริ่ม'];
       
       statusOrder.forEach(status => {
         if (grouped[status] && grouped[status].length > 0) {
@@ -232,7 +230,7 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
                     if (!grouped[t.Status]) grouped[t.Status] = [];
                     grouped[t.Status].push(t);
                   });
-                  const statusOrder = ['เสร็จสิ้น', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'ยังไม่เริ่ม'];
+                  const statusOrder = ['เสร็จสิ้น', 'กำลังทำ', 'รอตรวจ', 'ยังไม่เริ่ม'];
                   
                   return statusOrder.map(status => {
                     if (!grouped[status] || grouped[status].length === 0) return null;
