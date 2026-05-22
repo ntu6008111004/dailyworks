@@ -1,9 +1,28 @@
 const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
 
-// Simple in-memory cache and request deduplication
+// ───────────────────────────────────────────────────────────────────────────
+// Tiered in-memory cache — different TTLs for different data types
+// ───────────────────────────────────────────────────────────────────────────
 const cache = new Map();
 const pendingRequests = new Map();
-const CACHE_TTL = 15 * 1000; // 15 seconds (reduced from 5 mins)
+let lastMutationAt = 0;  // Tracks when the last data mutation happened
+
+// Tiered TTL config (milliseconds)
+const CACHE_TTL = {
+  getTasksSummary: 30 * 1000,   // 30s — tasks change often
+  getTasksPaged:   30 * 1000,   // 30s
+  getTasks:        30 * 1000,   // 30s
+  getUsers:        120 * 1000,  // 2min — users rarely change
+  init:            120 * 1000,  // 2min — init data is stable
+  getPositions:    300 * 1000,  // 5min — positions almost never change
+  getBriefings:    30 * 1000,   // 30s
+  getBriefingResponses: 30 * 1000,
+  _default:        30 * 1000,
+};
+
+function getTTL(action) {
+  return CACHE_TTL[action] || CACHE_TTL._default;
+}
 
 export const apiService = {
   executorId: 'System',
@@ -20,6 +39,20 @@ export const apiService = {
 
   clearCache() {
     cache.clear();
+    window.dispatchEvent(new CustomEvent('cache-cleared'));
+  },
+
+  // Selective cache invalidation — only clear keys matching specific actions
+  clearCacheFor(...actions) {
+    lastMutationAt = Date.now();  // Mark mutation time
+    for (const [key] of cache) {
+      try {
+        const parsed = JSON.parse(key);
+        if (actions.includes(parsed.action)) {
+          cache.delete(key);
+        }
+      } catch { /* skip non-JSON keys */ }
+    }
     window.dispatchEvent(new CustomEvent('cache-cleared'));
   },
 
@@ -56,14 +89,32 @@ export const apiService = {
 
   async request(action, data = {}, options = { useCache: false }) {
     const cacheKey = options.useCache ? JSON.stringify({ action, data }) : null;
+    const ttl = getTTL(action);
 
     if (cacheKey) {
       if (cache.has(cacheKey)) {
         const cached = cache.get(cacheKey);
-        if (Date.now() - cached.timestamp < CACHE_TTL) {
-          return cached.data;
+        const age = Date.now() - cached.timestamp;
+
+        // If cache was created BEFORE the last mutation, skip it entirely
+        // This ensures users always see fresh data after editing
+        const createdBeforeMutation = cached.timestamp < lastMutationAt;
+
+        if (age < ttl && !createdBeforeMutation) {
+          return cached.data;  // Fresh & no mutation since — return immediately
         }
-        cache.delete(cacheKey); // Expired
+
+        // Stale-while-revalidate: return stale data immediately,
+        // then refresh in background for next request
+        // BUT: skip this if there was a recent mutation (force fresh fetch)
+        if (age < ttl * 3 && !createdBeforeMutation) {
+          if (!pendingRequests.has(cacheKey)) {
+            this._fetchAndCache(action, data, cacheKey, ttl);
+          }
+          return cached.data;  // Return stale immediately
+        }
+
+        cache.delete(cacheKey);  // Too old — discard
       }
 
       if (pendingRequests.has(cacheKey)) {
@@ -71,9 +122,13 @@ export const apiService = {
       }
     }
 
+    return this._fetchAndCache(action, data, cacheKey, ttl);
+  },
+
+  // Internal: performs the actual fetch and updates cache
+  async _fetchAndCache(action, data, cacheKey, ttl) {
     const fetchPromise = (async () => {
       try {
-        // Add cache-busting timestamp to URL
         const urlWithBuster = new URL(GAS_URL);
         urlWithBuster.searchParams.set('t', Date.now());
 
@@ -81,7 +136,6 @@ export const apiService = {
           'Content-Type': 'text/plain', // Avoid CORS preflight options
         };
 
-        // If a modern API key is configured, add it to headers
         const apiKey = import.meta.env.VITE_API_KEY;
         if (apiKey) {
           headers['x-api-key'] = apiKey;
@@ -149,7 +203,7 @@ export const apiService = {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
     return this.request('addTask', data).then(res => {
-      this.clearCache();
+      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
       return res;
     });
   },
@@ -158,7 +212,7 @@ export const apiService = {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
     return this.request('updateTask', data).then(res => {
-      this.clearCache();
+      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
       return res;
     });
   },
@@ -179,7 +233,7 @@ export const apiService = {
 
   deleteTask(id) {
     return this.request('deleteTask', { id }).then(res => {
-      this.clearCache();
+      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
       return res;
     });
   },
@@ -190,18 +244,18 @@ export const apiService = {
 
   addUser(user) {
     if (user.Password) user.Password = btoa(user.Password);
-    this.clearCache();
+    this.clearCacheFor('getUsers', 'init');
     return this.request('addUser', user);
   },
 
   updateUser(user) {
     if (user.Password && !user.Password.endsWith('==')) user.Password = btoa(user.Password);
-    this.clearCache();
+    this.clearCacheFor('getUsers', 'init');
     return this.request('updateUser', user);
   },
 
   deleteUser(id) {
-    this.clearCache();
+    this.clearCacheFor('getUsers', 'init');
     return this.request('deleteUser', { id });
   },
 
@@ -222,15 +276,15 @@ export const apiService = {
     return this.request('getPositions', {}, { useCache: true });
   },
   addPosition(data) {
-    this.clearCache();
+    this.clearCacheFor('getPositions', 'init');
     return this.request('addPosition', data);
   },
   updatePosition(data) {
-    this.clearCache();
+    this.clearCacheFor('getPositions', 'init');
     return this.request('updatePosition', data);
   },
   deletePosition(id) {
-    this.clearCache();
+    this.clearCacheFor('getPositions', 'init');
     return this.request('deletePosition', { id });
   },
   migratePositionsSheet() {
@@ -254,22 +308,22 @@ export const apiService = {
     return this.request('getBriefings', {}, { useCache: false });
   },
   addBriefing(data) {
-    this.clearCache();
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return this.request('addBriefing', data);
   },
   updateBriefing(data) {
-    this.clearCache();
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return this.request('updateBriefing', data);
   },
   deleteBriefing(id) {
-    this.clearCache();
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return this.request('deleteBriefing', { id });
   },
   getBriefingResponses(briefingId) {
     return this.request('getBriefingResponses', { briefingId }, { useCache: true });
   },
   saveBriefingResponse(data) {
-    this.clearCache();
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return this.request('saveBriefingResponse', data);
   },
   migrateUsersAddBriefingPermissions() {
@@ -281,7 +335,7 @@ export const apiService = {
 
   // Role/Permissions update (re-uses updateUser)
   updateUserPermissions(userId, permissions) {
-    this.clearCache();
+    this.clearCacheFor('getUsers', 'init');
     return this.request('updateUser', { ID: userId, Permissions: permissions });
   },
 

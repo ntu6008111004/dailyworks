@@ -8,6 +8,62 @@ const SHEET_POSITIONS = "Positions";
 const SHEET_BRIEFINGS = "Briefings";
 const SHEET_BRIEFING_RESPONSES = "BriefingResponses";
 
+// ───────────────────────────────────────────────────────────────────────────
+// Cache TTL Configuration (seconds) — Tiered by data volatility
+// ───────────────────────────────────────────────────────────────────────────
+const CACHE_TTL_TASKS = 30;       // Tasks change frequently
+const CACHE_TTL_USERS = 120;      // Users change rarely
+const CACHE_TTL_POSITIONS = 300;  // Positions almost never change
+const CACHE_TTL_BRIEFINGS = 30;   // Briefings change moderately
+
+/**
+ * Chunked cache helpers — GAS CacheService has a 100KB limit per key.
+ * Large datasets (e.g. hundreds of tasks) are split into chunks.
+ */
+function putChunkedCache(cache, key, jsonString, ttl) {
+  const CHUNK_SIZE = 90000; // ~90KB per chunk to stay under 100KB limit
+  if (jsonString.length <= CHUNK_SIZE) {
+    cache.put(key, jsonString, ttl);
+    cache.put(key + "_chunks", "0", ttl);
+    return;
+  }
+  const chunks = Math.ceil(jsonString.length / CHUNK_SIZE);
+  const pairs = {};
+  for (let i = 0; i < chunks; i++) {
+    pairs[key + "_" + i] = jsonString.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+  }
+  pairs[key + "_chunks"] = String(chunks);
+  cache.putAll(pairs, ttl);
+}
+
+function getChunkedCache(cache, key) {
+  const chunksMeta = cache.get(key + "_chunks");
+  if (chunksMeta === null) return null;
+  const chunks = parseInt(chunksMeta, 10);
+  if (chunks === 0) {
+    return cache.get(key);
+  }
+  let result = "";
+  for (let i = 0; i < chunks; i++) {
+    const part = cache.get(key + "_" + i);
+    if (part === null) return null; // Partial eviction — treat as miss
+    result += part;
+  }
+  return result;
+}
+
+function removeChunkedCache(cache, key) {
+  const chunksMeta = cache.get(key + "_chunks");
+  const keysToRemove = [key, key + "_chunks"];
+  if (chunksMeta !== null) {
+    const chunks = parseInt(chunksMeta, 10);
+    for (let i = 0; i < chunks; i++) {
+      keysToRemove.push(key + "_" + i);
+    }
+  }
+  cache.removeAll(keysToRemove);
+}
+
 function setup() {
   const doc = SpreadsheetApp.getActiveSpreadsheet();
   SCRIPT_PROP.setProperty("key", doc.getId());
@@ -304,33 +360,29 @@ function handleResponse(e) {
 
 function getTasks(doc) {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get("tasks_full");
+  const cached = getChunkedCache(cache, "tasks_full");
   if (cached) return JSON.parse(cached);
 
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  const headers = data[0].map((h) => h.toString().trim()); // Trim headers here
+  const headers = data[0].map((h) => h.toString().trim());
+  const tz = Session.getScriptTimeZone();
 
   const result = data.slice(1).map((row) => {
     let task = {};
     headers.forEach((header, i) => {
-      if (!header) return; // Skip empty headers
+      if (!header) return;
       let val = row[i];
       if (val instanceof Date) {
         if (header === "CreatedAt" || header === "UpdatedAt") {
           val = val.toISOString();
         } else {
-          val = Utilities.formatDate(
-            val,
-            Session.getScriptTimeZone(),
-            "yyyy-MM-dd",
-          );
+          val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
         }
       }
       task[header] = val;
     });
-    // Parse JSON custom fields if exist
     if (task.CustomFields) {
       try {
         task.CustomFields = JSON.parse(task.CustomFields);
@@ -342,20 +394,21 @@ function getTasks(doc) {
   });
 
   try {
-    cache.put("tasks_full", JSON.stringify(result), 15); // 15 seconds (reduced from 120s)
+    putChunkedCache(cache, "tasks_full", JSON.stringify(result), CACHE_TTL_TASKS);
   } catch (e) {}
   return result;
 }
 
 function getTasksSummary(doc) {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get("tasks_summary");
+  const cached = getChunkedCache(cache, "tasks_summary");
   if (cached) return JSON.parse(cached);
 
   const sheet = doc.getSheetByName(SHEET_TASKS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   let headers = data[0].map((h) => h.toString().trim());
+  const tz = Session.getScriptTimeZone();
 
   // Auto-migration: check if CompletedAt exists, if not, add it
   if (headers.indexOf("CompletedAt") === -1) {
@@ -367,22 +420,10 @@ function getTasksSummary(doc) {
 
   // Only keep essential columns for summary
   const summaryHeaders = [
-    "ID",
-    "Detail",
-    "Status",
-    "Priority",
-    "StartDate",
-    "DueDate",
-    "UserID",
-    "StaffName",
-    "Department",
-    "CustomFields",
-    "CreatedAt",
-    "CompletedAt",
+    "ID", "Detail", "Status", "Priority", "StartDate", "DueDate",
+    "UserID", "StaffName", "Department", "CustomFields", "CreatedAt", "CompletedAt",
   ];
   const indices = summaryHeaders.map((h) => headers.indexOf(h));
-
-  // Find image indices to check for existence
   const imgIndices = ["Image1", "Image2", "Image3", "Image4"].map((h) =>
     headers.indexOf(h),
   );
@@ -393,36 +434,21 @@ function getTasksSummary(doc) {
       const colIdx = indices[i];
       let val = colIdx !== -1 ? row[colIdx] : "";
 
-      // Prevent timezone shift issue by formatting Date objects to explicit strings
       if (val instanceof Date) {
-        if (
-          header === "CreatedAt" ||
-          header === "UpdatedAt" ||
-          header === "CompletedAt"
-        ) {
-          val = val.toISOString(); // keep full time for timestamps
+        if (header === "CreatedAt" || header === "UpdatedAt" || header === "CompletedAt") {
+          val = val.toISOString();
         } else {
-          val = Utilities.formatDate(
-            val,
-            Session.getScriptTimeZone(),
-            "yyyy-MM-dd",
-          );
+          val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
         }
       }
 
-      // Parse CustomFields JSON
       if (header === "CustomFields") {
-        try {
-          val = val ? JSON.parse(val) : {};
-        } catch (e) {
-          val = {};
-        }
+        try { val = val ? JSON.parse(val) : {}; } catch (e) { val = {}; }
       }
 
       task[header] = val;
     });
 
-    // Add lightweight indicator for images
     task.HasImages = imgIndices.some(
       (idx) => idx !== -1 && row[idx] && row[idx].toString().length > 0,
     );
@@ -431,14 +457,15 @@ function getTasksSummary(doc) {
   });
 
   try {
-    cache.put("tasks_summary", JSON.stringify(result), 15); // 15 seconds (reduced from 120s)
+    putChunkedCache(cache, "tasks_summary", JSON.stringify(result), CACHE_TTL_TASKS);
   } catch (e) {}
   return result;
 }
 
 function clearTasksCache() {
   const cache = CacheService.getScriptCache();
-  cache.removeAll(["tasks_full", "tasks_summary"]);
+  removeChunkedCache(cache, "tasks_full");
+  removeChunkedCache(cache, "tasks_summary");
 }
 
 /**
@@ -628,27 +655,34 @@ function updateTask(doc, data, executorId) {
 
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][idIndex]) === String(data.ID)) {
+      // Build updated row in memory, then write once (batch)
+      const updatedRow = rows[i].slice();
+
       headers.forEach((header, j) => {
         if (header === "CustomFields" && data[header]) {
-          sheet.getRange(i + 1, j + 1).setValue(JSON.stringify(data[header]));
+          updatedRow[j] = JSON.stringify(data[header]);
         } else if (
           data[header] !== undefined &&
           header !== "ID" &&
           header !== "CreatedAt"
         ) {
-          sheet.getRange(i + 1, j + 1).setValue(data[header]);
+          updatedRow[j] = data[header];
         }
         if (header === "UpdatedAt") {
-          sheet.getRange(i + 1, j + 1).setValue(new Date());
+          updatedRow[j] = new Date();
         }
         if (header === "CompletedAt") {
           if (data.Status === "เสร็จสิ้น" && !rows[i][j]) {
-            sheet.getRange(i + 1, j + 1).setValue(new Date());
+            updatedRow[j] = new Date();
           } else if (data.Status && data.Status !== "เสร็จสิ้น") {
-            sheet.getRange(i + 1, j + 1).setValue("");
+            updatedRow[j] = "";
           }
         }
       });
+
+      // Single batch write — dramatically faster than cell-by-cell
+      sheet.getRange(i + 1, 1, 1, updatedRow.length).setValues([updatedRow]);
+
       clearTasksCache();
       logActivity(
         doc,
@@ -684,13 +718,20 @@ function deleteTask(doc, id, executorId) {
 }
 
 function getUsers(doc, options = {}) {
+  const includeImage = options.includeImage !== false;
+  const cacheKey = includeImage ? "users_full" : "users_noimg";
+
+  // Check cache first
+  const cache = CacheService.getScriptCache();
+  const cached = getChunkedCache(cache, cacheKey);
+  if (cached) return JSON.parse(cached);
+
   const sheet = doc.getSheetByName(SHEET_USERS);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map((h) => h.toString().trim());
-  const includeImage = options.includeImage !== false;
 
-  return data.slice(1).map((row) => {
+  const result = data.slice(1).map((row) => {
     let user = {};
     headers.forEach((header, i) => {
       if (!includeImage && header === "ProfileImage") {
@@ -710,6 +751,17 @@ function getUsers(doc, options = {}) {
     });
     return user;
   });
+
+  try {
+    putChunkedCache(cache, cacheKey, JSON.stringify(result), CACHE_TTL_USERS);
+  } catch (e) {}
+  return result;
+}
+
+function clearUsersCache() {
+  const cache = CacheService.getScriptCache();
+  removeChunkedCache(cache, "users_full");
+  removeChunkedCache(cache, "users_noimg");
 }
 
 function getInitData(doc, params) {
@@ -765,6 +817,7 @@ function addUser(doc, data, executorId) {
 
   sheet.appendRow(newRow);
   checkAndExpandSheet(sheet);
+  clearUsersCache();
 
   logActivity(
     doc,
@@ -856,6 +909,7 @@ function updateUser(doc, data, executorId) {
         }
       }
 
+      clearUsersCache();
       logActivity(
         doc,
         executorId || "System",
@@ -879,6 +933,7 @@ function deleteUser(doc, id, executorId) {
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][idIndex]) === String(id)) {
       sheet.deleteRow(i + 1);
+      clearUsersCache();
       logActivity(
         doc,
         executorId || "System",

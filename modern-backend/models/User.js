@@ -12,4 +12,7 @@ const userSchema = new mongoose.Schema({
   Permissions: { type: Object, default: {} },
 }, { timestamps: true });
 
+// Compound index for fast login queries
+userSchema.index({ Username: 1, Password: 1 });
+
 module.exports = mongoose.model('User', userSchema);
