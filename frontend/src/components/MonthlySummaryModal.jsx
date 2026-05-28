@@ -20,22 +20,41 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
       if (tUserId !== currentUserId) return false;
 
       try {
-        let taskStartStr = '';
-        let taskDueStr = '';
+        let taskStartMonth = '';
+        let taskDueMonth = '';
 
-        if (typeof t.StartDate === 'string') {
-          taskStartStr = t.StartDate.substring(0, 7);
+        if (typeof t.StartDate === 'string' && t.StartDate.length >= 7) {
+          taskStartMonth = t.StartDate.substring(0, 7);
         } else if (t.StartDate instanceof Date) {
-          taskStartStr = format(t.StartDate, 'yyyy-MM');
+          taskStartMonth = format(t.StartDate, 'yyyy-MM');
         }
 
-        if (typeof t.DueDate === 'string') {
-          taskDueStr = t.DueDate.substring(0, 7);
+        if (typeof t.DueDate === 'string' && t.DueDate.length >= 7) {
+          taskDueMonth = t.DueDate.substring(0, 7);
         } else if (t.DueDate instanceof Date) {
-          taskDueStr = format(t.DueDate, 'yyyy-MM');
+          taskDueMonth = format(t.DueDate, 'yyyy-MM');
         }
-        
-        return monthStr >= taskStartStr && monthStr <= taskDueStr;
+
+        // Case 1: Both dates exist — check if month falls within the range
+        if (taskStartMonth && taskDueMonth) {
+          return monthStr >= taskStartMonth && monthStr <= taskDueMonth;
+        }
+        // Case 2: Only StartDate — match if it's in the selected month
+        if (taskStartMonth && !taskDueMonth) {
+          return taskStartMonth === monthStr;
+        }
+        // Case 3: Only DueDate — match if it's in the selected month
+        if (!taskStartMonth && taskDueMonth) {
+          return taskDueMonth === monthStr;
+        }
+        // Case 4: No dates at all — fallback to CreatedAt month
+        if (t.CreatedAt) {
+          const createdMonth = typeof t.CreatedAt === 'string'
+            ? t.CreatedAt.substring(0, 7)
+            : format(new Date(t.CreatedAt), 'yyyy-MM');
+          return createdMonth === monthStr;
+        }
+        return false;
       } catch {
         return false;
       }

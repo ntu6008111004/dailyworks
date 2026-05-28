@@ -1,28 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export const NotificationPermissionModal = () => {
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      const hasDismissed = localStorage.getItem('hideNotiPrompt');
-      if (Notification.permission === 'default' && !hasDismissed) {
-        // Delay showing it slightly to not clash with initial page load
-        const timer = setTimeout(() => setIsOpen(true), 1500);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, []);
-
   const [showInstructions, setShowInstructions] = useState(false);
 
-
   useEffect(() => {
     if ('Notification' in window) {
       const hasDismissed = localStorage.getItem('hideNotiPrompt');
+      // Only show prompt if permission is default and not dismissed
       if (Notification.permission === 'default' && !hasDismissed) {
-        // Delay showing it slightly to not clash with initial page load
         const timer = setTimeout(() => setIsOpen(true), 1500);
         return () => clearTimeout(timer);
       }
@@ -32,7 +20,15 @@ export const NotificationPermissionModal = () => {
   const handleAllow = async () => {
     try {
       if (!('Notification' in window)) {
+        toast.error('บราวเซอร์ของคุณไม่รองรับการแจ้งเตือน');
         setIsOpen(false);
+        return;
+      }
+
+      // Modern browsers block Notification API in insecure contexts (HTTP)
+      if (!window.isSecureContext) {
+        toast.error('ต้องการเชื่อมต่อแบบปลอดภัย (HTTPS หรือ localhost) เพื่อเปิดแจ้งเตือน');
+        setShowInstructions(true);
         return;
       }
 
@@ -42,12 +38,15 @@ export const NotificationPermissionModal = () => {
       }
 
       const result = await Notification.requestPermission();
-      if (result === 'granted' || result === 'denied') {
+      if (result === 'granted') {
+        toast.success('เปิดใช้งานการแจ้งเตือนสำเร็จ!');
         setIsOpen(false);
+      } else {
+        setShowInstructions(true);
       }
     } catch (err) {
-      console.error(err);
-      setIsOpen(false);
+      console.error('Notification Error:', err);
+      setShowInstructions(true);
     }
   };
 

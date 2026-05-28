@@ -115,7 +115,7 @@ export const Briefing = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchTerm);
-    }, 1200);
+    }, 350);
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
@@ -789,8 +789,8 @@ const StatCard = ({ label, value, color, icon, onClick, active }) => (
   </button>
 );
 
-// eslint-disable-next-line no-unused-vars
-const BriefingCard = ({ briefing, allUsers, onClick, onDelete, onPostStatusToggle, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
+// eslint-disable-next-line react/display-name
+const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPostStatusToggle, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
   const creator = allUsers.find(u => String(u.ID) === String(briefing.CreatorID));
   const assigneesCount = briefing.Assignees?.length || 0;
   const isOverdue = apiService.isBriefingOverdue(briefing);
@@ -957,7 +957,19 @@ const BriefingCard = ({ briefing, allUsers, onClick, onDelete, onPostStatusToggl
       )}
     </div>
   );
-};
+}, (prev, next) => {
+  return (
+    prev.briefing.ID === next.briefing.ID &&
+    prev.briefing.Status === next.briefing.Status &&
+    prev.briefing.PostStatus === next.briefing.PostStatus &&
+    prev.briefing.PostDate === next.briefing.PostDate &&
+    prev.briefing.syncState === next.briefing.syncState &&
+    prev.briefing.UpdatedAt === next.briefing.UpdatedAt &&
+    prev.openStatusId === next.openStatusId &&
+    prev.user?.ID === next.user?.ID &&
+    prev.allUsers.length === next.allUsers.length
+  );
+});
 
 // --- Settings Modal Component ---
 const BriefingSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
