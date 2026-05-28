@@ -24,16 +24,16 @@ export const UpdateNotifier = () => {
       if (serverVersion > CURRENT_VERSION && CURRENT_VERSION !== 0) {
         const timestampStr = String(serverVersion);
         
-        // If user already dismissed this specific update in this session, don't nag
-        if (sessionStorage.getItem('dismissed_update') === timestampStr) {
+        // If user already dismissed this specific update, don't nag
+        if (localStorage.getItem('dismissed_update') === timestampStr) {
           return;
         }
 
         // If user clicked update but we are still stuck on the old version
-        if (sessionStorage.getItem('attempted_update') === timestampStr) {
-          if (!sessionStorage.getItem('notified_stale_update')) {
+        if (localStorage.getItem('attempted_update') === timestampStr) {
+          if (!localStorage.getItem('notified_stale_update')) {
             toast.error('ยังคงแสดงผลเวอร์ชันเก่า กรุณาล้างแคชเบราว์เซอร์ด้วยตนเอง (Ctrl+F5)', { duration: 5000, position: 'bottom-right' });
-            sessionStorage.setItem('notified_stale_update', 'true');
+            localStorage.setItem('notified_stale_update', 'true');
           }
           return; 
         }
@@ -67,8 +67,8 @@ export const UpdateNotifier = () => {
     
     // Mark this version as attempted so we don't loop if it fails to fetch the new bundle
     if (updateInfo?.timestamp) {
-      sessionStorage.setItem('attempted_update', String(updateInfo.timestamp));
-      sessionStorage.removeItem('notified_stale_update');
+      localStorage.setItem('attempted_update', String(updateInfo.timestamp));
+      localStorage.removeItem('notified_stale_update');
     }
 
     // Clear potentially stale caches programatically if using Service Workers/CacheStorage
@@ -90,7 +90,7 @@ export const UpdateNotifier = () => {
 
   const handleDismiss = () => {
     if (updateInfo?.timestamp) {
-      sessionStorage.setItem('dismissed_update', String(updateInfo.timestamp));
+      localStorage.setItem('dismissed_update', String(updateInfo.timestamp));
     }
     setIsHidden(true);
   };
