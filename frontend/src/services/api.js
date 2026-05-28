@@ -1,4 +1,9 @@
-const GAS_URL = import.meta.env.VITE_GAS_WEBAPP_URL;
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Tiered in-memory cache — different TTLs for different data types
@@ -22,6 +27,36 @@ const CACHE_TTL = {
 
 function getTTL(action) {
   return CACHE_TTL[action] || CACHE_TTL._default;
+}
+
+// Helper to parse JSON values safely
+function parseJson(val, defaultVal = {}) {
+  if (!val) return defaultVal;
+  if (typeof val === 'object') return val;
+  try {
+    const cleaned = val.trim();
+    if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
+      return JSON.parse(cleaned);
+    }
+  } catch (e) {}
+  return defaultVal;
+}
+
+// Helper: Fetch ALL rows from a Supabase query, bypassing the default 1000-row limit
+// Accepts a factory function that returns a fresh query builder for each page
+async function fetchAllRows(queryFactory) {
+  const PAGE_SIZE = 1000;
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await queryFactory().range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows = allRows.concat(data);
+    if (data.length < PAGE_SIZE) break; // last page
+    from += PAGE_SIZE;
+  }
+  return allRows;
 }
 
 export const apiService = {
@@ -87,6 +122,22 @@ export const apiService = {
     }
   },
 
+  // Helper to log user actions in Supabase
+  async logActivity(userId, action, details) {
+    try {
+      await supabase
+        .from('ActivityLogs')
+        .insert([{
+          UserID: userId || 'System',
+          Action: action,
+          Details: details,
+          Timestamp: new Date().toISOString()
+        }]);
+    } catch (e) {
+      console.warn('Failed to log activity:', e);
+    }
+  },
+
   async request(action, data = {}, options = { useCache: false }) {
     const cacheKey = options.useCache ? JSON.stringify({ action, data }) : null;
     const ttl = getTTL(action);
@@ -125,41 +176,541 @@ export const apiService = {
     return this._fetchAndCache(action, data, cacheKey, ttl);
   },
 
-  // Internal: performs the actual fetch and updates cache
+  // Internal: performs the actual fetch from Supabase and updates cache
   async _fetchAndCache(action, data, cacheKey, ttl) {
     const fetchPromise = (async () => {
       try {
-        const urlWithBuster = new URL(GAS_URL);
-        urlWithBuster.searchParams.set('t', Date.now());
+        let resultData;
+        switch (action) {
+          case 'login': {
+            const { data: user, error } = await supabase
+              .from('Users')
+              .select('*')
+              .eq('Username', data.username)
+              .eq('Password', data.password)
+              .maybeSingle();
+            if (error) throw error;
+            if (!user) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+            resultData = user;
+            break;
+          }
 
-        const headers = {
-          'Content-Type': 'text/plain', // Avoid CORS preflight options
-        };
+          case 'getTasks': {
+            const tasks = await fetchAllRows(
+              () => supabase
+                .from('Tasks')
+                .select('*')
+                .order('CreatedAt', { ascending: false })
+            );
+            resultData = tasks || [];
+            break;
+          }
 
-        const apiKey = import.meta.env.VITE_API_KEY;
-        if (apiKey) {
-          headers['x-api-key'] = apiKey;
+          case 'getTasksSummary': {
+            let tasks;
+            try {
+              tasks = await fetchAllRows(
+                () => supabase
+                  .from('TasksSummary')
+                  .select('ID, Detail, Status, Priority, StartDate, DueDate, UserID, StaffName, Department, CustomFields, CreatedAt, CompletedAt, HasImages')
+                  .order('CreatedAt', { ascending: false })
+              );
+            } catch (viewError) {
+              // View not created yet, fall back to table query (without pulling base64 images to memory)
+              console.warn('TasksSummary view not found, falling back to Tasks table query...', viewError);
+              const rawTasks = await fetchAllRows(
+                () => supabase
+                  .from('Tasks')
+                  .select('ID, Detail, Status, Priority, StartDate, DueDate, UserID, StaffName, Department, CustomFields, CreatedAt, CompletedAt, Image1, Image2, Image3, Image4')
+                  .order('CreatedAt', { ascending: false })
+              );
+              
+              tasks = (rawTasks || []).map(t => ({
+                ...t,
+                HasImages: !!(t.Image1 || t.Image2 || t.Image3 || t.Image4),
+                Image1: undefined,
+                Image2: undefined,
+                Image3: undefined,
+                Image4: undefined
+              }));
+            }
+            
+            resultData = tasks || [];
+            break;
+          }
+
+          case 'getTasksPaged': {
+            // Get all tasks (using cached summary or fetching summary)
+            const allTasks = await this.getTasksSummary();
+            
+            // Build CustomFields lookup from full cache if available
+            const cfMap = {};
+            const fullCacheKey = JSON.stringify({ action: 'getTasks', data: {} });
+            if (cache.has(fullCacheKey)) {
+              const cachedFull = cache.get(fullCacheKey).data;
+              if (Array.isArray(cachedFull)) {
+                cachedFull.forEach(t => {
+                  cfMap[t.ID] = t.CustomFields;
+                });
+              }
+            }
+
+            const mergedTasks = allTasks.map(t => ({
+              ...t,
+              CustomFields: cfMap[t.ID] !== undefined ? cfMap[t.ID] : t.CustomFields
+            }));
+
+            // Apply filters
+            const keyword = (data.keyword || '').toLowerCase().trim();
+            const status = data.status || 'All';
+            const department = data.department || 'All';
+            const filterUser = data.user || 'All';
+            const startDate = data.startDate || '';
+            const endDate = data.endDate || '';
+
+            const userRole = (data.userRole || 'Staff').toString().trim();
+            const userDept = (data.userDept || '').toString().trim();
+            const canSeeAll = userRole === 'Admin' || (userRole === 'Head' && userDept === 'HR');
+            const currentUserId = String(data.userId || '');
+
+            let filtered = mergedTasks.filter(t => {
+              // RBAC
+              const tUserId = String(t.UserID || '');
+              const tDept = (t.Department || '').toString().trim().toLowerCase();
+
+              if (!canSeeAll) {
+                if (userRole === 'Staff' && tUserId !== currentUserId) return false;
+                if (userRole === 'Head') {
+                  if (tDept !== userDept.toLowerCase()) return false;
+                  if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
+                }
+              } else {
+                if (department !== 'All' && tDept !== department.toLowerCase()) return false;
+                if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
+              }
+
+              // Status
+              if (status !== 'All' && t.Status !== status) return false;
+
+              // Keyword
+              if (keyword) {
+                const detailMatch = (t.Detail || '').toLowerCase().includes(keyword);
+                let projectVal = '';
+                if (t.CustomFields && typeof t.CustomFields === 'object') {
+                  projectVal = (t.CustomFields.Project || '').toLowerCase();
+                }
+                const projectMatch = projectVal.includes(keyword);
+                if (!detailMatch && !projectMatch) return false;
+              }
+
+              // Date range
+              if (startDate || endDate) {
+                const compareDate = t.DueDate || t.StartDate || '';
+                if (!compareDate) return false;
+                if (startDate && compareDate < startDate) return false;
+                if (endDate && compareDate > endDate) return false;
+              }
+
+              return true;
+            });
+
+            // Sort newest first
+            filtered.sort((a, b) => {
+              const da = a.CreatedAt ? new Date(a.CreatedAt) : new Date(0);
+              const db = b.CreatedAt ? new Date(b.CreatedAt) : new Date(0);
+              return db - da;
+            });
+
+            const page = parseInt(data.page || 1, 10);
+            const pageSize = parseInt(data.pageSize || 10, 10);
+            const totalCount = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+            const safePage = Math.min(Math.max(page, 1), totalPages);
+            const start = (safePage - 1) * pageSize;
+            const pageTasks = filtered.slice(start, start + pageSize);
+
+            resultData = {
+              tasks: pageTasks,
+              totalCount,
+              totalPages,
+              currentPage: safePage
+            };
+            break;
+          }
+
+          case 'getTaskById': {
+            const { data: task, error } = await supabase
+              .from('Tasks')
+              .select('*')
+              .eq('ID', data.id)
+              .maybeSingle();
+            if (error) throw error;
+            if (!task) throw new Error('Task not found');
+            resultData = task;
+            break;
+          }
+
+          case 'addTask': {
+            const newId = crypto.randomUUID();
+            const { error } = await supabase
+              .from('Tasks')
+              .insert([{
+                ...data,
+                ID: data.ID || newId
+              }]);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'ADD_TASK', `Task created`);
+            resultData = { message: 'Task added successfully' };
+            break;
+          }
+
+          case 'updateTask': {
+            const updateFields = { ...data };
+            if (updateFields.Status === 'เสร็จสิ้น') {
+              const { data: currentTask } = await supabase
+                .from('Tasks')
+                .select('CompletedAt')
+                .eq('ID', data.ID)
+                .maybeSingle();
+              if (currentTask && !currentTask.CompletedAt) {
+                updateFields.CompletedAt = new Date().toISOString();
+              }
+            } else if (updateFields.Status && updateFields.Status !== 'เสร็จสิ้น') {
+              updateFields.CompletedAt = null;
+            }
+            updateFields.UpdatedAt = new Date().toISOString();
+
+            const { error } = await supabase
+              .from('Tasks')
+              .update(updateFields)
+              .eq('ID', data.ID);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'UPDATE_TASK', `Task ${data.ID} updated`);
+            resultData = { message: 'Task updated successfully' };
+            break;
+          }
+
+          case 'deleteTask': {
+            const { error } = await supabase
+              .from('Tasks')
+              .delete()
+              .eq('ID', data.id);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'DELETE_TASK', `Task ${data.id} deleted`);
+            resultData = { message: 'Task deleted successfully' };
+            break;
+          }
+
+          case 'getUsers': {
+            const { data: users, error } = await supabase
+              .from('Users')
+              .select('*')
+              .order('Username');
+            if (error) throw error;
+            
+            resultData = (users || []).map(u => {
+              if (data.includeImage === false) {
+                return { ...u, ProfileImage: u.ProfileImage ? 'has_image' : '' };
+              }
+              return u;
+            });
+            break;
+          }
+
+          case 'addUser': {
+            const newId = crypto.randomUUID();
+            const { error } = await supabase
+              .from('Users')
+              .insert([{
+                ...data,
+                ID: data.ID || newId
+              }]);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'ADD_USER', `User created: ${data.Username}`);
+            resultData = { message: 'User added successfully' };
+            break;
+          }
+
+          case 'updateUser': {
+            const updateFields = { ...data };
+            updateFields.UpdatedAt = new Date().toISOString();
+            
+            const { error } = await supabase
+              .from('Users')
+              .update(updateFields)
+              .eq('ID', data.ID);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'UPDATE_USER', `User ${data.ID} updated`);
+            resultData = { message: 'User updated successfully' };
+            break;
+          }
+
+          case 'deleteUser': {
+            const { error } = await supabase
+              .from('Users')
+              .delete()
+              .eq('ID', data.id);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'DELETE_USER', `User ${data.id} deleted`);
+            resultData = { message: 'User deleted successfully' };
+            break;
+          }
+
+          case 'getPositions': {
+            const { data: positions, error } = await supabase
+              .from('Positions')
+              .select('*')
+              .order('Name');
+            if (error) throw error;
+            resultData = (positions || []).map(p => ({
+              ...p,
+              Color: p.Color || 'bg-blue-100 text-blue-600'
+            }));
+            break;
+          }
+
+          case 'addPosition': {
+            const newId = crypto.randomUUID();
+            const { error } = await supabase
+              .from('Positions')
+              .insert([{
+                ID: newId,
+                Name: data.Name || '',
+                Color: data.Color || 'bg-blue-100 text-blue-600'
+              }]);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'ADD_POSITION', `Position created: ${data.Name}`);
+            resultData = { message: 'Position added', id: newId };
+            break;
+          }
+
+          case 'updatePosition': {
+            const { error } = await supabase
+              .from('Positions')
+              .update({
+                Name: data.Name,
+                Color: data.Color,
+                UpdatedAt: new Date().toISOString()
+              })
+              .eq('ID', data.ID);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'UPDATE_POSITION', `Position ${data.ID} updated`);
+            resultData = { message: 'Position updated' };
+            break;
+          }
+
+          case 'deletePosition': {
+            const { error } = await supabase
+              .from('Positions')
+              .delete()
+              .eq('ID', data.id);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'DELETE_POSITION', `Position ${data.id} deleted`);
+            resultData = { message: 'Position deleted' };
+            break;
+          }
+
+          case 'getBriefings': {
+            const { data: briefings, error } = await supabase
+              .from('Briefings')
+              .select('ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate')
+              .order('CreatedAt', { ascending: false });
+            if (error) throw error;
+            resultData = (briefings || []).map(b => ({
+              ...b,
+              Assignees: Array.isArray(b.Assignees) ? b.Assignees : parseJson(b.Assignees, [])
+            }));
+            break;
+          }
+
+          case 'getBriefingById': {
+            const { data: briefing, error } = await supabase
+              .from('Briefings')
+              .select('*')
+              .eq('ID', data.id)
+              .maybeSingle();
+            if (error) throw error;
+            if (!briefing) throw new Error('Briefing not found');
+            resultData = {
+              ...briefing,
+              Assignees: Array.isArray(briefing.Assignees) ? briefing.Assignees : parseJson(briefing.Assignees, [])
+            };
+            break;
+          }
+
+          case 'addBriefing': {
+            const newId = crypto.randomUUID();
+            const now = new Date();
+            const dateStr = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+            
+            const { count, error: countErr } = await supabase
+              .from('Briefings')
+              .select('*', { count: 'exact', head: true });
+            if (countErr) throw countErr;
+            
+            const runningId = `BR-${dateStr}-${String((count || 0) + 1).padStart(3, '0')}`;
+            
+            const { error } = await supabase
+              .from('Briefings')
+              .insert([{
+                ID: newId,
+                RunningID: runningId,
+                Title: data.Title || '',
+                CreatorID: this.userId || null,
+                Detail: data.Detail || '',
+                CreatorNote: data.CreatorNote || '',
+                Assignees: data.Assignees || [],
+                Status: data.Status || 'รอดำเนินการ',
+                Priority: data.Priority || 'Medium',
+                StartDate: data.StartDate || '',
+                DueDate: data.DueDate || '',
+                RefURL: data.RefURL || '',
+                CardColor: data.CardColor || '',
+                PostStatus: data.PostStatus || 'ยังไม่โพส',
+                PostUrl: data.PostUrl || '',
+                PostDate: data.PostDate || '',
+                LastUpdatedBy: this.userId || null,
+                ...Object.keys(data).reduce((acc, k) => {
+                  if (k.startsWith('RefImage')) acc[k] = data[k];
+                  return acc;
+                }, {})
+              }]);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'ADD_BRIEFING', `Briefing created: ${runningId}`);
+            resultData = { message: 'Briefing created', runningId };
+            break;
+          }
+
+          case 'updateBriefing': {
+            const updateFields = { ...data };
+            if (updateFields.Status === 'เสร็จสิ้น') {
+              updateFields.CompletedAt = new Date().toISOString();
+            } else if (updateFields.Status && updateFields.Status !== 'เสร็จสิ้น') {
+              updateFields.CompletedAt = null;
+            }
+            updateFields.UpdatedAt = new Date().toISOString();
+            updateFields.LastUpdatedBy = this.userId || null;
+
+            const { error } = await supabase
+              .from('Briefings')
+              .update(updateFields)
+              .eq('ID', data.ID);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'UPDATE_BRIEFING', `Briefing updated: ${data.ID}`);
+            resultData = { message: 'Briefing updated' };
+            break;
+          }
+
+          case 'deleteBriefing': {
+            const { error } = await supabase
+              .from('Briefings')
+              .delete()
+              .eq('ID', data.id);
+            if (error) throw error;
+            await this.logActivity(this.executorId, 'DELETE_BRIEFING', `Briefing deleted: ${data.id}`);
+            resultData = { message: 'Briefing and related responses deleted' };
+            break;
+          }
+
+          case 'getBriefingResponses': {
+            const { data: responses, error } = await supabase
+              .from('BriefingResponses')
+              .select('*')
+              .eq('BriefingID', data.briefingId);
+            if (error) throw error;
+            resultData = responses || [];
+            break;
+          }
+
+          case 'saveBriefingResponse': {
+            const responseData = {
+              BriefingID: data.BriefingID,
+              UserID: data.UserID || this.userId,
+              URL1: data.URL1 || '',
+              URL2: data.URL2 || '',
+              Status: data.Status || 'รอดำเนินการ',
+              Note: data.Note || '',
+              UpdatedAt: new Date().toISOString(),
+              ...Object.keys(data).reduce((acc, k) => {
+                if (k.startsWith('ResultImage') || k.startsWith('ReviewImage')) {
+                  acc[k] = data[k];
+                }
+                return acc;
+              }, {})
+            };
+
+            const { data: existing, error: findErr } = await supabase
+              .from('BriefingResponses')
+              .select('ID')
+              .eq('BriefingID', data.BriefingID)
+              .eq('UserID', responseData.UserID)
+              .maybeSingle();
+            
+            if (findErr) throw findErr;
+
+            if (existing) {
+              const { error: updateErr } = await supabase
+                .from('BriefingResponses')
+                .update(responseData)
+                .eq('ID', existing.ID);
+              if (updateErr) throw updateErr;
+            } else {
+              const newId = crypto.randomUUID();
+              const { error: insertErr } = await supabase
+                .from('BriefingResponses')
+                .insert([{
+                  ID: newId,
+                  ...responseData
+                }]);
+              if (insertErr) throw insertErr;
+            }
+
+            const briefingUpdate = {
+              UpdatedAt: new Date().toISOString(),
+              LastUpdatedBy: this.userId || null
+            };
+            if (data.NewOverallStatus) {
+              briefingUpdate.Status = data.NewOverallStatus;
+            }
+            await supabase
+              .from('Briefings')
+              .update(briefingUpdate)
+              .eq('ID', data.BriefingID);
+
+            resultData = { message: 'Response saved' };
+            break;
+          }
+
+          case 'init': {
+            const positions = await this.getPositions();
+            const users = await this.getUsers({ includeImage: false });
+            const departments = [...new Set(users.map(u => u.Department).filter(Boolean))].sort();
+            
+            let currentUser = null;
+            if (data.userId) {
+              const { data: fullUser, error } = await supabase
+                .from('Users')
+                .select('*')
+                .eq('ID', data.userId)
+                .maybeSingle();
+              if (!error && fullUser) {
+                currentUser = fullUser;
+              }
+            }
+            resultData = { positions, departments, currentUser };
+            break;
+          }
+
+          default:
+            throw new Error(`Action ${action} not supported in Supabase API wrapper.`);
         }
 
-        const response = await fetch(urlWithBuster.toString(), {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify({ 
-            action, 
-            data, 
-            executorId: this.executorId 
-          }),
-        });
-        
-        const result = await response.json();
-        if (result.status === 'error') throw new Error(result.message);
-        
         if (cacheKey) {
-          cache.set(cacheKey, { data: result.data, timestamp: Date.now() });
+          cache.set(cacheKey, { data: resultData, timestamp: Date.now() });
         }
-        return result.data;
+        return resultData;
       } catch (error) {
-        console.error('API Error:', error);
+        console.error('Supabase API Error:', error);
         throw error;
       } finally {
         if (cacheKey) pendingRequests.delete(cacheKey);
@@ -169,7 +720,6 @@ export const apiService = {
     if (cacheKey) {
       pendingRequests.set(cacheKey, fetchPromise);
     }
-
     return fetchPromise;
   },
 
@@ -186,8 +736,6 @@ export const apiService = {
   },
 
   getTasksPaged(page, pageSize, filters = {}) {
-    // Enabled caching so that prefetching on hover works efficiently.
-    // Mutations (add/edit/delete) will clear the cache anyway.
     return this.request('getTasksPaged', { page, pageSize, ...filters }, { useCache: true });
   },
 
@@ -202,6 +750,10 @@ export const apiService = {
   addTask(task) {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
+    if (this.userId) {
+      const u = cache.get(JSON.stringify({ action: 'init', data: { userId: this.userId } }))?.data?.currentUser;
+      if (u) data.StaffName = u.Name;
+    }
     return this.request('addTask', data).then(res => {
       this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
       return res;
@@ -217,15 +769,12 @@ export const apiService = {
     });
   },
 
-  // Status-only update: patches cache in-place so the UI never snaps back
   updateTaskStatus(taskId, newStatus) {
     const data = { ID: taskId, Status: newStatus };
     if (this.userId) data.UserID = this.userId;
-    // Patch page caches immediately so any concurrent fetchPage returns correct data
     this.mutatePagesCache({ ID: taskId, Status: newStatus });
     this.mutateSummaryCache('update', { ID: taskId, Status: newStatus });
     return this.request('updateTask', data).then(res => {
-      // Patch again with server-confirmed data (same values, keeps cache fresh)
       this.mutatePagesCache({ ID: taskId, Status: newStatus });
       return res;
     });
@@ -244,60 +793,56 @@ export const apiService = {
 
   addUser(user) {
     if (user.Password) user.Password = btoa(user.Password);
-    this.clearCacheFor('getUsers', 'init');
-    return this.request('addUser', user);
+    return this.request('addUser', user).then(res => {
+      this.clearCacheFor('getUsers', 'init');
+      return res;
+    });
   },
 
   updateUser(user) {
     if (user.Password && !user.Password.endsWith('==')) user.Password = btoa(user.Password);
-    this.clearCacheFor('getUsers', 'init');
-    return this.request('updateUser', user);
+    return this.request('updateUser', user).then(res => {
+      this.clearCacheFor('getUsers', 'init');
+      return res;
+    });
   },
 
   deleteUser(id) {
-    this.clearCacheFor('getUsers', 'init');
-    return this.request('deleteUser', { id });
+    return this.request('deleteUser', { id }).then(res => {
+      this.clearCacheFor('getUsers', 'init');
+      return res;
+    });
   },
 
   uploadImage(base64, filename, mimeType) {
-    return this.request('uploadImage', { base64, filename, mimeType });
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      url: base64,
+      downloadUrl: base64
+    });
   },
 
-  migrateUsersSheet() {
-    return this.request('MIGRATE_USERS_SHEET');
-  },
-  
-  migrateTasksSheet() {
-    return this.request('MIGRATE_TASKS_SHEET');
-  },
-
-  // Positions Master Data
+  // Master Positions
   getPositions() {
     return this.request('getPositions', {}, { useCache: true });
   },
   addPosition(data) {
-    this.clearCacheFor('getPositions', 'init');
-    return this.request('addPosition', data);
+    return this.request('addPosition', data).then(res => {
+      this.clearCacheFor('getPositions', 'init');
+      return res;
+    });
   },
   updatePosition(data) {
-    this.clearCacheFor('getPositions', 'init');
-    return this.request('updatePosition', data);
+    return this.request('updatePosition', data).then(res => {
+      this.clearCacheFor('getPositions', 'init');
+      return res;
+    });
   },
   deletePosition(id) {
-    this.clearCacheFor('getPositions', 'init');
-    return this.request('deletePosition', { id });
-  },
-  migratePositionsSheet() {
-    return this.request('MIGRATE_POSITIONS_SHEET');
-  },
-  migrateUsersAddPosition() {
-    return this.request('MIGRATE_USERS_ADD_POSITION');
-  },
-  migrateUsersAddPermissions() {
-    return this.request('MIGRATE_USERS_ADD_PERMISSIONS');
-  },
-  migrateUsersPositionToId() {
-    return this.request('MIGRATE_USERS_POSITION_TO_ID');
+    return this.request('deletePosition', { id }).then(res => {
+      this.clearCacheFor('getPositions', 'init');
+      return res;
+    });
   },
 
   // Briefing Service
@@ -307,40 +852,54 @@ export const apiService = {
   getBriefingsNoCache() {
     return this.request('getBriefings', {}, { useCache: false });
   },
+  getBriefingById(id) {
+    return this.request('getBriefingById', { id }, { useCache: false });
+  },
   addBriefing(data) {
-    this.clearCacheFor('getBriefings', 'getBriefingResponses');
-    return this.request('addBriefing', data);
+    return this.request('addBriefing', data).then(res => {
+      this.clearCacheFor('getBriefings', 'getBriefingResponses');
+      return res;
+    });
   },
   updateBriefing(data) {
-    this.clearCacheFor('getBriefings', 'getBriefingResponses');
-    return this.request('updateBriefing', data);
+    return this.request('updateBriefing', data).then(res => {
+      this.clearCacheFor('getBriefings', 'getBriefingResponses');
+      return res;
+    });
   },
   deleteBriefing(id) {
-    this.clearCacheFor('getBriefings', 'getBriefingResponses');
-    return this.request('deleteBriefing', { id });
+    return this.request('deleteBriefing', { id }).then(res => {
+      this.clearCacheFor('getBriefings', 'getBriefingResponses');
+      return res;
+    });
   },
   getBriefingResponses(briefingId) {
     return this.request('getBriefingResponses', { briefingId }, { useCache: true });
   },
   saveBriefingResponse(data) {
-    this.clearCacheFor('getBriefings', 'getBriefingResponses');
-    return this.request('saveBriefingResponse', data);
-  },
-  migrateUsersAddBriefingPermissions() {
-    return this.request('MIGRATE_USERS_ADD_BRIEFING_PERMISSIONS');
-  },
-  migrateBriefingsAddFields() {
-    return this.request('MIGRATE_BRIEFINGS_ADD_FIELDS');
+    return this.request('saveBriefingResponse', data).then(res => {
+      this.clearCacheFor('getBriefings', 'getBriefingResponses');
+      return res;
+    });
   },
 
-  // Role/Permissions update (re-uses updateUser)
   updateUserPermissions(userId, permissions) {
-    this.clearCacheFor('getUsers', 'init');
-    return this.request('updateUser', { ID: userId, Permissions: permissions });
+    return this.request('updateUser', { ID: userId, Permissions: permissions }).then(res => {
+      this.clearCacheFor('getUsers', 'init');
+      return res;
+    });
   },
+
+  migrateUsersSheet() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateTasksSheet() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migratePositionsSheet() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateUsersAddPosition() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateUsersAddPermissions() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateUsersPositionToId() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateUsersAddBriefingPermissions() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
+  migrateBriefingsAddFields() { return Promise.resolve({ status: 'success', data: { message: 'Already migrated' } }); },
 
   isOverdue() {
-    // Disabled as per previous requirement for Tasks
     return false;
   },
 

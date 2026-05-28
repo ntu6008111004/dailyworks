@@ -88,6 +88,48 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     PostDate: briefing?.PostDate || new Date().toISOString().split('T')[0]
   });
 
+  const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
+
+  useEffect(() => {
+    const loadFullBriefing = async () => {
+      if (!briefing?.ID) return;
+      setIsLoadingBriefing(true);
+      try {
+        const fullBriefing = await apiService.getBriefingById(briefing.ID);
+        setFormData({
+          Title: fullBriefing.Title || '',
+          Detail: fullBriefing.Detail || '',
+          CreatorNote: fullBriefing.CreatorNote || '',
+          Priority: fullBriefing.Priority || 'Medium',
+          Status: fullBriefing.Status || 'รอดำเนินการ',
+          StartDate: fullBriefing.StartDate || '',
+          DueDate: fullBriefing.DueDate || '',
+          Assignees: fullBriefing.Assignees || [],
+          RefURL: fullBriefing.RefURL || '',
+          CardColor: fullBriefing.CardColor || '',
+          PostStatus: fullBriefing.PostStatus || 'ยังไม่โพส',
+          PostUrl: fullBriefing.PostUrl || '',
+          PostDate: fullBriefing.PostDate || ''
+        });
+        const imgs = [];
+        if (fullBriefing.RefImage1) imgs.push(fullBriefing.RefImage1);
+        if (fullBriefing.RefImage2) imgs.push(fullBriefing.RefImage2);
+        if (fullBriefing.RefImage3) imgs.push(fullBriefing.RefImage3);
+        if (fullBriefing.RefImage4) imgs.push(fullBriefing.RefImage4);
+        if (fullBriefing.RefImage5) imgs.push(fullBriefing.RefImage5);
+        if (fullBriefing.RefImage6) imgs.push(fullBriefing.RefImage6);
+        setRefImages(imgs);
+      } catch (e) {
+        console.error('Failed to load full briefing', e);
+        toast.error('ไม่สามารถโหลดข้อมูลรูปภาพบรีฟได้', { position: 'bottom-right' });
+      } finally {
+        setIsLoadingBriefing(false);
+      }
+    };
+
+    loadFullBriefing();
+  }, [briefing?.ID]);
+
   const [refImages, setRefImages] = useState(() => {
     const imgs = [];
     if (briefing?.RefImage1) imgs.push(briefing.RefImage1);
@@ -224,6 +266,24 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
         currentStatus = 'รอตรวจ';
       }
 
+      // Auto Overall Status Calculation on Client
+      const assigneeIds = formData.Assignees;
+      const latestStatuses = assigneeIds.map(id => {
+        if (String(id) === String(user?.ID)) {
+          return currentStatus;
+        }
+        const r = responses.find(resp => String(resp.UserID) === String(id));
+        return r?.Status || 'รอดำเนินการ';
+      });
+
+      let newOverallStatus = formData.Status;
+      if (latestStatuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
+      else if (latestStatuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
+      else if (latestStatuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
+      else if (latestStatuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
+      else if (latestStatuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
+      else newOverallStatus = 'กำลังทำ';
+
       const payload = {
         BriefingID: briefing.ID,
         UserID: String(user?.ID || ''),
@@ -231,15 +291,13 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
         URL2: myResponse.URL2,
         Status: currentStatus,
         Note: myResponse.Note,
+        NewOverallStatus: newOverallStatus,
         ...myResponse.ResultImages.reduce((acc, img, i) => {
           acc[`ResultImage${i+1}`] = img;
           return acc;
         }, {})
       };
       await apiService.saveBriefingResponse(payload);
-      
-      // Auto Overall Status Calculation
-      await triggerAutoOverallStatus(currentStatus);
       
       toast.success('บันทึกผลการบรีฟเรียบร้อย', { position: 'bottom-right' });
       loadResponses();
@@ -248,39 +306,6 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
     } finally {
       setSaving(false);
-    }
-  };
-
-  const triggerAutoOverallStatus = async () => {
-    if (!briefing?.ID) return;
-    
-    // Get latest responses (including the one just saved)
-    const latestResps = await apiService.getBriefingResponses(briefing.ID);
-    const assigneeIds = formData.Assignees;
-    
-    // Logic:
-    // 1. If any is 'รอตรวจ' (Waiting for Review), overall is 'รอตรวจ' because admin MUST check it.
-    // 2. Else if any is 'รอแก้ไข' (Admin asked for changes), overall is 'รอแก้ไข'.
-    // 3. Else if any is 'กำลังทำ', overall is 'กำลังทำ'.
-    // 4. Else if EVERYONE is 'เสร็จสิ้น', overall is 'เสร็จสิ้น'.
-    // 5. Else if EVERYONE is 'รอดำเนินการ', overall is 'รอดำเนินการ'.
-    // 6. Else Mixed (e.g. some เสร็จสิ้น, some รอดำเนินการ), overall is 'กำลังทำ'.
-    
-    let newOverallStatus = briefing.Status;
-    const statuses = assigneeIds.map(id => {
-      const r = latestResps.find(resp => String(resp.UserID) === String(id));
-      return r?.Status || 'รอดำเนินการ';
-    });
-
-    if (statuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
-    else if (statuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
-    else if (statuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
-    else if (statuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
-    else if (statuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
-    else newOverallStatus = 'กำลังทำ';
-
-    if (newOverallStatus !== briefing.Status) {
-      await apiService.updateBriefing({ ...formData, ID: briefing.ID, Status: newOverallStatus });
     }
   };
 
@@ -307,8 +332,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
             
             const dataUrl = canvas.toDataURL('image/webp', currentQuality);
             
-            // Limit to 41000 characters (Safe margin for GAS/Sheet storage)
-            if (dataUrl.length > 41000) {
+            // Limit to 600000 characters (Safe margin for Supabase storage)
+            if (dataUrl.length > 600000) {
               if (currentQuality > 0.15) {
                 // Lower quality slightly to preserve sharpness
                 currentQuality -= 0.1;
@@ -676,22 +701,31 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                 </div>
                 
                 <div className="grid grid-cols-3 gap-3">
-                  {refImages.map((img, i) => (
-                    <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden group border border-slate-200 shadow-sm bg-slate-50">
-                       <img src={img} className="w-full h-full object-cover" />
-                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <button onClick={() => setPreviewImage(img)} className="p-1.5 bg-white rounded-lg text-slate-800"><ExternalLink size={14}/></button>
-                          {canEditCore && (
-                            <button onClick={() => setRefImages(refImages.filter((_, idx) => idx !== i))} className="p-1.5 bg-red-500 rounded-lg text-white"><Trash2 size={14}/></button>
-                          )}
-                       </div>
+                  {isLoadingBriefing ? (
+                    <div className="col-span-3 py-10 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400">
+                       <RefreshCw size={32} className="mb-2 opacity-50 animate-spin text-blue-500" />
+                       <span className="text-sm font-medium">กำลังโหลดรูปภาพอ้างอิง...</span>
                     </div>
-                  ))}
-                  {refImages.length === 0 && (
-                    <div className="col-span-3 py-10 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300">
-                       <ImageIcon size={32} className="mb-2 opacity-50" />
-                       <span className="text-sm font-medium">ไม่มีรูปภาพอ้างอิง</span>
-                    </div>
+                  ) : (
+                    <>
+                      {refImages.map((img, i) => (
+                        <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden group border border-slate-200 shadow-sm bg-slate-50">
+                           <img src={img} className="w-full h-full object-cover" />
+                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button onClick={() => setPreviewImage(img)} className="p-1.5 bg-white rounded-lg text-slate-800"><ExternalLink size={14}/></button>
+                              {canEditCore && (
+                                <button onClick={() => setRefImages(refImages.filter((_, idx) => idx !== i))} className="p-1.5 bg-red-500 rounded-lg text-white"><Trash2 size={14}/></button>
+                              )}
+                           </div>
+                        </div>
+                      ))}
+                      {refImages.length === 0 && (
+                        <div className="col-span-3 py-10 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300">
+                           <ImageIcon size={32} className="mb-2 opacity-50" />
+                           <span className="text-sm font-medium">ไม่มีรูปภาพอ้างอิง</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -1024,7 +1058,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                   <div className="grid grid-cols-3 gap-2">
                                     {reviewerImages.map((img, i) => (
                                       <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
-                                        <img src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
+                                        <img loading="lazy" src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
                                         <button onClick={() => setReviewerImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
                                           <X size={10}/>
                                         </button>
@@ -1078,10 +1112,28 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                          const timestamp = format(new Date(), 'd MMM yy HH:mm', { locale: th });
                                          if (reviewerNote.trim()) finalNote += `\n\n[สั่งแก้ไขโดย ${user?.Name} ${timestamp}]: ${reviewerNote.trim()}`;
                                          
+                                         const assigneeIds = formData.Assignees;
+                                         const latestStatuses = assigneeIds.map(id => {
+                                           if (String(id) === String(selectedAssigneeId)) {
+                                             return 'รอแก้ไข';
+                                           }
+                                           const r = responses.find(resp => String(resp.UserID) === String(id));
+                                           return r?.Status || 'รอดำเนินการ';
+                                         });
+
+                                         let newOverallStatus = formData.Status;
+                                         if (latestStatuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
+                                         else if (latestStatuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
+                                         else if (latestStatuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
+                                         else if (latestStatuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
+                                         else if (latestStatuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
+                                         else newOverallStatus = 'กำลังทำ';
+
                                          const updateData = {
                                            ...selectedResponse,
                                            Status: 'รอแก้ไข',
-                                           Note: finalNote
+                                           Note: finalNote,
+                                           NewOverallStatus: newOverallStatus
                                          };
                                          reviewerImages.forEach((img, i) => {
                                            updateData[`ReviewImage${i + 1}`] = img;

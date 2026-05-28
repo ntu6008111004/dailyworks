@@ -35,7 +35,7 @@ export const MyProfile = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 150; 
+          const MAX_SIZE = 300; 
           let width = img.width;
           let height = img.height;
 
@@ -56,11 +56,11 @@ export const MyProfile = () => {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
           
-          const currentQuality = 0.5;
+          const currentQuality = 0.8;
           const dataUrl = canvas.toDataURL('image/webp', currentQuality);
           
-          if (dataUrl.length > 41000) {
-            // Drop quality if somehow 150x150 is still too big
+          if (dataUrl.length > 600000) {
+            // Drop quality if somehow 300x300 is still too big
             resolve(canvas.toDataURL('image/webp', 0.1));
           } else {
             resolve(dataUrl);

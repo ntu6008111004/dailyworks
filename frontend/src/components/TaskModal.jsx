@@ -73,8 +73,8 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
           img.onload = () => {
             const canvas = document.createElement('canvas');
             
-            let currentMaxDim = 600;
-            let currentQuality = 0.5;
+            let currentMaxDim = 1200;
+            let currentQuality = 0.8;
 
             const compress = () => {
               let curWidth = img.width;
@@ -93,7 +93,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
               
               const dataUrl = canvas.toDataURL('image/webp', currentQuality);
               
-              if (dataUrl.length > 41000) {
+              if (dataUrl.length > 600000) {
                 if (currentQuality > 0.15) {
                   currentQuality -= 0.1;
                   compress();

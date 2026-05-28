@@ -49,7 +49,7 @@ export const AdminUsers = () => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 150; // Small avatar size
+          const MAX_SIZE = 300; // Small avatar size
           let width = img.width;
           let height = img.height;
 
@@ -71,11 +71,11 @@ export const AdminUsers = () => {
           ctx.drawImage(img, 0, 0, width, height);
           
           // Highly compressed WebP for profile pic (~10-30kb)
-          const currentQuality = 0.5;
+          const currentQuality = 0.8;
           const dataUrl = canvas.toDataURL('image/webp', currentQuality);
           
-          if (dataUrl.length > 41000) {
-            // Already very small dimensions (150x150), so just drop quality if it's somehow still too big
+          if (dataUrl.length > 600000) {
+            // Already very small dimensions (300x300), so just drop quality if it's somehow still too big
             resolve(canvas.toDataURL('image/webp', 0.1));
           } else {
             resolve(dataUrl);
