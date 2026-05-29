@@ -316,10 +316,13 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          let currentMaxDim = 1200; // Start larger for clarity
-          let currentQuality = 0.8; // High initial quality
+          let currentMaxDim = 2560; // Start large for clarity
+          let currentQuality = 0.9;  // High initial quality
+          let dataUrl = '';
+          let sizeBytes = Infinity;
+          const maxByteSize = 2 * 1024 * 1024; // 2MB
 
-          const compress = () => {
+          while (sizeBytes > maxByteSize) {
             let width = img.width;
             let height = img.height;
             if (width > height) { if (width > currentMaxDim) { height *= currentMaxDim / width; width = currentMaxDim; } }
@@ -330,29 +333,28 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            const dataUrl = canvas.toDataURL('image/webp', currentQuality);
+            dataUrl = canvas.toDataURL('image/webp', currentQuality);
             
-            // Limit to 600000 characters (Safe margin for Supabase storage)
-            if (dataUrl.length > 600000) {
-              if (currentQuality > 0.15) {
-                // Lower quality slightly to preserve sharpness
-                currentQuality -= 0.1;
-                compress();
-              } else if (currentMaxDim > 300) {
-                // If quality is very low, shrink dimensions down to 300px
-                currentMaxDim -= 100;
-                currentQuality = 0.6; // Reset quality for new dimension
-                compress();
+            // Calculate size in bytes from the base64 string
+            const base64Str = dataUrl.split(',')[1] || '';
+            sizeBytes = Math.round((base64Str.length * 3) / 4);
+            
+            if (sizeBytes > maxByteSize) {
+              if (currentQuality > 0.3) {
+                // Gradually reduce quality to preserve dimensions and clarity
+                currentQuality -= 0.05;
+              } else if (currentMaxDim > 400) {
+                // If quality is already low, reduce dimensions and reset quality to moderate
+                currentMaxDim = Math.round(currentMaxDim * 0.8);
+                currentQuality = 0.8;
               } else {
-                // Return best effort
-                resolve(dataUrl);
+                // Cannot compress further without excessive degradation, break and keep best effort
+                break;
               }
-            } else {
-              resolve(dataUrl);
             }
-          };
+          }
 
-          compress();
+          resolve(dataUrl);
         };
         img.src = reader.result;
       };
