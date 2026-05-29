@@ -73,10 +73,13 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
           img.onload = () => {
             const canvas = document.createElement('canvas');
             
-            let currentMaxDim = 1200;
-            let currentQuality = 0.8;
+            let currentMaxDim = 2560; // Start large for clarity
+            let currentQuality = 0.9;  // High initial quality
+            let dataUrl = '';
+            let sizeBytes = Infinity;
+            const maxByteSize = 2 * 1024 * 1024; // 2MB
 
-            const compress = () => {
+            while (sizeBytes > maxByteSize) {
               let curWidth = img.width;
               let curHeight = img.height;
               
@@ -91,25 +94,28 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
               const ctx = canvas.getContext('2d');
               ctx.drawImage(img, 0, 0, curWidth, curHeight);
               
-              const dataUrl = canvas.toDataURL('image/webp', currentQuality);
+              dataUrl = canvas.toDataURL('image/webp', currentQuality);
               
-              if (dataUrl.length > 600000) {
-                if (currentQuality > 0.15) {
-                  currentQuality -= 0.1;
-                  compress();
-                } else if (currentMaxDim > 300) {
-                  currentMaxDim -= 100;
-                  currentQuality = 0.6;
-                  compress();
+              // Calculate size in bytes from the base64 string
+              const base64Str = dataUrl.split(',')[1] || '';
+              sizeBytes = Math.round((base64Str.length * 3) / 4);
+              
+              if (sizeBytes > maxByteSize) {
+                if (currentQuality > 0.3) {
+                  // Gradually reduce quality to preserve dimensions and clarity
+                  currentQuality -= 0.05;
+                } else if (currentMaxDim > 400) {
+                  // If quality is already low, reduce dimensions and reset quality to moderate
+                  currentMaxDim = Math.round(currentMaxDim * 0.8);
+                  currentQuality = 0.8;
                 } else {
-                  resolve({ file, preview: dataUrl });
+                  // Cannot compress further without excessive degradation, break and keep best effort
+                  break;
                 }
-              } else {
-                resolve({ file, preview: dataUrl });
               }
-            };
+            }
 
-            compress();
+            resolve({ file, preview: dataUrl });
           };
           img.src = reader.result;
         };
