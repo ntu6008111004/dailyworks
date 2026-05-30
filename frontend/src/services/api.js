@@ -303,12 +303,13 @@ export const apiService = {
                 if (!detailMatch && !projectMatch) return false;
               }
 
-              // Date range
+              // Date range — compare against task's StartDate (วันเริ่มต้นงาน)
+              // so the filter finds tasks that *started* within the given range
               if (startDate || endDate) {
-                const compareDate = t.DueDate || t.StartDate || '';
-                if (!compareDate) return false;
-                if (startDate && compareDate < startDate) return false;
-                if (endDate && compareDate > endDate) return false;
+                const taskStartDate = (t.StartDate || t.DueDate || '').slice(0, 10);
+                if (!taskStartDate) return false;
+                if (startDate && taskStartDate < startDate) return false;
+                if (endDate && taskStartDate > endDate) return false;
               }
 
               return true;
@@ -772,10 +773,13 @@ export const apiService = {
   updateTaskStatus(taskId, newStatus) {
     const data = { ID: taskId, Status: newStatus };
     if (this.userId) data.UserID = this.userId;
+    // Optimistically patch all caches immediately
     this.mutatePagesCache({ ID: taskId, Status: newStatus });
     this.mutateSummaryCache('update', { ID: taskId, Status: newStatus });
     return this.request('updateTask', data).then(res => {
-      this.mutatePagesCache({ ID: taskId, Status: newStatus });
+      // After successful API write, also invalidate caches so next fetchPage
+      // gets truly fresh data from server instead of stale cache
+      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
       return res;
     });
   },
