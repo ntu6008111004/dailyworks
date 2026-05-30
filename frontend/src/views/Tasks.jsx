@@ -422,16 +422,19 @@ export const Tasks = () => {
     // Optimistic update: เปลี่ยน UI ทันที
     setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: 'syncing' } : t));
     try {
-      // ใช้ updateTaskStatus ที่ patch cache แทนการ clearCache ทั้งหมด
-      // เพื่อป้องกัน fetchPage ที่ run concurrent จากการดึงข้อมูลเก่ามาทับ
+      // Wait for the API call to fully complete + caches to be invalidated
       await apiService.updateTaskStatus(taskId, newStatus);
+      
+      // Show success indicator — force newStatus in state to prevent any stale overwrite
       setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: 'success' } : t));
+      toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
+      
+      // After the success indicator finishes, clear it and silently re-fetch fresh data
       setTimeout(() => {
         setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: newStatus, syncState: null } : t));
-        // Silently fetch to ensure data is completely synced
+        // Cache was already cleared by updateTaskStatus, so this fetch will get fresh server data
         fetchPage(currentPage, true);
       }, 1500);
-      toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
     } catch (error) {
       // Rollback ถ้า API ล้มเหลว
       setTasks(prev => prev.map(t => String(t.ID) === String(taskId) ? { ...t, Status: oldStatus, syncState: null } : t));
