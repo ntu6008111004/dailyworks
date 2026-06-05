@@ -227,12 +227,13 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     if (saving) return;
     setSaving(true);
     try {
+      const refImagePayload = {};
+      for (let i = 1; i <= 6; i++) {
+        refImagePayload[`RefImage${i}`] = refImages[i - 1] || null;
+      }
       const payload = {
         ...formData,
-        ...refImages.reduce((acc, img, i) => {
-          acc[`RefImage${i+1}`] = img;
-          return acc;
-        }, {})
+        ...refImagePayload
       };
       
       if (briefing?.ID) {
@@ -284,6 +285,11 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       else if (latestStatuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
       else newOverallStatus = 'กำลังทำ';
 
+      const resultImagePayload = {};
+      for (let i = 1; i <= 6; i++) {
+        resultImagePayload[`ResultImage${i}`] = myResponse.ResultImages[i - 1] || null;
+      }
+
       const payload = {
         BriefingID: briefing.ID,
         UserID: String(user?.ID || ''),
@@ -292,10 +298,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
         Status: currentStatus,
         Note: myResponse.Note,
         NewOverallStatus: newOverallStatus,
-        ...myResponse.ResultImages.reduce((acc, img, i) => {
-          acc[`ResultImage${i+1}`] = img;
-          return acc;
-        }, {})
+        ...resultImagePayload
       };
       await apiService.saveBriefingResponse(payload);
       
@@ -306,6 +309,36 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const triggerAutoOverallStatus = async () => {
+    if (!briefing?.ID) return;
+    
+    try {
+      // Get latest responses (including the one just saved)
+      const latestResps = await apiService.getBriefingResponses(briefing.ID);
+      const assigneeIds = formData.Assignees;
+      
+      let newOverallStatus = formData.Status;
+      const statuses = assigneeIds.map(id => {
+        const r = latestResps.find(resp => String(resp.UserID) === String(id));
+        return r?.Status || 'รอดำเนินการ';
+      });
+
+      if (statuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
+      else if (statuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
+      else if (statuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
+      else if (statuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
+      else if (statuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
+      else newOverallStatus = 'กำลังทำ';
+
+      if (newOverallStatus !== formData.Status) {
+        setFormData(prev => ({ ...prev, Status: newOverallStatus }));
+        await apiService.updateBriefing({ ...formData, ID: briefing.ID, Status: newOverallStatus });
+      }
+    } catch (e) {
+      console.error('Failed to trigger auto overall status:', e);
     }
   };
 
@@ -1137,9 +1170,9 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                            Note: finalNote,
                                            NewOverallStatus: newOverallStatus
                                          };
-                                         reviewerImages.forEach((img, i) => {
-                                           updateData[`ReviewImage${i + 1}`] = img;
-                                         });
+                                         for (let i = 1; i <= 6; i++) {
+                                           updateData[`ReviewImage${i}`] = reviewerImages[i - 1] || null;
+                                         }
 
                                           await apiService.saveBriefingResponse(updateData);
                                           toast.success(`สั่งแก้ไขงานของ ${selectedUserInfo?.Name} แล้ว`, { position: 'bottom-right' });
@@ -1173,9 +1206,9 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                            Status: 'เสร็จสิ้น',
                                            Note: finalNote
                                          };
-                                         reviewerImages.forEach((img, i) => {
-                                           updateData[`ReviewImage${i + 1}`] = img;
-                                         });
+                                         for (let i = 1; i <= 6; i++) {
+                                           updateData[`ReviewImage${i}`] = reviewerImages[i - 1] || null;
+                                         }
 
                                           await apiService.saveBriefingResponse(updateData);
                                           toast.success(`อนุมัติงานของ ${selectedUserInfo?.Name} แล้ว`, { position: 'bottom-right' });
