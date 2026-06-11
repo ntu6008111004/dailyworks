@@ -27,7 +27,7 @@ export const DailySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutside
 
     try {
       const tStart = format(new Date(t.StartDate), 'yyyy-MM-dd');
-      const tDue = format(new Date(t.DueDate), 'yyyy-MM-dd');
+      const tDue = t.DueDate ? format(new Date(t.DueDate), 'yyyy-MM-dd') : tStart;
       return date >= tStart && date <= tDue;
     } catch {
       return false;

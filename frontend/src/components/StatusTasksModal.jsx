@@ -122,7 +122,7 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                           <Calendar size={14} className="text-blue-500"/>
                           <div className="flex flex-col">
                             <span className="text-[8px] text-slate-400 uppercase tracking-tighter">กำหนดส่ง</span>
-                            <span>{format(new Date(task.DueDate), 'd MMM yyyy', { locale: th })}</span>
+                            <span>{task.DueDate ? format(new Date(task.DueDate), 'd MMM yyyy', { locale: th }) : 'ไม่มีกำหนดส่ง'}</span>
                           </div>
                         </div>
                       </div>

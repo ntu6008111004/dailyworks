@@ -670,7 +670,7 @@ export const Briefing = () => {
                              <div className="flex flex-col items-center">
                                 <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
                                    <Calendar size={12} className={isOverdue ? 'text-red-500' : 'text-blue-500'} />
-                                   {format(new Date(b.DueDate), 'dd/MM/yyyy', { locale: th })}
+                                   {b.DueDate ? format(new Date(b.DueDate), 'dd/MM/yyyy', { locale: th }) : 'ไม่มีกำหนดส่ง'}
                                 </div>
                              </div>
                           </td>
@@ -856,7 +856,7 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
             />
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
               <Calendar size={13} />
-              {format(new Date(briefing.DueDate), 'd MMM yy', { locale: th })}
+              {briefing.DueDate ? format(new Date(briefing.DueDate), 'd MMM yy', { locale: th }) : 'ไม่มีกำหนดส่ง'}
             </div>
           </div>
   

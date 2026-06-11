@@ -712,7 +712,7 @@ export const Tasks = () => {
                     <div className="flex flex-wrap gap-3 text-xs text-slate-500 mt-5 pt-2 border-t border-slate-50">
                       <div className="flex items-center gap-1">
                         <Calendar size={13} />
-                        <span>กำหนดส่ง: วัน{format(new Date(task.DueDate), "eeeeที่ d MMMM yyyy", { locale: th })}</span>
+                        <span>กำหนดส่ง: {task.DueDate ? `วัน${format(new Date(task.DueDate), "eeeeที่ d MMMM yyyy", { locale: th })}` : 'ไม่มีกำหนดส่ง'}</span>
                       </div>
                       <div className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-100 rounded-md">
                         <span className="font-medium text-slate-700">{task.StaffName}</span>
@@ -826,7 +826,7 @@ export const Tasks = () => {
                              <div className="flex flex-col items-center">
                                 <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
                                    <Calendar size={12} className="text-blue-500" />
-                                   {format(new Date(task.DueDate), 'dd/MM/yyyy', { locale: th })}
+                                   {task.DueDate ? format(new Date(task.DueDate), 'dd/MM/yyyy', { locale: th }) : 'ไม่มีกำหนดส่ง'}
                                 </div>
                                 <span className="text-[9px] text-slate-400 font-medium px-1.5 bg-slate-50 rounded border border-slate-100 mt-0.5">
                                    {task.StaffName}
