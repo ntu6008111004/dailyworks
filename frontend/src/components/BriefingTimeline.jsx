@@ -30,7 +30,9 @@ export const BriefingTimeline = ({ briefings, onBriefingClick }) => {
 
   const getBriefingsForDay = (day) => {
     return briefings.filter(b => {
+      if (!b.DueDate) return false;
       const due = new Date(b.DueDate);
+      if (isNaN(due.getTime())) return false;
       due.setHours(0, 0, 0, 0);
       const d = new Date(day);
       d.setHours(0, 0, 0, 0);

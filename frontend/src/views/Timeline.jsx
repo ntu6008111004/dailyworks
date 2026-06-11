@@ -86,11 +86,15 @@ export const Timeline = () => {
     const userName = user?.Name || user?.name;
     return tasks
       .filter(t => t.StaffName === userName)
-      .map(t => ({
-        ...t,
-        startDate: new Date(t.StartDate),
-        endDate: new Date(t.DueDate),
-      }));
+      .map(t => {
+        const start = t.StartDate ? new Date(t.StartDate) : new Date();
+        const due = t.DueDate ? new Date(t.DueDate) : start;
+        return {
+          ...t,
+          startDate: isNaN(start.getTime()) ? new Date() : start,
+          endDate: isNaN(due.getTime()) ? (isNaN(start.getTime()) ? new Date() : start) : due,
+        };
+      });
   }, [tasks, user]);
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
@@ -359,7 +363,7 @@ export const Timeline = () => {
                   <div className="mt-1 text-slate-900 text-sm">
                     {format(new Date(selectedTask.StartDate), 'd MMM yyyy', { locale: th })}
                     <span className="text-slate-400 mx-2">→</span>
-                    {format(new Date(selectedTask.DueDate), 'd MMM yyyy', { locale: th })}
+                    {selectedTask.DueDate ? format(new Date(selectedTask.DueDate), 'd MMM yyyy', { locale: th }) : 'ไม่มีกำหนดส่ง'}
                   </div>
                 </div>
               </div>
