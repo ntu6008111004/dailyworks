@@ -85,7 +85,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     CardColor: briefing?.CardColor || '',
     PostStatus: briefing?.PostStatus || 'ยังไม่โพส',
     PostUrl: briefing?.PostUrl || '',
-    PostDate: briefing?.PostDate || new Date().toISOString().split('T')[0]
+    PostDate: briefing?.PostDate || new Date().toISOString().split('T')[0],
+    Points: briefing?.Points || 0
   });
 
   const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
@@ -109,7 +110,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
           CardColor: fullBriefing.CardColor || '',
           PostStatus: fullBriefing.PostStatus || 'ยังไม่โพส',
           PostUrl: fullBriefing.PostUrl || '',
-          PostDate: fullBriefing.PostDate || ''
+          PostDate: fullBriefing.PostDate || '',
+          Points: fullBriefing.Points || 0
         });
         const imgs = [];
         if (fullBriefing.RefImage1) imgs.push(fullBriefing.RefImage1);
@@ -593,6 +595,19 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                             </button>
                           ))}
                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">คะแนน (Points)</label>
+                       <input 
+                         type="number"
+                         min="0"
+                         value={formData.Points || ''}
+                         onChange={e => setFormData({...formData, Points: parseInt(e.target.value) || 0})}
+                         placeholder="ใส่คะแนน..."
+                         className="w-24 px-3 py-1 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-sm"
+                         readOnly={!canEditCore}
+                       />
                     </div>
 
                     <div className="space-y-2">

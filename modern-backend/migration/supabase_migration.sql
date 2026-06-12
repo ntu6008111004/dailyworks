@@ -83,7 +83,8 @@ CREATE TABLE "Briefings" (
   "CardColor" TEXT,
   "PostStatus" TEXT DEFAULT 'ยังไม่โพส',
   "PostUrl" TEXT,
-  "PostDate" TEXT
+  "PostDate" TEXT,
+  "Points" INTEGER DEFAULT 0
 );
 
 -- 5. Briefing Responses Table

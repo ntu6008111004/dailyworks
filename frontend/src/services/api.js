@@ -514,7 +514,7 @@ export const apiService = {
           case 'getBriefings': {
             const { data: briefings, error } = await supabase
               .from('Briefings')
-              .select('ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate')
+              .select('ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points')
               .order('CreatedAt', { ascending: false });
             if (error) throw error;
             resultData = (briefings || []).map(b => ({
@@ -571,6 +571,7 @@ export const apiService = {
                 PostUrl: data.PostUrl || '',
                 PostDate: data.PostDate || '',
                 LastUpdatedBy: this.userId || null,
+                Points: data.Points || 0,
                 ...Object.keys(data).reduce((acc, k) => {
                   if (k.startsWith('RefImage')) acc[k] = data[k];
                   return acc;
@@ -614,10 +615,12 @@ export const apiService = {
           }
 
           case 'getBriefingResponses': {
-            const { data: responses, error } = await supabase
-              .from('BriefingResponses')
-              .select('*')
-              .eq('BriefingID', data.briefingId);
+            const selectFields = data.select || '*';
+            let query = supabase.from('BriefingResponses').select(selectFields);
+            if (data && data.briefingId) {
+              query = query.eq('BriefingID', data.briefingId);
+            }
+            const { data: responses, error } = await query;
             if (error) throw error;
             resultData = responses || [];
             break;
@@ -877,8 +880,8 @@ export const apiService = {
       return res;
     });
   },
-  getBriefingResponses(briefingId) {
-    return this.request('getBriefingResponses', { briefingId }, { useCache: true });
+  getBriefingResponses(briefingId, select) {
+    return this.request('getBriefingResponses', { briefingId, select }, { useCache: true });
   },
   saveBriefingResponse(data) {
     return this.request('saveBriefingResponse', data).then(res => {
