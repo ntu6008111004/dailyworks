@@ -7,13 +7,14 @@ import toast from 'react-hot-toast';
 export const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const { login, loading } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      await login(username, btoa(password));
+      await login(username, btoa(password), rememberMe);
       toast.success('เข้าสู่ระบบสำเร็จ');
       navigate('/');
     } catch (error) {
@@ -59,6 +60,18 @@ export const Login = () => {
               className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none bg-white/50"
               placeholder="••••••••"
             />
+          </div>
+
+          <div className="flex items-center">
+            <label className="flex items-center text-sm text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500 mr-2 cursor-pointer transition-all"
+              />
+              จดจำการเข้าสู่ระบบไว้ (ในคอมพิวเตอร์และมือถือ)
+            </label>
           </div>
 
           <button

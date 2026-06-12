@@ -6,7 +6,6 @@ const AuthContext = createContext();
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
-// Simple XOR obfuscation key – not cryptographic but hides plaintext from casual inspection
 const STORAGE_KEY = 'dw_session';
 const SECRET = 'DWS!@#2025';
 
@@ -34,14 +33,59 @@ function deobfuscate(encoded) {
   }
 }
 
-function saveSession(userData) {
+// Add Cookie utility functions
+function setCookie(name, value, days) {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secureFlag;
+}
+
+function getCookie(name) {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i].trim();
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+}
+
+function eraseCookie(name) {
+  const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax' + secureFlag;
+}
+
+function saveSession(userData, remember = true) {
   const encoded = obfuscate(JSON.stringify(userData));
   localStorage.setItem(STORAGE_KEY, encoded);
+  
+  const shouldRemember = remember && localStorage.getItem('dw_remember') !== 'false';
+  if (shouldRemember) {
+    setCookie(STORAGE_KEY, encoded, 365);
+  } else {
+    setCookie(STORAGE_KEY, encoded, null);
+  }
 }
 
 function loadSession() {
-  // Support old plaintext sessions for backward compatibility
-  const encoded = localStorage.getItem(STORAGE_KEY);
+  let encoded = localStorage.getItem(STORAGE_KEY);
+  
+  if (!encoded) {
+    encoded = getCookie(STORAGE_KEY);
+    if (encoded) {
+      localStorage.setItem(STORAGE_KEY, encoded);
+    }
+  } else {
+    if (!getCookie(STORAGE_KEY) && localStorage.getItem('dw_remember') !== 'false') {
+      setCookie(STORAGE_KEY, encoded, 365);
+    }
+  }
+
   if (encoded) {
     const decoded = deobfuscate(encoded);
     if (decoded) return JSON.parse(decoded);
@@ -133,12 +177,13 @@ export const AuthProvider = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.ID, user?.id, user?.Username, user?.Name, user?.name, refreshInitData]);
 
-  const login = async (username, password) => {
+  const login = async (username, password, remember = true) => {
     setLoading(true);
     try {
       const userData = await apiService.login(username, password);
       setUser(userData);
-      saveSession(userData);
+      localStorage.setItem('dw_remember', remember ? 'true' : 'false');
+      saveSession(userData, remember);
       // Data will be refreshed by useEffect hook due to user change
       return userData;
     } finally {
@@ -152,6 +197,8 @@ export const AuthProvider = ({ children }) => {
     setDepartments([]);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('user');
+    localStorage.removeItem('dw_remember');
+    eraseCookie(STORAGE_KEY);
   };
 
   const updateUserState = (newData) => {
