@@ -70,3 +70,16 @@ docker-compose exec api npm run migrate
 1. ใช้ **Cloudflare Tunnel** (ฟรี) เพื่อชี้โดเมนมายังเครื่องคอมฯ คุณ
 2. ใช้ **API Key** (ที่ผมเพิ่มให้ในโค้ด) เพื่ออนุญาตเฉพาะ Vercel ของคุณเท่านั้น
 3. ไม่ต้องแลกเปลี่ยน IP หรือเปิด Port ที่ Router ให้เสี่ยงครับ
+
+## 8. CatLog AI / ThaiLLM Provider (ใหม่)
+
+การเรียก ThaiLLM ต้องผ่าน `POST /api/ai/chat` ของ backend เท่านั้น ห้ามใส่ `THAILLM_API_KEY` หรือ `VITE_*` ที่เป็น provider secret ใน frontend
+
+1. ตั้งค่าใน `modern-backend/.env`: `AI_SESSION_SECRET` (อย่างน้อย 32 ตัวอักษร), `THAILLM_API_KEY` (ใช้ key ใหม่ที่ rotate แล้ว), `THAILLM_API_URL=https://thaillm.or.th/api/v1/chat/completions` และ `CORS_ORIGINS`
+2. ตั้งค่า frontend production ให้ `VITE_AI_API_BASE_URL` ชี้ไปยัง public HTTPS URL ของ backend ต่อด้วย `/api/ai`
+3. เปิด `THAILLM_ALLOW_INSECURE_HTTP=true` เฉพาะกรณีจำเป็นจริงและต้องอยู่หลังเครือข่ายที่เชื่อถือได้ เพราะจะทำให้ backend-to-provider hop มีความเสี่ยงดักข้อมูล
+4. Backend จะตรวจสอบ session กับ Users ใน Supabase ใหม่ทุกคำขอ, บังคับ RBAC, จำกัด rate ต่อ user/IP และแปลงคำถามเป็นตัวกรองวันที่ สถานะ ชื่อเล่น และ keyword ก่อน query งานย้อนหลัง
+5. คำถาม “งานทั้งหมด / แดชบอร์ด / ภาพรวม” จะคำนวณสถิติจำนวนงานจากฐานข้อมูลโดยตรงตามสิทธิ์และตัวกรอง ไม่ใช่นับจากรายการตัวอย่างที่ AI อ่าน
+6. การค้นเว็บ fallback ใช้ DuckDuckGo Instant Answer ซึ่งอาจไม่ทันข่าวล่าสุด หากต้องการค้นเว็บ/ข่าวที่สดกว่า ให้ตั้ง `BRAVE_SEARCH_API_KEY` บน backend (ห้ามใส่ใน Vite) เพื่อใช้ Brave Search API
+
+คีย์ ThaiLLM เดิมที่เคยอยู่ใน frontend ถือว่าถูกเปิดเผยแล้ว ต้อง revoke/rotate ที่ผู้ให้บริการ แม้จะลบออกจาก source แล้วก็ตาม

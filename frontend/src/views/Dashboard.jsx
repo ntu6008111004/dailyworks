@@ -8,8 +8,29 @@ import { StatusTasksModal } from '../components/StatusTasksModal';
 import { CustomSelect } from '../components/CustomSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 
+function dashboardFilterStorageKey(userId) {
+  return `worklogs_dashboard_filters:${encodeURIComponent(String(userId || 'anonymous'))}`;
+}
+
+function readDashboardFilters(userId) {
+  try {
+    const value = JSON.parse(localStorage.getItem(dashboardFilterStorageKey(userId)) || '{}');
+    return {
+      department: typeof value.department === 'string' ? value.department : 'All',
+      staffName: typeof value.staffName === 'string' ? value.staffName : 'All',
+      year: typeof value.year === 'string' || typeof value.year === 'number' ? String(value.year) : 'All',
+      startDate: typeof value.startDate === 'string' ? value.startDate : '',
+      endDate: typeof value.endDate === 'string' ? value.endDate : '',
+    };
+  } catch {
+    return { department: 'All', staffName: 'All', year: 'All', startDate: '', endDate: '' };
+  }
+}
+
 export const Dashboard = () => {
   const { user } = useAuth();
+  const userId = String(user?.ID || user?.id || '');
+  const [savedFiltersUserId, setSavedFiltersUserId] = useState('');
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
@@ -29,6 +50,30 @@ export const Dashboard = () => {
   const canSeeAll = isAdmin || isHRHead;
   
   const [allUsers, setAllUsers] = useState([]);
+
+  useEffect(() => {
+    setSavedFiltersUserId('');
+    const saved = readDashboardFilters(userId);
+    setFilterDepartment(saved.department);
+    setFilterUser(saved.staffName);
+    setFilterYear(saved.year);
+    setStartDate(saved.startDate);
+    setEndDate(saved.endDate);
+    setSavedFiltersUserId(userId);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || savedFiltersUserId !== userId) return;
+    try {
+      localStorage.setItem(dashboardFilterStorageKey(userId), JSON.stringify({
+        department: filterDepartment,
+        staffName: filterUser,
+        year: filterYear,
+        startDate,
+        endDate,
+      }));
+    } catch { /* storage may be unavailable */ }
+  }, [userId, savedFiltersUserId, filterDepartment, filterUser, filterYear, startDate, endDate]);
 
   useEffect(() => {
     let isMounted = true;

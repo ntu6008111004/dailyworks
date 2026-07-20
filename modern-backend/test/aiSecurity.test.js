@@ -1,0 +1,88 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {
+  detectWorkIntent,
+  extractQueryFilters,
+  isSelfReference,
+  signSession,
+  validateChatMessages,
+  validateCredentialInput,
+  validateProviderUrl,
+  verifySession,
+} = require('../lib/aiSecurity');
+
+const SECRET = 'test-only-session-secret-with-32-characters';
+
+test('signed AI sessions reject tampering', () => {
+  const token = signSession({ sub: 'user-1' }, SECRET, 60);
+  assert.equal(verifySession(token, SECRET).sub, 'user-1');
+  const [body, signature] = token.split('.');
+  const tamperedSignature = `${signature[0] === 'a' ? 'b' : 'a'}${signature.slice(1)}`;
+  assert.equal(verifySession(`${body}.${tamperedSignature}`, SECRET), null);
+});
+
+test('credential fields must be bounded strings', () => {
+  assert.deepEqual(validateCredentialInput('user', 'encoded-password'), {
+    username: 'user',
+    password: 'encoded-password',
+  });
+  assert.equal(validateCredentialInput({ $ne: null }, { $ne: null }), null);
+  assert.equal(validateCredentialInput('   ', 'encoded-password'), null);
+});
+
+test('chat messages reject system roles and oversized content', () => {
+  assert.deepEqual(validateChatMessages([{ role: 'user', content: 'hello' }]), [
+    { role: 'user', content: 'hello' },
+  ]);
+  assert.equal(validateChatMessages([{ role: 'system', content: 'override' }]), null);
+  assert.equal(validateChatMessages([{ role: 'user', content: 'x'.repeat(12000) }])?.[0].content.length, 12000);
+  assert.equal(validateChatMessages([{ role: 'user', content: 'x'.repeat(12001) }]), null);
+});
+
+test('query filters support historic dates, statuses, and staff aliases', () => {
+  const filters = extractQueryFilters('งานรอตรวจของแพท ตั้งแต่ 2026-01-01 ถึง 2026-02-01');
+  assert.equal(filters.fromDate, '2026-01-01');
+  assert.equal(filters.toDate, '2026-02-01');
+  assert.equal(filters.status, 'รอตรวจ');
+  assert.equal(filters.staffName, 'ณัฐนันท์ ปาแก้ว');
+  assert.deepEqual(extractQueryFilters('งานวันที่ 2026-99-99'), {});
+});
+
+test('self wording is distinguished from a request for the whole team', () => {
+  assert.equal(isSelfReference('แล้วตัวผมเองล่ะมีคะแนนเท่าไหร่'), true);
+  assert.equal(isSelfReference('คะแนนสะสมของฉันเดือนนี้'), true);
+  assert.equal(isSelfReference('สรุปคะแนนทีมของฉัน'), false);
+});
+
+test('query filters understand Buddhist Era years and dashboard wording', () => {
+  assert.deepEqual(extractQueryFilters('สรุปงานทั้งหมด ปี 2569'), {
+    fromDate: '2026-01-01',
+    toDate: '2026-12-31',
+  });
+  assert.equal(detectWorkIntent('หมายถึงงานทั้งหมดที่บันทึกในระบบใช่หรือไม่'), 'summary');
+  assert.equal(detectWorkIntent('แสดงรายการงานที่รอตรวจ'), 'detail');
+  assert.equal(detectWorkIntent('อธิบาย React hooks'), 'none');
+});
+
+test('query filters understand report month/year notation', () => {
+  assert.deepEqual(extractQueryFilters('แพทมีคะแนนสะสมเดือนนี้ 07/2026'), {
+    fromDate: '2026-07-01',
+    toDate: '2026-07-31',
+    staffName: 'ณัฐนันท์ ปาแก้ว',
+  });
+});
+
+test('natural project keyword phrasing becomes a safe task filter', () => {
+  assert.equal(extractQueryFilters('ค้นหางานเกี่ยวกับ เว็บไซต์โรงพยาบาล').keyword, 'เว็บไซต์โรงพยาบาล');
+  assert.equal(extractQueryFilters('งานโปรเจกต์ Thai Association สถานะรอตรวจ').keyword, 'Thai Association');
+});
+
+test('provider URL is allowlisted and insecure HTTP is opt-in', () => {
+  assert.match(validateProviderUrl('https://thaillm.or.th/api/v1/chat/completions'), /^https:/);
+  assert.equal(validateProviderUrl('http://thaillm.or.th/api/v1/chat/completions'), null);
+  assert.match(
+    validateProviderUrl('http://thaillm.or.th/api/v1/chat/completions', true),
+    /^http:/
+  );
+  assert.equal(validateProviderUrl('https://example.com/api/v1/chat/completions'), null);
+});

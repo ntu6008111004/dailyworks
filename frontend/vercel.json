@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/thaillm/:path*",
+      "destination": "http://thaillm.or.th/api/v1/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { apiService } from '../services/api';
+import { thaiLlmService } from '../services/thaiLlmService';
 
 const AuthContext = createContext();
 
@@ -181,6 +182,12 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const userData = await apiService.login(username, password);
+      try {
+        await thaiLlmService.createSession(username, password);
+      } catch (error) {
+        console.warn('AI session could not be created:', error);
+        thaiLlmService.clearSession();
+      }
       setUser(userData);
       localStorage.setItem('dw_remember', remember ? 'true' : 'false');
       saveSession(userData, remember);
@@ -192,12 +199,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    thaiLlmService.clearSession();
     setUser(null);
     setPositions([]);
     setDepartments([]);
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('user');
     localStorage.removeItem('dw_remember');
+    // Remove unowned legacy chat keys. New chat storage is namespaced by user ID.
+    localStorage.removeItem('chatbot_rooms');
+    localStorage.removeItem('chatbot_active_room');
+    localStorage.removeItem('chatbot_mini_messages');
     eraseCookie(STORAGE_KEY);
   };
 

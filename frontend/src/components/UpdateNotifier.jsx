@@ -6,6 +6,15 @@ import toast from 'react-hot-toast';
 /* global __APP_VERSION__ */
 const CURRENT_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 0;
 
+function formatPublishedAt(timestamp) {
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) return 'เพิ่งเผยแพร่';
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 export const UpdateNotifier = () => {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -97,61 +106,61 @@ export const UpdateNotifier = () => {
 
   if (!updateInfo || isHidden) return null;
 
+  const changelog = Array.isArray(updateInfo.changelog) && updateInfo.changelog.length
+    ? updateInfo.changelog
+    : ['ปรับปรุงประสิทธิภาพและความเสถียรของระบบ'];
+
   return (
     <div className="ios-glass-overlay !z-[9999] p-4">
-      <div className="ios-soft-card max-w-md w-full relative">
+      <div className="ios-soft-card max-w-lg w-full relative max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
         {/* Top Glow Accent */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400" />
         
         {/* Header Section */}
-        <div className="p-6 pb-4 flex justify-between items-start">
+        <div className="px-6 pt-6 pb-5 flex justify-between items-start shrink-0">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-500/10 text-purple-600 rounded-2xl shadow-inner border border-purple-500/10">
-              <Sparkles size={28} className="animate-pulse" />
+            <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-violet-100 to-fuchsia-100 text-violet-600 rounded-2xl border border-violet-200/70 shadow-sm">
+              <Sparkles size={25} />
             </div>
             <div>
-              <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-tight">พบเวอร์ชันใหม่!</h3>
-              <p className="text-[10px] font-extrabold text-purple-600 tracking-[0.15em] uppercase opacity-80">System Ready for Update</p>
+              <p className="text-xs font-bold text-violet-600 mb-0.5">มีอัปเดตใหม่พร้อมใช้งาน</p>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-tight">อัปเดตระบบ</h3>
             </div>
           </div>
           <button 
             onClick={handleDismiss}
-            className="text-slate-400 hover:text-slate-600 hover:bg-white/50 p-2 rounded-full transition-all border border-transparent hover:border-white/40"
+            aria-label="ปิดการแจ้งเตือนอัปเดต"
+            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-xl transition-colors"
           >
-            <X size={22} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Content Section */}
-        <div className="px-6 pb-8">
-          <div className="ios-glass-pill p-4 mb-6 italic text-slate-600 text-sm leading-relaxed border-purple-500/5 bg-white/30">
-            " แวะอัปเดตสักครู่ เพื่อการทำงานที่เสถียรยิ่งขึ้นและเห็นข้อมูลตรงกับทุกคนในทีม! "
+        <div className="px-6 pb-6 min-h-0 flex flex-col">
+          <div className="rounded-2xl bg-violet-50 border border-violet-100 px-4 py-3 mb-4 shrink-0">
+            <p className="text-sm font-semibold text-slate-700">อัปเดตครั้งนี้มี {changelog.length} รายการ</p>
+            <p className="text-xs text-slate-500 mt-0.5">กดอัปเดตเพื่อโหลดข้อมูลและหน้าจอเวอร์ชันล่าสุด</p>
           </div>
 
-          <div className="space-y-3 mb-8 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
-            {updateInfo.changelog && updateInfo.changelog.length > 0 ? (
-              updateInfo.changelog.map((log, i) => (
-                <div key={i} className="flex gap-3 text-[15px] text-slate-700 items-start">
-                  <div className="mt-1 w-5 h-5 flex items-center justify-center bg-green-500/10 rounded-full shrink-0">
-                    <CheckCircle2 className="text-green-600" size={14} />
-                  </div>
-                  <span className="font-medium tracking-wide">{log}</span>
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3 mb-5" aria-label="รายการอัปเดต">
+            {changelog.map((log, i) => (
+              <article key={i} className="flex gap-3 rounded-2xl border border-slate-100 bg-white/70 px-4 py-3.5 shadow-sm">
+                <div className="w-7 h-7 flex items-center justify-center bg-emerald-50 rounded-full shrink-0 mt-0.5">
+                  <CheckCircle2 className="text-emerald-600" size={16} />
                 </div>
-              ))
-            ) : (
-              <div className="flex gap-3 text-[15px] text-slate-700 items-start">
-                <div className="mt-1 w-5 h-5 flex items-center justify-center bg-green-500/10 rounded-full shrink-0">
-                  <CheckCircle2 className="text-green-600" size={14} />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-400 mb-1">รายการที่ {i + 1}</p>
+                  <p className="text-[15px] leading-6 text-slate-700 font-medium break-words">{log}</p>
                 </div>
-                <span className="font-medium tracking-wide">ปรับปรุงประสิทธิภาพและความเสถียรของระบบ</span>
-              </div>
-            )}
+              </article>
+            ))}
           </div>
 
           <button
             onClick={handleUpdate}
             disabled={isUpdating}
-            className={`w-full py-4 px-6 ios-glass-btn flex items-center justify-center gap-3 font-black text-lg transition-all ${
+            className={`w-full py-3.5 px-6 ios-glass-btn flex items-center justify-center gap-3 font-black text-base transition-all shrink-0 ${
               isUpdating ? 'opacity-50 grayscale cursor-not-allowed' : ''
             }`}
           >
@@ -168,13 +177,7 @@ export const UpdateNotifier = () => {
             )}
           </button>
           
-          <div className="flex justify-center items-center gap-2 mt-6">
-            <span className="h-[1px] w-4 bg-slate-200" />
-            <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">
-              ID: {updateInfo.timestamp}
-            </p>
-            <span className="h-[1px] w-4 bg-slate-200" />
-          </div>
+          <p className="text-center text-[11px] text-slate-400 mt-4">เผยแพร่เมื่อ {formatPublishedAt(updateInfo.timestamp)}</p>
         </div>
       </div>
     </div>
