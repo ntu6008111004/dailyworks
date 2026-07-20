@@ -257,15 +257,13 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     if (saving) return;
     setSaving(true);
     try {
-      // Auto status trigger: If first time recording, set status to 'รอตรวจ' (Waiting for Review)
+      // Auto status trigger: เมื่อผู้รับมอบหมายแนบงาน (รูป/URL/โน้ต) ให้เปลี่ยนสถานะเป็น 'รอตรวจ' เสมอ
       let currentStatus = myResponse.Status;
-      const isFirstRecord = !responses.find(r => String(r.UserID) === String(user?.ID || ''));
       const hasContent = myResponse.ResultImages.length > 0 || myResponse.URL1 || myResponse.URL2 || myResponse.Note;
 
-      if (currentStatus === 'รอแก้ไข') {
-        currentStatus = 'รอตรวจ';
-      }
-      if (isFirstRecord && hasContent && (currentStatus === 'รอดำเนินการ' || !currentStatus)) {
+      // Auto-change to 'รอตรวจ' when there is content attached
+      // ยกเว้นสถานะ 'เสร็จสิ้น', 'ยกเลิกงาน' ที่ไม่ควร override, หรือ 'รอตรวจ' ที่เป็นอยู่แล้ว
+      if (hasContent && currentStatus !== 'เสร็จสิ้น' && currentStatus !== 'ยกเลิกงาน' && currentStatus !== 'รอตรวจ') {
         currentStatus = 'รอตรวจ';
       }
 
@@ -1057,8 +1055,30 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                             {(selectedResponse.URL1 || selectedResponse.URL2) && (
                               <div className="space-y-2">
                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ลิงก์แนบ</p>
-                                 {selectedResponse.URL1 && <a href={selectedResponse.URL1} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 text-xs font-bold bg-blue-50 p-2 rounded-lg hover:underline"><ExternalLink size={12}/> {selectedResponse.URL1}</a>}
-                                 {selectedResponse.URL2 && <a href={selectedResponse.URL2} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 text-xs font-bold bg-blue-50 p-2 rounded-lg hover:underline"><ExternalLink size={12}/> {selectedResponse.URL2}</a>}
+                                 {selectedResponse.URL1 && (
+                                   <a 
+                                     href={selectedResponse.URL1} 
+                                     target="_blank" 
+                                     rel="noreferrer" 
+                                     className="flex items-center gap-2 text-blue-600 text-xs font-medium bg-blue-50/90 border border-blue-100 p-2.5 rounded-xl hover:bg-blue-100 hover:text-blue-700 transition-colors min-w-0 group"
+                                     title={selectedResponse.URL1}
+                                   >
+                                     <ExternalLink size={14} className="shrink-0 text-blue-500 group-hover:scale-110 transition-transform" /> 
+                                     <span className="break-all min-w-0 flex-1">{selectedResponse.URL1}</span>
+                                   </a>
+                                 )}
+                                 {selectedResponse.URL2 && (
+                                   <a 
+                                     href={selectedResponse.URL2} 
+                                     target="_blank" 
+                                     rel="noreferrer" 
+                                     className="flex items-center gap-2 text-blue-600 text-xs font-medium bg-blue-50/90 border border-blue-100 p-2.5 rounded-xl hover:bg-blue-100 hover:text-blue-700 transition-colors min-w-0 group"
+                                     title={selectedResponse.URL2}
+                                   >
+                                     <ExternalLink size={14} className="shrink-0 text-blue-500 group-hover:scale-110 transition-transform" /> 
+                                     <span className="break-all min-w-0 flex-1">{selectedResponse.URL2}</span>
+                                   </a>
+                                 )}
                               </div>
                             )}
                             
