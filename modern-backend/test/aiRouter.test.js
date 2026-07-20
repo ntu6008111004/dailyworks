@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const {
+  asksForFreshInformation,
   briefingMetrics,
   createAiRouter,
   formatBriefingSummary,
@@ -97,6 +98,16 @@ test('AI chat endpoint rejects requests without a signed session', async () => {
   });
 });
 
+test('AI status endpoint identifies the deployed freshness-guard build', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/ai`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.build, '2026-07-20-freshness-guard-v1');
+    assert.equal(payload.capabilities.includes('freshness-guard'), true);
+  });
+});
+
 test('server metrics use all queried rows rather than a displayed sample', () => {
   const metrics = taskMetrics([
     { Status: 'เสร็จสิ้น', DueDate: '2026-01-01' },
@@ -185,6 +196,12 @@ test('long pasted summaries do not trigger internal work queries or web search',
   assert.equal(isTextSummaryRequest(request), true);
   assert.equal(shouldSearchExternal(request), false);
   assert.equal(shouldSearchExternal('ค้นหาข่าว AI ล่าสุดในไทย'), true);
+});
+
+test('current-year price questions are forced through fresh web search', () => {
+  const question = 'ทำไมแรมถึงแพงขึ้นปีนี้';
+  assert.equal(asksForFreshInformation(question), true);
+  assert.equal(shouldSearchExternal(question), true);
 });
 
 test('web results are ranked by question relevance before being sent to the model', () => {
