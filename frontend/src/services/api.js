@@ -185,7 +185,7 @@ export const apiService = {
           case 'login': {
             const { data: user, error } = await supabase
               .from('Users')
-              .select('*')
+              .select('ID, Username, Role, Department, Name, ProfileImage, Position, Permissions, CreatedAt, UpdatedAt')
               .eq('Username', data.username)
               .eq('Password', data.password)
               .maybeSingle();
@@ -405,7 +405,7 @@ export const apiService = {
           case 'getUsers': {
             const { data: users, error } = await supabase
               .from('Users')
-              .select('*')
+              .select('ID, Username, Role, Department, Name, ProfileImage, Position, Permissions, CreatedAt, UpdatedAt')
               .order('Username');
             if (error) throw error;
             
@@ -694,7 +694,7 @@ export const apiService = {
             if (data.userId) {
               const { data: fullUser, error } = await supabase
                 .from('Users')
-                .select('*')
+                .select('ID, Username, Role, Department, Name, ProfileImage, Position, Permissions, CreatedAt, UpdatedAt')
                 .eq('ID', data.userId)
                 .maybeSingle();
               if (!error && fullUser) {

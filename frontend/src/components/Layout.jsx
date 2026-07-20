@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs, Bot } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBriefingNotifications } from '../hooks/useBriefingNotifications';
 import { NotificationPermissionModal } from './NotificationPermissionModal';
+import { MiniChatBot } from './MiniChatBot';
 
 export const Layout = () => {
   useBriefingNotifications();
@@ -14,7 +15,8 @@ export const Layout = () => {
   const navItems = [
     { name: 'หน้าภาพรวม', path: '/', icon: <LayoutDashboard size={20} /> },
     { name: 'จัดการงาน', path: '/tasks', icon: <CheckSquare size={20} /> },
-    { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> }
+    { name: 'ไทม์ไลน์งาน', path: '/timeline', icon: <CalendarDays size={20} /> },
+    { name: 'CatLog AI', path: '/chatbot', icon: <Bot size={20} /> }
   ];
 
   const perms = user?.Permissions || {};
@@ -132,6 +134,7 @@ export const Layout = () => {
       </div>
       
       <NotificationPermissionModal />
+      <MiniChatBot />
     </div>
   );
 };

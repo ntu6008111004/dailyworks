@@ -4,85 +4,98 @@ const cors = require('cors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const path = require('path');
-const fs = require('fs');
+const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
+const { createAiRouter } = require('./aiRouter');
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT || 3001);
+const API_KEY = process.env.API_KEY;
+const supabaseAdmin = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  : null;
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173')
+    .split(',').map(origin => origin.trim()).filter(Boolean)
+);
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.set('trust proxy', process.env.TRUST_PROXY === 'true');
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed'));
+  },
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+}));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(morgan('dev'));
 
-// Security Middleware: API Key check
-const API_KEY = process.env.API_KEY || 'your-default-secure-key';
-app.use((req, res, next) => {
-  const apiKeyHeader = req.headers['x-api-key'];
-  if (apiKeyHeader && apiKeyHeader === API_KEY) {
-    next();
-  } else {
-    res.status(401).json({ status: 'error', message: 'Unauthorized: Invalid API Key' });
-  }
-});
+function safeEqual(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string' || left.length !== right.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(left), Buffer.from(right));
+}
 
-// Models (will be imported properly in production)
-const User = require('./models/User');
-const Task = require('./models/Task');
+function requireLegacyApiKey(req, res, next) {
+  if (!API_KEY) return res.status(503).json({ status: 'error', message: 'Legacy API is not configured' });
+  if (!safeEqual(req.get('x-api-key') || '', API_KEY)) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  return next();
+}
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// AI routes use short-lived, user-bound sessions; they must not use a browser-shared API key.
+app.use('/api/ai', createAiRouter({ supabase: supabaseAdmin, env: process.env }));
 
-// --- API Implementation (Matching GAS Actions) ---
-
-app.post('/api', async (req, res) => {
-  const { action, data, executorId } = req.body;
-  
+app.post('/api', requireLegacyApiKey, async (req, res) => {
+  const { action, data = {} } = req.body || {};
   try {
     let result = {};
-    
-    switch (action) {
-      case 'login':
-        const user = await User.findOne({ Username: data.username, Password: data.password });
-        if (!user) throw new Error('Invalid username or password');
-        result = user;
-        break;
-        
-      case 'getTasksSummary':
-        const tasks = await Task.find({}, 'ID Detail Status Priority StartDate DueDate UserID StaffName Department CustomFields CreatedAt CompletedAt Image1 Image2 Image3 Image4');
-        result = tasks.map(t => ({
-          ...t.toObject(),
-          HasImages: !!(t.Image1 || t.Image2 || t.Image3 || t.Image4)
-        }));
-        break;
-
-      case 'addTask':
-        const newTask = new Task({
-          ...data,
-          ID: data.ID || require('uuid').v4(),
-        });
-        await newTask.save();
-        result = { message: 'Task added successfully' };
-        break;
-
-      // Add other cases matching Code.gs...
-      
-      default:
-        throw new Error(`Action ${action} not implemented yet`);
+    if (action === 'login') {
+      if (typeof data.username !== 'string' || typeof data.password !== 'string') {
+        return res.status(400).json({ status: 'error', message: 'Invalid credentials' });
+      }
+      const User = require('./models/User');
+      const user = await User.findOne({ Username: data.username, Password: data.password })
+        .select('-Password').lean();
+      if (!user) return res.status(401).json({ status: 'error', message: 'Invalid username or password' });
+      result = user;
+    } else if (action === 'getTasksSummary') {
+      const Task = require('./models/Task');
+      const tasks = await Task.find(
+        {},
+        'ID Detail Status Priority StartDate DueDate UserID StaffName Department CustomFields CreatedAt CompletedAt Image1 Image2 Image3 Image4'
+      ).lean();
+      result = tasks.map(task => Object.assign({}, task, {
+        HasImages: Boolean(task.Image1 || task.Image2 || task.Image3 || task.Image4),
+      }));
+    } else if (action === 'addTask') {
+      const Task = require('./models/Task');
+      const newTask = new Task(Object.assign({}, data, { ID: data.ID || require('uuid').v4() }));
+      await newTask.save();
+      result = { message: 'Task added successfully' };
+    } else {
+      throw new Error('Action ' + action + ' not implemented yet');
     }
-    
-    res.json({ status: 'success', data: result });
+    return res.json({ status: 'success', data: result });
   } catch (error) {
-    res.status(400).json({ status: 'error', message: error.message });
+    console.error('Legacy API error:', error.message);
+    return res.status(400).json({ status: 'error', message: 'Request failed' });
   }
 });
 
-// Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { fallthrough: false }));
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(error => console.error('MongoDB connection error:', error.message));
+}
+
+if (require.main === module) {
+  app.listen(PORT, () => console.log('Server running on port ' + PORT));
+}
+
+module.exports = { app, requireLegacyApiKey };

@@ -41,4 +41,20 @@ export default defineConfig({
     tailwindcss(),
     generateVersionPlugin()
   ],
+  server: {
+    proxy: {
+      // The browser only talks to our backend. ThaiLLM credentials stay there.
+      '/api/ai': {
+        target: process.env.VITE_AI_PROXY_TARGET || 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // Client-key fallback for ThaiLLM in local development. In production
+      // the matching Vercel rewrite keeps this HTTP upstream off the browser.
+      '/api/thaillm': {
+        target: 'http://thaillm.or.th',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/thaillm/, '/api/v1'),
+      },
+    },
+  },
 })

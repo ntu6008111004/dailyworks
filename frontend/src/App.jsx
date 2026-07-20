@@ -11,6 +11,7 @@ import { AdminRoles } from './views/AdminRoles';
 import { MyProfile } from './views/MyProfile';
 import { MyTeam } from './views/MyTeam';
 import { Briefing } from './views/Briefing';
+import { ChatbotWorklog } from './views/ChatbotWorklog';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
@@ -18,7 +19,10 @@ import { Toaster } from 'react-hot-toast';
 import { UpdateNotifier } from './components/UpdateNotifier';
 
 const ProtectedRoute = ({ children }) => {
-  const { user } = useAuth();
+  // During Vite Fast Refresh the context module can briefly be reloaded before
+  // its provider tree. Do not crash the whole application in that transition.
+  const auth = useAuth();
+  const user = auth?.user;
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -38,6 +42,7 @@ function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="timeline" element={<Timeline />} />
             <Route path="briefing" element={<Briefing />} />
+            <Route path="chatbot" element={<ChatbotWorklog />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="team" element={<MyTeam />} />
             <Route path="admin/users" element={<AdminUsers />} />
