@@ -133,7 +133,7 @@ async function sendClientProviderChat(messages, { recordUsage = true } = {}) {
         messages: [
           {
             role: 'system',
-            content: 'คุณคือ CatLog AI ผู้ช่วยภาษาไทยสำหรับระบบ WorkLogs ตอบให้ชัดเจน กระชับ และซื่อสัตย์ หากคำถามต้องใช้ข้อมูลภายในระบบแต่ไม่มีข้อมูลส่งให้ ห้ามเดาหรือแต่งตัวเลข ให้บอกว่าต้องเชื่อมต่อบริการ WorkLogs ก่อน',
+            content: 'คุณคือ CatLog AI ผู้ช่วยภาษาไทยสำหรับระบบ WorkLogs ตอบให้ชัดเจน กระชับ และซื่อสัตย์ ตอบแบบธรรมชาติของคนทั่วไป หากคำถามต้องใช้ข้อมูลภายในระบบแต่ไม่มีข้อมูลส่งให้ ห้ามเดาหรือแต่งตัวเลข ให้บอกว่าต้องเชื่อมต่อบริการ WorkLogs ก่อน',
           },
           ...messages,
         ],
@@ -262,6 +262,15 @@ function needsTrustedWorkData(messages) {
   ].some(term => question.includes(term));
 }
 
+function needsFreshWebData(messages) {
+  const question = String(messages[messages.length - 1]?.content || '').toLowerCase();
+  return [
+    'ล่าสุด', 'ปัจจุบัน', 'วันนี้', 'ตอนนี้', 'ปีนี้', 'เมื่อวาน', 'ข่าว',
+    'ราคา', 'แพงขึ้น', 'ถูกลง', 'แนวโน้ม',
+    'latest', 'current', 'today', 'news', 'right now', 'this year', 'price',
+  ].some(term => question.includes(term));
+}
+
 async function sendChat(messages, { enableWebSearch = true, dashboardFilters = null } = {}) {
   const limit = rateLimiter.canProceed();
   if (!limit.allowed) return { success: false, error: 'rate_limit', message: limit.message, waitMs: limit.waitMs };
@@ -271,6 +280,9 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
   if (!token) {
     if (needsTrustedWorkData(normalized)) {
       return { success: false, error: 'work_data_session_required', message: 'CatLog AI ยังเชื่อมต่อข้อมูล WorkLogs ไม่สำเร็จ จึงจะไม่เดาตัวเลขงาน กรุณารีเฟรชหน้าแล้วลงชื่อเข้าใช้อีกครั้งเพื่อเชื่อมต่อข้อมูลจริง' };
+    }
+    if (needsFreshWebData(normalized)) {
+      return { success: false, error: 'fresh_data_session_required', message: 'คำถามนี้ต้องค้นข้อมูลปัจจุบัน แต่ CatLog AI ยังไม่ได้เชื่อมต่อ Backend จึงจะไม่ตอบจากความจำเก่า กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่ จากนั้นลองถามอีกครั้ง' };
     }
     const directResult = await sendClientProviderChat(normalized);
     if (directResult) return directResult;
@@ -295,6 +307,9 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
       if (needsTrustedWorkData(normalized)) {
         return { success: false, error: 'work_data_session_required', message: 'CatLog AI ต้องเชื่อมต่อข้อมูล WorkLogs ใหม่ จึงจะตอบตัวเลขจริงได้ กรุณาลงชื่อเข้าใช้อีกครั้ง' };
       }
+      if (needsFreshWebData(normalized)) {
+        return { success: false, error: 'fresh_data_session_required', message: 'เซสชันค้นข้อมูลสดของ CatLog AI หมดอายุ จึงจะไม่ตอบจากข้อมูลเก่า กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่' };
+      }
       const directResult = await sendClientProviderChat(normalized, { recordUsage: false });
       if (directResult) return directResult;
       return { success: false, error: 'session_required', message: 'เซสชัน AI หมดอายุ กรุณาเข้าสู่ระบบใหม่' };
@@ -302,6 +317,9 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
     if (!response.ok) {
       if (needsTrustedWorkData(normalized)) {
         return { success: false, error: 'work_data_unavailable', message: 'CatLog AI เชื่อมต่อฐานข้อมูล WorkLogs ไม่สำเร็จ จึงจะไม่ตอบตัวเลขจากการคาดเดา กรุณาลองใหม่อีกครั้ง' };
+      }
+      if (needsFreshWebData(normalized)) {
+        return { success: false, error: 'fresh_data_unavailable', message: 'CatLog AI ค้นข้อมูลปัจจุบันไม่สำเร็จ จึงจะไม่ตอบจากความจำเก่า กรุณาลองใหม่อีกครั้ง' };
       }
       const directResult = await sendClientProviderChat(normalized, { recordUsage: false });
       if (directResult) return directResult;

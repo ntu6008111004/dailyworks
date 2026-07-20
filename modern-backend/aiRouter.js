@@ -1231,6 +1231,15 @@ function createAiRouter({ supabase, env = process.env }) {
   });
   const ipLimiter = createRateLimiter({ perSecond: 10, perMinute: 120 });
 
+  router.get('/', (_req, res) => res.json({
+    status: 'online',
+    service: 'CatLog AI API',
+    build: '2026-07-20-freshness-guard-v1',
+    currentDate: bangkokNow(),
+    capabilities: ['worklogs-rbac', 'web-search', 'freshness-guard', 'text-summary'],
+    endpoints: ['POST /api/ai/session', 'POST /api/ai/chat'],
+  }));
+
   async function requireAiSession(req, res, next) {
     if (!supabase || !env.AI_SESSION_SECRET) {
       return res.status(503).json({ status: 'error', code: 'ai_not_configured' });
@@ -1360,6 +1369,26 @@ function createAiRouter({ supabase, env = process.env }) {
         ? await webSearch(searchQuery, env)
         : { provider: null, results: [], freshnessVerified: false };
 
+      // Never let a current-year/news/price question silently fall back to the
+      // model's training memory. A truthful retry is safer than an old answer.
+      if (freshnessRequested && search.results.length === 0) {
+        return res.json({
+          status: 'success',
+          data: {
+            answer: `ยังค้นหาแหล่งข้อมูลปัจจุบันสำหรับคำถามนี้ไม่สำเร็จ (ตรวจ ณ ${now.gregorianDate} / พ.ศ. ${now.buddhistYear}) จึงจะไม่ตอบจากความจำเก่าของโมเดล กรุณาลองใหม่อีกครั้งหรือระบุหัวข้อให้เจาะจงขึ้น`,
+            thinking: null,
+            searchPerformed: false,
+            searchProvider: null,
+            usage: null,
+            appliedFilters: null,
+            totalMatches: null,
+            sources: [],
+            deterministic: true,
+            freshnessVerified: false,
+          },
+        });
+      }
+
       const systemPrompt = [
         'คุณคือ CatLog AI ผู้ช่วยภาษาไทยสำหรับระบบ WorkLogs ตอบให้กระชับ ชัดเจน และอ้างอิงเฉพาะข้อมูลที่ให้มา',
         `วันปัจจุบันในประเทศไทยคือ ${now.gregorianDate} (ค.ศ. ${now.gregorianYear} / พ.ศ. ${now.buddhistYear})`,
@@ -1371,6 +1400,7 @@ function createAiRouter({ supabase, env = process.env }) {
         'หากใช้ผลการค้นเว็บ ให้ตอบจาก snippets ที่ให้มาเท่านั้น และปิดท้ายด้วยหัวข้อ “แหล่งข้อมูล” เป็น Markdown links ของผลค้นหาที่ใช้; หากผลค้นหาไม่มีแหล่งที่น่าเชื่อถือให้บอกข้อจำกัดอย่างตรงไปตรงมา',
         'หาก appliedFilters.staffIdentityResolved เป็น true พนักงานถูกเลือกจากรหัสพนักงานบนเซิร์ฟเวอร์แล้ว ให้ยึดคนนี้เท่านั้นและห้ามเดาจากชื่อที่คล้ายกัน',
         'หาก freshnessRequested เป็น true ห้ามอ้างว่าข้อมูลเว็บเป็นล่าสุดหรือเรียลไทม์ เว้นแต่ search.freshnessVerified เป็น true และผลค้นหามีอายุ/วันที่ที่ยืนยันได้; ให้บอกวันที่ปัจจุบันและข้อจำกัดนี้อย่างตรงไปตรงมา',
+        'คำถามเกี่ยวกับปีนี้ ราคาปัจจุบัน ข่าว หรือแนวโน้ม ต้องตอบจาก search.results เท่านั้น ห้ามใช้เหตุการณ์เก่า เช่น COVID-19 สงคราม หรือเทคโนโลยีรุ่นเก่าเป็นสาเหตุหลัก เว้นแต่ผลค้นหาที่ให้มาระบุเช่นนั้นโดยตรง',
         `ผู้ใช้ที่ยืนยันโดยเซิร์ฟเวอร์: ${clip(req.aiUser.Name)}; สิทธิ์: ${clip(req.aiUser.Role)}; แผนก: ${clip(req.aiUser.Department)}`,
         '<untrusted_data>',
         JSON.stringify({
@@ -1454,6 +1484,7 @@ function createAiRouter({ supabase, env = process.env }) {
 }
 
 module.exports = {
+  asksForFreshInformation,
   briefingMetrics,
   createAiRouter,
   formatBriefingSummary,
