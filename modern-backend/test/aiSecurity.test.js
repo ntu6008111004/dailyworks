@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   detectWorkIntent,
   extractQueryFilters,
+  extractStaffMentions,
   isSelfReference,
   signSession,
   validateChatMessages,
@@ -12,6 +13,13 @@ const {
 } = require('../lib/aiSecurity');
 
 const SECRET = 'test-only-session-secret-with-32-characters';
+
+test('employee entity extractor finds multiple nicknames in one question', () => {
+  assert.deepEqual(extractStaffMentions('แพดกับเหมี่ยวมีคะแนนเดือนนี้เท่าไหร่'), [
+    'วิศรุตา จันตาโลก',
+    'ณัฐนันท์ ปาแก้ว',
+  ]);
+});
 
 test('signed AI sessions reject tampering', () => {
   const token = signSession({ sub: 'user-1' }, SECRET, 60);
@@ -69,6 +77,30 @@ test('query filters understand report month/year notation', () => {
     fromDate: '2026-07-01',
     toDate: '2026-07-31',
     staffName: 'ณัฐนันท์ ปาแก้ว',
+  });
+});
+
+test('query planner understands future, historic, and natural Thai dates', () => {
+  const reference = new Date('2026-07-21T03:00:00.000Z');
+  assert.deepEqual(extractQueryFilters('งานของผมวันที่ 22 มีเท่าไหร่', reference), {
+    fromDate: '2026-07-22',
+    toDate: '2026-07-22',
+  });
+  assert.deepEqual(extractQueryFilters('งานย้อนหลัง 3 วัน', reference), {
+    fromDate: '2026-07-19',
+    toDate: '2026-07-21',
+  });
+  assert.deepEqual(extractQueryFilters('งานล่วงหน้า 3 วัน', reference), {
+    fromDate: '2026-07-22',
+    toDate: '2026-07-24',
+  });
+  assert.deepEqual(extractQueryFilters('งานวันที่ 22 กรกฎาคม 2569', reference), {
+    fromDate: '2026-07-22',
+    toDate: '2026-07-22',
+  });
+  assert.deepEqual(extractQueryFilters('งานวันที่ 22/07/2026 เดือนนี้', reference), {
+    fromDate: '2026-07-22',
+    toDate: '2026-07-22',
   });
 });
 
