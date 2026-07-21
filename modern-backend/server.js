@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const { createAiRouter } = require('./aiRouter');
+const { createCorsOptions } = require('./lib/corsConfig');
 
 dotenv.config();
 
@@ -18,20 +19,8 @@ const supabaseAdmin = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_R
     auth: { persistSession: false, autoRefreshToken: false },
   })
   : null;
-const allowedOrigins = new Set(
-  (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:4173')
-    .split(',').map(origin => origin.trim()).filter(Boolean)
-);
-
 app.set('trust proxy', process.env.TRUST_PROXY === 'true');
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
-    return callback(new Error('Origin is not allowed'));
-  },
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-}));
+app.use(cors(createCorsOptions(process.env.CORS_ORIGINS)));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(morgan('dev'));
 

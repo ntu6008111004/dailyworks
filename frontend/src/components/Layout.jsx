@@ -35,9 +35,10 @@ export const Layout = () => {
   }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const isChatbotPage = location.pathname === '/chatbot';
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="app-shell flex bg-slate-50 overflow-hidden">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div 
@@ -115,7 +116,7 @@ export const Layout = () => {
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         {/* Mobile Header */}
         <header className="glass md:hidden border-b border-slate-200 flex items-center justify-between p-4 z-10 sticky top-0">
           <h1 className="text-xl font-bold text-blue-600">WorkLogs</h1>
@@ -128,7 +129,7 @@ export const Layout = () => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className={`flex-1 min-h-0 ${isChatbotPage ? 'overflow-hidden p-0 md:p-8' : 'overflow-y-auto p-4 md:p-8'}`}>
           <Outlet />
         </main>
       </div>

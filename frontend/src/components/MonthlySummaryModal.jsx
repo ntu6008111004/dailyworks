@@ -170,9 +170,9 @@ export const MonthlySummaryModal = ({ isOpen, onClose, tasks, user, closeOnOutsi
 
             <div className="ios-glass-pill p-6 border-white/40 h-[320px] flex flex-col">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">สถิติสถานะงาน</h3>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0 min-h-0">
                 {stats.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                     <PieChart>
                       <Pie data={stats} cx="50%" cy="50%" innerRadius={65} outerRadius={85} paddingAngle={8} dataKey="value" stroke="none">
                         {stats.map((entry, index) => (
