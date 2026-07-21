@@ -420,6 +420,87 @@
   background: rgba(248, 250, 252, 0.8);
 }
 
+.mini-chat-composer,
+.chatbot-composer {
+  flex-shrink: 0;
+  min-width: 0;
+  background: rgba(248, 250, 252, 0.96);
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.mini-chat-composer .mini-chat-input-area,
+.chatbot-composer .chatbot-input-area {
+  border-top: 0;
+}
+
+.chat-quick-actions {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 9px 20px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.25) transparent;
+  overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-quick-actions::-webkit-scrollbar {
+  height: 4px;
+}
+
+.chat-quick-actions::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-quick-actions::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 999px;
+}
+
+.chat-quick-actions:hover::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.45);
+}
+
+.chat-quick-actions.mini {
+  padding: 8px 12px 5px;
+  gap: 6px;
+}
+
+.chat-quick-actions button,
+.chat-response-actions button {
+  appearance: none;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: #fff;
+  color: #5145cd;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font: 600 11px/1.25 inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+
+.chat-quick-actions button:hover:not(:disabled),
+.chat-response-actions button:hover:not(:disabled) {
+  background: #f2f0ff;
+  border-color: #7c3aed;
+  transform: translateY(-1px);
+}
+
+.chat-quick-actions button:disabled,
+.chat-response-actions button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.chat-response-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .mini-chat-input-area textarea {
   flex: 1;
   border: 1px solid #e2e8f0;
@@ -1145,6 +1226,31 @@
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
+  .chat-quick-actions,
+  .chat-quick-actions.mini {
+    padding: 7px 10px 0;
+    gap: 6px;
+  }
+
+  .chat-quick-actions button,
+  .chat-response-actions button {
+    min-height: 36px;
+    padding: 8px 11px;
+    touch-action: manipulation;
+  }
+
+  .chat-response-actions {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .chat-response-actions::-webkit-scrollbar {
+    display: none;
+  }
+
   .chatbot-page {
     flex-direction: column;
     width: 100%;
