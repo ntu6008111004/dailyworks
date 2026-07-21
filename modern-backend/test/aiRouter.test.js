@@ -109,7 +109,7 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     const response = await fetch(`${baseUrl}/api/ai`);
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.build, '2026-07-21-data-agent-v4');
+    assert.equal(payload.build, '2026-07-21-all-time-scope-v5');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
     assert.equal(payload.capabilities.includes('data-agent-planner'), true);
   });
@@ -160,6 +160,10 @@ test('dashboard filters only narrow a chatbot query and can be explicitly bypass
     status: 'กำลังทำ', department: 'HR', staffName: 'Test User', fromDate: '2026-01-01', toDate: '2026-12-31',
   });
   assert.deepEqual(mergeDashboardFilters(base, dashboard, 'สรุปทุกแผนก ไม่ใช้ตัวกรอง'), base);
+  assert.deepEqual(
+    mergeDashboardFilters(base, dashboard, 'สรุปคะแนนสะสมของฉันทุกช่วงเวลาตั้งแต่เริ่มบันทึก'),
+    base
+  );
 });
 
 test('team score summary uses the MyTeam values rather than an LLM estimate', () => {

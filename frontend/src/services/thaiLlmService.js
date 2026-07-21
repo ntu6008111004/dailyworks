@@ -475,7 +475,7 @@ function applyAllTimeScope(messages) {
   const scoped = messages.map((message, index) => index === messages.length - 1
     ? {
       ...message,
-      content: `${contextualQuestion}\n\nขอบเขตที่ผู้ใช้ยืนยัน: ${scopeLabel} ไม่ใช่เฉพาะวันนี้ ให้ค้นช่วง 2000-01-01 ถึง 2100-12-31`,
+      content: `${contextualQuestion}\n\nขอบเขตที่ผู้ใช้ยืนยัน: ${scopeLabel} [ALL_TIME_SCOPE]`,
     }
     : message);
   return { messages: scoped, dashboardFilters: null };
