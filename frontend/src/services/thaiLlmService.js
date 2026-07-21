@@ -61,6 +61,28 @@ function getSessionToken() {
   try { return sessionStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem(SESSION_STORAGE_KEY) || ''; } catch { return ''; }
 }
 
+function getSessionStatus() {
+  const token = getSessionToken();
+  if (!token) return { valid: false, reason: 'missing', expiresAt: 0 };
+  try {
+    const body = token.split('.')[0];
+    const base64 = body.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+    const expiresAt = Number(payload.exp) * 1000;
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      return { valid: false, reason: 'expired', expiresAt: expiresAt || 0 };
+    }
+    return { valid: true, reason: 'active', expiresAt };
+  } catch {
+    return { valid: false, reason: 'invalid', expiresAt: 0 };
+  }
+}
+
+function notifySessionExpired(reason = 'expired') {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('catlog-ai-session-expired', { detail: { reason } }));
+}
+
 function setSessionToken(token) {
   try {
     if (token) {
@@ -322,6 +344,7 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) {
       clearSession();
+      notifySessionExpired('expired');
       if (needsTrustedWorkData(normalized)) {
         return { success: false, error: 'work_data_session_required', message: 'CatLog AI ต้องเชื่อมต่อข้อมูล WorkLogs ใหม่ จึงจะตอบตัวเลขจริงได้ กรุณาลงชื่อเข้าใช้อีกครั้ง' };
       }
@@ -369,5 +392,5 @@ async function buildWorklogContext() { return ''; }
 
 export const thaiLlmService = {
   sendChat, createSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext,
-  getDashboardFilters, parseThinking, markdownToHtml, rateLimiter, config: AI_CONFIG,
+  getDashboardFilters, getSessionStatus, parseThinking, markdownToHtml, rateLimiter, config: AI_CONFIG,
 };

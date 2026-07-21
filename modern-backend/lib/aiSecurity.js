@@ -115,8 +115,8 @@ function validateChatMessages(messages) {
   return normalized;
 }
 
-function bangkokDate(offsetDays = 0) {
-  const now = new Date(Date.now() + offsetDays * 86400000);
+function bangkokDate(offsetDays = 0, referenceDate = Date.now()) {
+  const now = new Date(new Date(referenceDate).getTime() + offsetDays * 86400000);
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
@@ -125,13 +125,36 @@ function bangkokDate(offsetDays = 0) {
   }).format(now);
 }
 
-function bangkokYear() {
-  return Number(bangkokDate().slice(0, 4));
+function bangkokYear(referenceDate = Date.now()) {
+  return Number(bangkokDate(0, referenceDate).slice(0, 4));
+}
+
+const THAI_MONTHS = new Map([
+  ['มกราคม', 1], ['ม.ค.', 1], ['ม.ค', 1], ['กุมภาพันธ์', 2], ['ก.พ.', 2], ['ก.พ', 2],
+  ['มีนาคม', 3], ['มี.ค.', 3], ['มี.ค', 3], ['เมษายน', 4], ['เม.ย.', 4], ['เม.ย', 4],
+  ['พฤษภาคม', 5], ['พ.ค.', 5], ['พ.ค', 5], ['มิถุนายน', 6], ['มิ.ย.', 6], ['มิ.ย', 6],
+  ['กรกฎาคม', 7], ['ก.ค.', 7], ['ก.ค', 7], ['สิงหาคม', 8], ['ส.ค.', 8], ['ส.ค', 8],
+  ['กันยายน', 9], ['ก.ย.', 9], ['ก.ย', 9], ['ตุลาคม', 10], ['ต.ค.', 10], ['ต.ค', 10],
+  ['พฤศจิกายน', 11], ['พ.ย.', 11], ['พ.ย', 11], ['ธันวาคม', 12], ['ธ.ค.', 12], ['ธ.ค', 12],
+]);
+
+function isoDateFromParts(day, month, rawYear) {
+  const year = Number(rawYear) >= 2400 ? Number(rawYear) - 543 : Number(rawYear);
+  const candidate = `${year}-${String(Number(month)).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+  return isValidIsoDate(candidate) ? candidate : '';
+}
+
+function monthRange(year, month) {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    fromDate: `${year}-${String(month).padStart(2, '0')}-01`,
+    toDate: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+  };
 }
 
 const STATUS_ALIASES = [
   { terms: ['ยังไม่เริ่ม', 'ยังไม่เริ่มทำ', 'not started'], value: 'ยังไม่เริ่ม' },
-  { terms: ['รอดำเนินการ', 'งานค้าง', 'pending'], value: 'รอดำเนินการ' },
+  { terms: ['รอดำเนินการ', 'pending'], value: 'รอดำเนินการ' },
   { terms: ['กำลังทำ', 'in progress'], value: 'กำลังทำ' },
   { terms: ['รอตรวจ', 'waiting review'], value: 'รอตรวจ' },
   { terms: ['รอแก้ไข', 'waiting fix'], value: 'รอแก้ไข' },
@@ -151,6 +174,15 @@ const STAFF_ALIASES = [
   { aliases: ['แพท', 'แพด'], name: 'ณัฐนันท์ ปาแก้ว' },
   { aliases: ['มาย', 'มายด์'], name: 'ธัญญา แสงเมือง' },
 ];
+
+function extractStaffMentions(question) {
+  const lower = String(question || '').toLowerCase();
+  return [...new Set(
+    STAFF_ALIASES
+      .filter(item => item.aliases.some(alias => lower.includes(alias.toLowerCase())))
+      .map(item => item.name)
+  )];
+}
 
 const WORK_TERMS = [
   'งาน', 'task', 'worklog', 'บรีฟ', 'briefing', 'สถานะ', 'status', 'สรุปงาน',
@@ -196,10 +228,14 @@ function hasInternalWorkEvidence(question) {
     isSelfReference(question);
 }
 
-function extractQueryFilters(question) {
+function extractQueryFilters(question, referenceDate = Date.now()) {
   const text = String(question || '').trim();
   const lower = text.toLowerCase();
   const filters = {};
+  const today = bangkokDate(0, referenceDate);
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  const slashDate = lower.match(/\b(0?[1-9]|[12]\d|3[01])\/(0?[1-9]|1[0-2])\/(20\d{2}|25\d{2})\b/);
 
   const explicitDates = [...lower.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)]
     .map(match => match[1])
@@ -210,27 +246,75 @@ function extractQueryFilters(question) {
     filters.fromDate = explicitDates[0];
     filters.toDate = explicitDates[0];
   } else if (lower.includes('วันนี้') || lower.includes('today')) {
-    filters.fromDate = bangkokDate();
+    filters.fromDate = today;
     filters.toDate = filters.fromDate;
   } else if (lower.includes('เมื่อวาน') || lower.includes('yesterday')) {
-    filters.fromDate = bangkokDate(-1);
+    filters.fromDate = bangkokDate(-1, referenceDate);
     filters.toDate = filters.fromDate;
+  } else if (lower.includes('มะรืน')) {
+    filters.fromDate = bangkokDate(2, referenceDate);
+    filters.toDate = filters.fromDate;
+  } else if (lower.includes('พรุ่งนี้') || lower.includes('tomorrow')) {
+    filters.fromDate = bangkokDate(1, referenceDate);
+    filters.toDate = filters.fromDate;
+  } else if (lower.match(/(?:ย้อนหลัง|ที่ผ่านมา)\s*(\d{1,3})\s*วัน/u)) {
+    const days = Math.min(366, Math.max(1, Number(lower.match(/(?:ย้อนหลัง|ที่ผ่านมา)\s*(\d{1,3})\s*วัน/u)[1])));
+    filters.fromDate = bangkokDate(-(days - 1), referenceDate);
+    filters.toDate = today;
+  } else if (lower.match(/(?:ล่วงหน้า|ข้างหน้า|ถัดไป)\s*(\d{1,3})\s*วัน/u)) {
+    const days = Math.min(366, Math.max(1, Number(lower.match(/(?:ล่วงหน้า|ข้างหน้า|ถัดไป)\s*(\d{1,3})\s*วัน/u)[1])));
+    filters.fromDate = bangkokDate(1, referenceDate);
+    filters.toDate = bangkokDate(days, referenceDate);
+  } else if (lower.match(/(?:อีก|ในอีก)\s*(\d{1,3})\s*วัน/u)) {
+    const days = Math.min(366, Math.max(0, Number(lower.match(/(?:อีก|ในอีก)\s*(\d{1,3})\s*วัน/u)[1])));
+    filters.fromDate = bangkokDate(days, referenceDate);
+    filters.toDate = filters.fromDate;
+  } else if (lower.match(/(\d{1,3})\s*วันที่แล้ว/u)) {
+    const days = Math.min(366, Math.max(0, Number(lower.match(/(\d{1,3})\s*วันที่แล้ว/u)[1])));
+    filters.fromDate = bangkokDate(-days, referenceDate);
+    filters.toDate = filters.fromDate;
+  } else if (lower.includes('สัปดาห์ที่แล้ว') || lower.includes('last week')) {
+    filters.fromDate = bangkokDate(-7, referenceDate);
+    filters.toDate = bangkokDate(-1, referenceDate);
+  } else if (lower.includes('สัปดาห์หน้า') || lower.includes('next week')) {
+    filters.fromDate = bangkokDate(1, referenceDate);
+    filters.toDate = bangkokDate(7, referenceDate);
   } else if (
     lower.includes('สัปดาห์นี้') ||
     lower.includes('7 วัน') ||
     lower.includes('this week')
   ) {
-    filters.fromDate = bangkokDate(-6);
-    filters.toDate = bangkokDate();
+    filters.fromDate = bangkokDate(-6, referenceDate);
+    filters.toDate = today;
+  } else if (lower.includes('เดือนที่แล้ว') || lower.includes('last month')) {
+    const previous = new Date(Date.UTC(currentYear, currentMonth - 2, 1));
+    Object.assign(filters, monthRange(previous.getUTCFullYear(), previous.getUTCMonth() + 1));
+  } else if (lower.includes('เดือนหน้า') || lower.includes('next month')) {
+    const next = new Date(Date.UTC(currentYear, currentMonth, 1));
+    Object.assign(filters, monthRange(next.getUTCFullYear(), next.getUTCMonth() + 1));
   } else if (lower.includes('เดือนนี้') || lower.includes('this month')) {
-    filters.fromDate = `${bangkokDate().slice(0, 7)}-01`;
-    filters.toDate = bangkokDate();
+    filters.fromDate = `${today.slice(0, 7)}-01`;
+    filters.toDate = today;
+  }
+
+  if (!explicitDates.length && slashDate) {
+    const iso = isoDateFromParts(slashDate[1], slashDate[2], slashDate[3]);
+    if (iso) filters.fromDate = filters.toDate = iso;
+  }
+
+  if (!explicitDates.length && !slashDate) {
+    const monthNames = [...THAI_MONTHS.keys()].sort((a, b) => b.length - a.length).map(value => value.replace(/\./g, '\\.')).join('|');
+    const thaiDate = lower.match(new RegExp(`(?:วันที่\\s*)?(\\d{1,2})\\s*(${monthNames})(?:\\s*(20\\d{2}|25\\d{2}))?`, 'u'));
+    if (thaiDate) {
+      const iso = isoDateFromParts(thaiDate[1], THAI_MONTHS.get(thaiDate[2]), thaiDate[3] || currentYear);
+      if (iso) filters.fromDate = filters.toDate = iso;
+    }
   }
 
   // Month/year input commonly used in reports, e.g. 07/2026 or 07/2569.
   // An explicit month/year is more precise than a relative phrase such as
   // "เดือนนี้". This also makes historical reports deterministic.
-  if (!explicitDates.length) {
+  if (!explicitDates.length && !slashDate) {
     const monthYearMatch = lower.match(/\b(0?[1-9]|1[0-2])\/(20\d{2}|25\d{2})\b/);
     if (monthYearMatch) {
       const month = Number(monthYearMatch[1]);
@@ -257,14 +341,23 @@ function extractQueryFilters(question) {
         filters.toDate = `${gregorianYear}-12-31`;
       }
     } else if (lower.includes('ปีนี้') || lower.includes('ปีปัจจุบัน') || lower.includes('this year')) {
-      const currentYear = bangkokYear();
-      filters.fromDate = `${currentYear}-01-01`;
-      filters.toDate = `${currentYear}-12-31`;
+      const selectedYear = bangkokYear(referenceDate);
+      filters.fromDate = `${selectedYear}-01-01`;
+      filters.toDate = `${selectedYear}-12-31`;
+    }
+  }
+
+  if (!filters.fromDate && !hasIsoLikeDate) {
+    const bareDay = lower.match(/วันที่\s*(0?[1-9]|[12]\d|3[01])(?!\d)/u);
+    if (bareDay) {
+      const iso = isoDateFromParts(bareDay[1], currentMonth, currentYear);
+      if (iso) filters.fromDate = filters.toDate = iso;
     }
   }
 
   const status = STATUS_ALIASES.find(item => item.terms.some(term => lower.includes(term)));
   if (status) filters.status = status.value;
+  if (lower.includes('งานค้าง') || lower.includes('ยังไม่เสร็จ')) filters.pendingOnly = true;
 
   const staff = STAFF_ALIASES.find(item => item.aliases.some(alias => lower.includes(alias)));
   if (staff) filters.staffName = staff.name;
@@ -352,6 +445,7 @@ module.exports = {
   detectWorkDataset,
   detectWorkIntent,
   extractQueryFilters,
+  extractStaffMentions,
   hasInternalWorkEvidence,
   isWorkRelated,
   isHypotheticalOrCalculation,

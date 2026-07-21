@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import { apiService } from '../services/api';
 import { thaiLlmService } from '../services/thaiLlmService';
 
@@ -198,7 +199,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     thaiLlmService.clearSession();
     setUser(null);
     setPositions([]);
@@ -211,7 +212,36 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('chatbot_active_room');
     localStorage.removeItem('chatbot_mini_messages');
     eraseCookie(STORAGE_KEY);
-  };
+  }, []);
+
+  React.useEffect(() => {
+    if (!user) return undefined;
+
+    let logoutTimer;
+    const forceRelogin = (reason = 'expired') => {
+      const message = reason === 'missing'
+        ? 'ไม่พบเซสชัน CatLog AI กรุณาเข้าสู่ระบบใหม่เพื่อเชื่อมต่อ AI'
+        : 'เซสชัน CatLog AI หมดอายุ กรุณาเข้าสู่ระบบใหม่เพื่อใช้งานต่อ';
+      toast.error(message, { duration: 4500, id: 'catlog-ai-session-expired' });
+      logout();
+    };
+
+    const session = thaiLlmService.getSessionStatus();
+    if (!session.valid) {
+      forceRelogin(session.reason);
+      return undefined;
+    }
+
+    const remainingMs = session.expiresAt - Date.now();
+    logoutTimer = window.setTimeout(() => forceRelogin('expired'), Math.max(0, remainingMs));
+    const handleExpired = (event) => forceRelogin(event.detail?.reason || 'expired');
+    window.addEventListener('catlog-ai-session-expired', handleExpired);
+
+    return () => {
+      window.clearTimeout(logoutTimer);
+      window.removeEventListener('catlog-ai-session-expired', handleExpired);
+    };
+  }, [user, logout]);
 
   const updateUserState = (newData) => {
     const updatedUser = { ...user, ...newData };

@@ -3,11 +3,13 @@ const assert = require('node:assert/strict');
 const express = require('express');
 const {
   applyCommonFilters,
+  applyTaskDateOverlap,
   asksForFreshInformation,
   briefingMetrics,
   classifyAssistantMode,
   createAiRouter,
   formatBriefingSummary,
+  formatConciseTaskList,
   formatDashboardSummary,
   formatNewsSummary,
   formatTeamSummary,
@@ -107,8 +109,9 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     const response = await fetch(`${baseUrl}/api/ai`);
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.build, '2026-07-21-flexible-router-v3');
+    assert.equal(payload.build, '2026-07-21-data-agent-v4');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
+    assert.equal(payload.capabilities.includes('data-agent-planner'), true);
   });
 });
 
@@ -123,6 +126,31 @@ test('server metrics use all queried rows rather than a displayed sample', () =>
   assert.equal(metrics.byStatus['กำลังทำ'], 2);
   assert.equal(metrics.overdue, 1);
   assert.equal(metrics.isComplete, true);
+});
+
+test('today task list returns only concise pending headings grouped by status', () => {
+  const answer = formatConciseTaskList({
+    question: 'งานของผมวันนี้มีอะไรบ้าง',
+    dataset: 'tasks',
+    tasks: {
+      metrics: {
+        total: 3,
+        byStatus: { 'เสร็จสิ้น': 1, 'ยังไม่เริ่ม': 2 },
+      },
+      items: [
+        { status: 'เสร็จสิ้น', detail: 'งานที่เสร็จแล้ว พร้อมรายละเอียดจำนวนมาก' },
+        { status: 'ยังไม่เริ่ม', detail: 'สร้าง API /api/admin/users สำหรับเพิ่มผู้ใช้ใหม่ (ตรวจสอบ payload)' },
+        { status: 'ยังไม่เริ่ม', detail: 'แก้ไข CRM fields ของ Visit และแสดงรูป proof จาก private bucket' },
+      ],
+    },
+  });
+
+  assert.match(answer, /งานค้าง: 2 งาน/);
+  assert.match(answer, /สร้าง API \/api\/admin\/users/);
+  assert.match(answer, /แก้ไข CRM fields ของ Visit/);
+  assert.doesNotMatch(answer, /งานที่เสร็จแล้ว/);
+  assert.doesNotMatch(answer, /ตรวจสอบ payload/);
+  assert.doesNotMatch(answer, /private bucket/);
 });
 
 test('dashboard filters only narrow a chatbot query and can be explicitly bypassed', () => {
@@ -227,18 +255,37 @@ test('flexible router separates WorkLogs, calculations, research, and general ch
   assert.equal(detectWorkIntent('ถ้ามีงาน 800 งาน ทำวันละ 5 งาน อีกกี่วันจะครบ 1000'), 'none');
 });
 
-test('task DATE filters use ISO dates without timezone timestamps', () => {
+test('task date ranges use Daily Summary overlap semantics', () => {
   const calls = [];
   const query = {
     gte(column, value) { calls.push(['gte', column, value]); return query; },
     lte(column, value) { calls.push(['lte', column, value]); return query; },
+    or(value) { calls.push(['or', value]); return query; },
+    not(column, operator, value) { calls.push(['not', column, operator, value]); return query; },
     eq(column, value) { calls.push(['eq', column, value]); return query; },
   };
-  applyCommonFilters(query, { fromDate: '2026-07-21', toDate: '2026-07-21' }, 'StartDate');
+  applyTaskDateOverlap(query, { fromDate: '2026-07-22', toDate: '2026-07-22' });
   assert.deepEqual(calls, [
-    ['gte', 'StartDate', '2026-07-21'],
-    ['lte', 'StartDate', '2026-07-21'],
+    ['lte', 'StartDate', '2026-07-22'],
+    ['or', 'DueDate.gte.2026-07-22,and(DueDate.is.null,StartDate.gte.2026-07-22)'],
   ]);
+});
+
+test('data agent compares multiple employees and calculates score gaps from an explicit target', () => {
+  const summary = formatTeamSummary({
+    agentPlan: { action: 'score_gap', targetPoints: 500 },
+    teamFilters: { fromDate: '2026-07-01', toDate: '2026-07-31', staffNames: ['แพท', 'เหมี่ยว'] },
+    teamMetrics: {
+      members: [
+        { name: 'แพท', totalPoints: 183, received: { completed: 1, inProgress: 0, notStarted: 0 }, assigned: { completed: 4, inProgress: 2, notStarted: 1 } },
+        { name: 'เหมี่ยว', totalPoints: 210, received: { completed: 2, inProgress: 0, notStarted: 0 }, assigned: { completed: 5, inProgress: 1, notStarted: 0 } },
+      ],
+    },
+  });
+  assert.match(summary, /พนักงาน แพท, เหมี่ยว/);
+  assert.match(summary, /แพท: คะแนนสะสม 183 คะแนน/);
+  assert.match(summary, /ขาดอีก 317 คะแนน เพื่อถึงเป้า 500 คะแนน/);
+  assert.match(summary, /ขาดอีก 290 คะแนน เพื่อถึงเป้า 500 คะแนน/);
 });
 
 test('short follow-up questions retain the previous current-year web topic', () => {
