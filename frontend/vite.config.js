@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import process from 'process'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -32,7 +32,10 @@ const generateVersionPlugin = () => ({
 })
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
   define: {
     __APP_VERSION__: versionTimestamp
   },
@@ -45,8 +48,9 @@ export default defineConfig({
     proxy: {
       // The browser only talks to our backend. ThaiLLM credentials stay there.
       '/api/ai': {
-        target: process.env.VITE_AI_PROXY_TARGET || 'http://localhost:3001',
+        target: env.VITE_AI_PROXY_TARGET || 'http://localhost:3001',
         changeOrigin: true,
+        secure: true,
       },
       // Client-key fallback for ThaiLLM in local development. In production
       // the matching Vercel rewrite keeps this HTTP upstream off the browser.
@@ -57,4 +61,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

@@ -8,6 +8,7 @@ test('default CORS origins include production and local frontends', () => {
   const origins = buildAllowedOrigins();
   assert.equal(origins.has('https://dailyworks-nu.vercel.app'), true);
   assert.equal(origins.has('http://localhost:5173'), true);
+  assert.equal(origins.has('http://localhost:5174'), true);
 });
 
 test('configured origins are normalized without allowing arbitrary Vercel sites', () => {
