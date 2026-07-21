@@ -4,6 +4,7 @@ const {
   detectWorkIntent,
   extractQueryFilters,
   extractStaffMentions,
+  isAllTimeQuestion,
   isSelfReference,
   signSession,
   validateChatMessages,
@@ -54,6 +55,13 @@ test('query filters support historic dates, statuses, and staff aliases', () => 
   assert.equal(filters.status, 'รอตรวจ');
   assert.equal(filters.staffName, 'ณัฐนันท์ ปาแก้ว');
   assert.deepEqual(extractQueryFilters('งานวันที่ 2026-99-99'), {});
+});
+
+test('all-time quick actions never become a synthetic single-day filter', () => {
+  const question = 'สรุปงานทั้งหมดของฉันทุกช่วงเวลาตั้งแต่เริ่มบันทึก ไม่ใช่เฉพาะวันนี้ ให้ค้นช่วง 2000-01-01 ถึง 2100-12-31';
+  assert.equal(isAllTimeQuestion(question), true);
+  assert.deepEqual(extractQueryFilters(question), {});
+  assert.equal(isAllTimeQuestion('สรุปงานทั้งหมดของฉันวันนี้'), false);
 });
 
 test('self wording is distinguished from a request for the whole team', () => {

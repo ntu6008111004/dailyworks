@@ -228,6 +228,28 @@ function hasInternalWorkEvidence(question) {
     isSelfReference(question);
 }
 
+function isAllTimeQuestion(question) {
+  const lower = String(question || '').toLowerCase();
+  const hasAllTimeIntent = [
+    'ทุกช่วงเวลา', 'ตั้งแต่เริ่มบันทึก', 'ตั้งแต่บันทึกทั้งหมด', 'ไม่จำกัดวัน',
+    'ไม่จำกัดวันที่', 'ทั้งหมดที่เคยบันทึก', 'ตั้งแต่แรก', 'all time',
+    '[all_time_scope]',
+    'งานทั้งหมดของฉัน', 'งานทั้งหมดของผม', 'งานของฉันทั้งหมด', 'งานของผมทั้งหมด',
+  ].some(term => lower.includes(term));
+  if (!hasAllTimeIntent) return false;
+
+  // Older quick actions used this synthetic range to mean "all time". It
+  // must never be interpreted as one day when only the first date is parsed.
+  if (lower.includes('2000-01-01') && lower.includes('2100-12-31')) return true;
+
+  const withoutNegatedToday = lower
+    .replace(/ไม่ใช่เฉพาะวันนี้/gu, '')
+    .replace(/ไม่ใช่วันนี้/gu, '');
+  const hasSpecificPeriod = /(?:วันนี้|เมื่อวาน|พรุ่งนี้|สัปดาห์|เดือน|ปี(?:นี้|ก่อน|หน้า|\s*\d)|วันที่\s*\d|ย้อนหลัง|ล่วงหน้า|20\d{2}-\d{2}-\d{2})/u
+    .test(withoutNegatedToday);
+  return !hasSpecificPeriod;
+}
+
 function extractQueryFilters(question, referenceDate = Date.now()) {
   const text = String(question || '').trim();
   const lower = text.toLowerCase();
@@ -355,6 +377,13 @@ function extractQueryFilters(question, referenceDate = Date.now()) {
     }
   }
 
+  // All-time requests intentionally have no date filter. This guard also
+  // removes dates proposed by legacy quick-action wording.
+  if (isAllTimeQuestion(text)) {
+    delete filters.fromDate;
+    delete filters.toDate;
+  }
+
   const status = STATUS_ALIASES.find(item => item.terms.some(term => lower.includes(term)));
   if (status) filters.status = status.value;
   if (lower.includes('งานค้าง') || lower.includes('ยังไม่เสร็จ')) filters.pendingOnly = true;
@@ -447,6 +476,7 @@ module.exports = {
   extractQueryFilters,
   extractStaffMentions,
   hasInternalWorkEvidence,
+  isAllTimeQuestion,
   isWorkRelated,
   isHypotheticalOrCalculation,
   isSelfReference,

@@ -5,6 +5,7 @@ const {
   extractQueryFilters,
   extractStaffMentions,
   isHypotheticalOrCalculation,
+  isAllTimeQuestion,
   isWorkRelated,
   isSelfReference,
   signSession,
@@ -129,7 +130,7 @@ function shouldIgnoreDashboardFilters(question) {
 
 function mergeDashboardFilters(questionFilters, dashboardFilters, question) {
   const merged = { ...questionFilters };
-  if (shouldIgnoreDashboardFilters(question)) return merged;
+  if (isAllTimeQuestion(question) || shouldIgnoreDashboardFilters(question)) return merged;
   const saved = safeDashboardFilters(dashboardFilters);
   if (!merged.department && saved.department) merged.department = saved.department;
   if (!merged.staffName && saved.staffName) merged.staffName = saved.staffName;
@@ -507,9 +508,10 @@ async function loadTeamMetrics(supabase, user, filters) {
 async function buildWorkContext(supabase, user, question, dashboardFilters, agentPlan = null) {
   if (!isWorkRelated(question)) return null;
   const dataset = agentPlan?.dataset || detectWorkDataset(question);
+  const allTimeQuestion = isAllTimeQuestion(question);
   const planFilters = agentPlan ? {
-    ...(agentPlan.fromDate ? { fromDate: agentPlan.fromDate } : {}),
-    ...(agentPlan.toDate ? { toDate: agentPlan.toDate } : {}),
+    ...(!allTimeQuestion && agentPlan.fromDate ? { fromDate: agentPlan.fromDate } : {}),
+    ...(!allTimeQuestion && agentPlan.toDate ? { toDate: agentPlan.toDate } : {}),
     ...(agentPlan.status ? { status: agentPlan.status } : {}),
     ...(agentPlan.keyword ? { keyword: agentPlan.keyword } : {}),
   } : {};
@@ -1561,7 +1563,7 @@ function createAiRouter({ supabase, env = process.env }) {
   router.get('/', (_req, res) => res.json({
     status: 'online',
     service: 'CatLog AI API',
-    build: '2026-07-21-data-agent-v4',
+    build: '2026-07-21-all-time-scope-v5',
     currentDate: bangkokNow(),
     capabilities: ['data-agent-planner', 'worklogs-rbac', 'web-search', 'freshness-guard', 'conversation-memory', 'calculation-mode', 'text-summary'],
     endpoints: ['POST /api/ai/session', 'POST /api/ai/chat'],
