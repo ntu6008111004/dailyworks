@@ -138,3 +138,8 @@
   - โหลด `VITE_AI_PROXY_TARGET` จาก `.env` ผ่าน Vite อย่างถูกต้อง เพื่อไม่ชน Backend เก่าหรือ CORS
   - ทดสอบ Local session และคำถาม WorkLogs สำเร็จ ได้ผลรวม 822 งานตรงจากฐานข้อมูล
   - Backend test ผ่าน 41/41 รายการ และ Frontend production build ผ่าน
+
+เรื่องที่ 21: เพิ่ม CORS และเผยแพร่แพตช์ขึ้น Git
+  - เพิ่ม `http://localhost:5174` สำหรับการทดสอบ CatLog AI บน Vite Dev
+  - ทดสอบ Backend ผ่าน 41/41 รายการ
+  - Commit และ Push สำเร็จทั้ง `dev` และ `main`
