@@ -5,7 +5,7 @@ const SESSION_VERSION = 1;
 // article for summarisation. The total cap still protects the model context.
 const MAX_MESSAGE_LENGTH = 12000;
 const MAX_TOTAL_MESSAGE_LENGTH = 30000;
-const MAX_MESSAGES = 8;
+const MAX_MESSAGES = 12;
 
 function base64UrlEncode(value) {
   return Buffer.from(value).toString('base64url');
@@ -168,6 +168,34 @@ const SUMMARY_TERMS = [
 
 const DETAIL_TERMS = ['แสดงรายการ', 'รายการ', 'รายชื่อ', 'รายละเอียด', 'งานไหน', 'list', 'show tasks'];
 
+function isHypotheticalOrCalculation(question) {
+  const text = String(question || '').trim();
+  const lower = text.toLowerCase();
+  const hasNumbers = (text.match(/\d+(?:[.,]\d+)?/g) || []).length >= 2;
+  const hypothetical = /(?:^|\s)(?:ถ้า|หาก|สมมติ|สมมุติ|กรณีที่)|(?:if|suppose|assuming)\b/iu.test(text);
+  const calculation = [
+    'คำนวณ', 'คิดเลข', 'อีกกี่วัน', 'กี่วันจะ', 'จะครบ', 'ต้องทำอีก', 'วันละ',
+    'เฉลี่ยวันละ', 'บวก', 'ลบ', 'คูณ', 'หาร', 'เปอร์เซ็นต์', 'ร้อยละ',
+    'calculate', 'per day', 'how many days',
+  ].some(term => lower.includes(term));
+  return calculation && (hypothetical || hasNumbers);
+}
+
+function hasInternalWorkEvidence(question) {
+  const lower = String(question || '').toLowerCase();
+  const strongTerms = [
+    'worklog', 'แดชบอร์ด', 'dashboard', 'ในระบบ', 'ที่บันทึก', 'รายการงาน',
+    'งานทั้งหมด', 'งานวันนี้', 'งานของฉัน', 'งานของผม', 'งานฉัน', 'งานผม',
+    'งานของทีม', 'งานของเรา', 'งานค้าง', 'กี่งาน', 'จำนวนงาน', 'สรุปงาน',
+    'บรีฟ', 'briefing', 'คะแนนสะสม', 'คะแนนของฉัน', 'คะแนนของผม',
+    'สถานะงาน', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'กำหนดส่ง', 'มอบหมาย',
+    'แผนก', 'ผู้รับผิดชอบ',
+  ];
+  return strongTerms.some(term => lower.includes(term)) ||
+    STAFF_ALIASES.some(item => item.aliases.some(alias => lower.includes(alias))) ||
+    isSelfReference(question);
+}
+
 function extractQueryFilters(question) {
   const text = String(question || '').trim();
   const lower = text.toLowerCase();
@@ -262,8 +290,11 @@ function extractQueryFilters(question) {
 
 function detectWorkIntent(question) {
   const lower = String(question || '').toLowerCase();
-  const related = WORK_TERMS.some(term => lower.includes(term)) ||
-    STAFF_ALIASES.some(item => item.aliases.some(alias => lower.includes(alias)));
+  if (isHypotheticalOrCalculation(question)) return 'none';
+  const related = hasInternalWorkEvidence(question) && (
+    WORK_TERMS.some(term => lower.includes(term)) ||
+    STAFF_ALIASES.some(item => item.aliases.some(alias => lower.includes(alias)))
+  );
   if (!related) return 'none';
   if (DETAIL_TERMS.some(term => lower.includes(term))) return 'detail';
   return SUMMARY_TERMS.some(term => lower.includes(term)) ? 'summary' : 'detail';
@@ -321,7 +352,9 @@ module.exports = {
   detectWorkDataset,
   detectWorkIntent,
   extractQueryFilters,
+  hasInternalWorkEvidence,
   isWorkRelated,
+  isHypotheticalOrCalculation,
   isSelfReference,
   signSession,
   validateChatMessages,

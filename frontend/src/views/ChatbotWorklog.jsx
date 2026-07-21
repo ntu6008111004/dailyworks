@@ -130,7 +130,7 @@ export const ChatbotWorklog = () => {
     setIsLoading(true);
 
     // Build history from this room's messages
-    const historyMsgs = [...(activeRoom.messages || []).slice(-7), userMsg].map(m => ({
+    const historyMsgs = [...(activeRoom.messages || []).slice(-11), userMsg].map(m => ({
       role: m.role,
       content: m.content,
     }));
