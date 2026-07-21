@@ -338,9 +338,9 @@ export const Dashboard = () => {
           </div>
         </div>
         
-        <div className="h-[400px] w-full">
+        <div className="h-[400px] min-h-[320px] w-full min-w-0">
           {statusChartData && statusChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={statusChartData}

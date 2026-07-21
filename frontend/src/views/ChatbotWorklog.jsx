@@ -445,6 +445,7 @@ export const ChatbotWorklog = () => {
                 onClick={() => handleSend()}
                 disabled={!input.trim() || isLoading}
                 title="ส่งข้อความ"
+                aria-label="ส่งข้อความ"
               >
                 <Send size={18} />
               </button>

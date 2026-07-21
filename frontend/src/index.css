@@ -293,6 +293,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+.app-shell {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Specific optimizations for headings and small text */
 h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.01em; /* Tighter for big text */

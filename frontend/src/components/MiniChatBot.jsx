@@ -67,9 +67,16 @@ export const MiniChatBot = () => {
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      setTimeout(() => textareaRef.current?.focus(), 350);
     }
   }, [isOpen, messages.length]);
+
+  // Opening the panel must not summon the mobile keyboard immediately.
+  // It reduces the usable viewport and was making the send button appear off-screen.
+  useEffect(() => {
+    if (!isOpen || !window.matchMedia('(pointer: fine)').matches) return undefined;
+    const focusTimer = window.setTimeout(() => textareaRef.current?.focus(), 350);
+    return () => window.clearTimeout(focusTimer);
+  }, [isOpen]);
 
   const handleToggle = useCallback(() => {
     if (isOpen) {
@@ -325,6 +332,7 @@ export const MiniChatBot = () => {
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
             title="ส่ง"
+            aria-label="ส่งข้อความ"
           >
             <Send size={16} />
           </button>
