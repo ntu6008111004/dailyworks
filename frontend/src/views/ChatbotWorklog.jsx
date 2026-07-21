@@ -147,6 +147,7 @@ export const ChatbotWorklog = () => {
       thinking: result.success ? result.thinking : null,
       searchPerformed: result.success ? result.searchPerformed : false,
       sources: result.success ? result.sources : [],
+      suggestions: result.success && Array.isArray(result.suggestions) ? result.suggestions : [],
       isError: !result.success && result.error === 'rate_limit',
       timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
     };
@@ -239,12 +240,19 @@ export const ChatbotWorklog = () => {
         {/* Knowledge Cards */}
         <div className="knowledge-cards">
           <div className="knowledge-title">
-            <span>📘 คู่มือใช้ CatLog AI</span>
-            <span className="knowledge-count">4 วิธี</span>
+            <span>📘 คู่มือและข้อควรรู้</span>
+            <span className="knowledge-count">7 ข้อ</span>
           </div>
           <div className="knowledge-card access">
             <span className="kc-icon">🔐</span>
             <span className="knowledge-copy"><strong>ระดับสิทธิ์: {userRole}</strong><small>{accessDescription}</small></span>
+          </div>
+          <div className="knowledge-card warning">
+            <span className="kc-icon">⚠️</span>
+            <span className="knowledge-copy">
+              <strong>รุ่น Beta · พร้อมใช้งานประมาณ 80%</strong>
+              <small>AI อาจตีความคำถามซับซ้อนคลาดเคลื่อนได้ โปรดตรวจตัวเลขสำคัญกับหน้า Dashboard หรือ My Team ก่อนนำไปใช้งาน</small>
+            </span>
           </div>
           <div className="knowledge-card internal-guide">
             <span className="kc-icon">📊</span>
@@ -277,7 +285,14 @@ export const ChatbotWorklog = () => {
               <small>สูตรง่าย ๆ: <b>เรื่องที่หา + ใคร + ช่วงเวลา + รูปแบบคำตอบ</b><br />ตัวอย่าง “งานค้างของฉันเดือนนี้ แยกตามสถานะ”</small>
             </span>
           </div>
-          <div className="knowledge-note">BETA · แชทเก็บในเครื่อง · จำกัด 60 ครั้ง/นาที</div>
+          <div className="knowledge-card prompt-guide">
+            <span className="kc-icon">💬</span>
+            <span className="knowledge-copy">
+              <strong>พิมพ์สั้นหรือเลือกปุ่มได้</strong>
+              <small>พิมพ์ “งาน”, “คะแนน” หรือ “บรีฟ” ได้ หากยังไม่ชัด CatLog AI จะถามกลับพร้อมตัวเลือก ไม่เดาตัวเลขเอง</small>
+            </span>
+          </div>
+          <div className="knowledge-note">หากข้อมูลไม่พอ ระบบจะถามกลับ · แชทเก็บในเครื่อง · จำกัด 60 ครั้ง/นาที</div>
         </div>
       </div>
 
@@ -398,6 +413,20 @@ export const ChatbotWorklog = () => {
                             ))}
                           </div>
                         )}
+                        {Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
+                          <div className="chat-response-actions" aria-label="ตัวเลือกคำถาม">
+                            {msg.suggestions.map(action => (
+                              <button
+                                key={action.id || action.query}
+                                type="button"
+                                onClick={() => handleSuggestion(action.query)}
+                                disabled={isLoading}
+                              >
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </>
                     )}
                     <div className="msg-time">{msg.timestamp}</div>
@@ -426,29 +455,48 @@ export const ChatbotWorklog = () => {
             </div>
 
             {/* Input */}
-            <div className="chatbot-input-area">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="ถามงาน ค้นเว็บ หรือวางข้อความเพื่อสรุป… (สูงสุด 12,000 ตัวอักษร)"
-                rows={1}
-                disabled={isLoading}
-                onInput={(e) => {
-                  e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                }}
-              />
-              <button
-                className="send-btn"
-                onClick={() => handleSend()}
-                disabled={!input.trim() || isLoading}
-                title="ส่งข้อความ"
-                aria-label="ส่งข้อความ"
+            <div className="chatbot-composer">
+              <div 
+                className="chat-quick-actions" 
+                aria-label="คำสั่งสำเร็จรูป"
+                onWheel={(e) => { if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY; }}
               >
-                <Send size={18} />
-              </button>
+                {thaiLlmService.quickActions.map(action => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => handleSuggestion(action.query)}
+                    disabled={isLoading}
+                    title={action.query}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+              <div className="chatbot-input-area">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="พิมพ์สั้น ๆ ได้ เช่น งานผม, คะแนน, งานค้าง หรือเลือกปุ่มด้านบน…"
+                  rows={1}
+                  disabled={isLoading}
+                  onInput={(e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                  }}
+                />
+                <button
+                  className="send-btn"
+                  onClick={() => handleSend()}
+                  disabled={!input.trim() || isLoading}
+                  title="ส่งข้อความ"
+                  aria-label="ส่งข้อความ"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </div>
           </>
         ) : (

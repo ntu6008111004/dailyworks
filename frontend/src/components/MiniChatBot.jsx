@@ -97,8 +97,8 @@ export const MiniChatBot = () => {
     localStorage.removeItem(miniStorageKey(userId));
   }, [userId]);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
+  const handleSend = useCallback(async (overrideInput) => {
+    const trimmed = String(overrideInput || input).trim();
     if (!trimmed || isLoading) return;
 
     const userMsg = {
@@ -130,6 +130,7 @@ export const MiniChatBot = () => {
         thinking: result.thinking,
         searchPerformed: result.searchPerformed,
         sources: result.sources,
+        suggestions: Array.isArray(result.suggestions) ? result.suggestions : [],
         timestamp: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages(prev => [...prev, botMsg]);
@@ -292,6 +293,20 @@ export const MiniChatBot = () => {
                           ))}
                         </div>
                       )}
+                      {Array.isArray(msg.suggestions) && msg.suggestions.length > 0 && (
+                        <div className="chat-response-actions" aria-label="ตัวเลือกคำถาม">
+                          {msg.suggestions.map(action => (
+                            <button
+                              key={action.id || action.query}
+                              type="button"
+                              onClick={() => handleSend(action.query)}
+                              disabled={isLoading}
+                            >
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
                   <div className="msg-time">{msg.timestamp}</div>
@@ -317,25 +332,44 @@ export const MiniChatBot = () => {
         </div>
 
         {/* Input */}
-        <div className="mini-chat-input-area">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="ถาม ค้นเว็บ หรือวางข้อความเพื่อสรุป…"
-            rows={1}
-            disabled={isLoading}
-          />
-          <button
-            className="send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            title="ส่ง"
-            aria-label="ส่งข้อความ"
+        <div className="mini-chat-composer">
+          <div 
+            className="chat-quick-actions mini" 
+            aria-label="คำสั่งสำเร็จรูป"
+            onWheel={(e) => { if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY; }}
           >
-            <Send size={16} />
-          </button>
+            {thaiLlmService.quickActions.slice(0, 6).map(action => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => handleSend(action.query)}
+                disabled={isLoading}
+                title={action.query}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+          <div className="mini-chat-input-area">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="พิมพ์สั้น ๆ เช่น งานผม, คะแนน…"
+              rows={1}
+              disabled={isLoading}
+            />
+            <button
+              className="send-btn"
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isLoading}
+              title="ส่ง"
+              aria-label="ส่งข้อความ"
+            >
+              <Send size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </>

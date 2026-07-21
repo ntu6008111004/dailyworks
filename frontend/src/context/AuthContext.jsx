@@ -114,6 +114,7 @@ export const AuthProvider = ({ children }) => {
   const [positions, setPositions] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [aiSessionReady, setAiSessionReady] = useState(() => thaiLlmService.getSessionStatus().valid);
 
   // Helper to get position name by ID
   const getPositionName = useCallback((id) => {
@@ -185,9 +186,18 @@ export const AuthProvider = ({ children }) => {
       const userData = await apiService.login(username, password);
       try {
         await thaiLlmService.createSession(username, password);
+        const verifiedAiSession = thaiLlmService.getSessionStatus();
+        if (!verifiedAiSession.valid) {
+          const sessionError = new Error('AI session token could not be verified');
+          sessionError.code = `session_${verifiedAiSession.reason}`;
+          throw sessionError;
+        }
+        toast.dismiss('catlog-ai-session-unavailable');
+        setAiSessionReady(true);
       } catch (error) {
         console.warn('AI session could not be created:', error);
         thaiLlmService.clearSession();
+        setAiSessionReady(false);
       }
       setUser(userData);
       localStorage.setItem('dw_remember', remember ? 'true' : 'false');
@@ -201,6 +211,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     thaiLlmService.clearSession();
+    setAiSessionReady(false);
     setUser(null);
     setPositions([]);
     setDepartments([]);
@@ -217,31 +228,41 @@ export const AuthProvider = ({ children }) => {
   React.useEffect(() => {
     if (!user) return undefined;
 
-    let logoutTimer;
-    const forceRelogin = (reason = 'expired') => {
+    let aiExpiryTimer;
+    const markAiUnavailable = (reason = 'expired') => {
+      thaiLlmService.clearSession();
+      setAiSessionReady(false);
       const message = reason === 'missing'
-        ? 'ไม่พบเซสชัน CatLog AI กรุณาเข้าสู่ระบบใหม่เพื่อเชื่อมต่อ AI'
-        : 'เซสชัน CatLog AI หมดอายุ กรุณาเข้าสู่ระบบใหม่เพื่อใช้งานต่อ';
-      toast.error(message, { duration: 4500, id: 'catlog-ai-session-expired' });
-      logout();
+        ? 'เข้าสู่ WorkLogs แล้ว แต่ CatLog AI ยังเชื่อมต่อไม่ได้ คุณยังใช้งานส่วนอื่นได้ตามปกติ'
+        : 'เซสชัน CatLog AI หมดอายุ ส่วนอื่นของ WorkLogs ยังใช้งานได้ตามปกติ';
+      toast(message, { icon: '⚠️', duration: 4500, id: 'catlog-ai-session-unavailable' });
     };
 
     const session = thaiLlmService.getSessionStatus();
     if (!session.valid) {
-      forceRelogin(session.reason);
+      // A remembered WorkLogs login can legitimately exist without an AI
+      // token (for example after a backend restart). Do not show a misleading
+      // connection error on page load; the chat itself will explain if the
+      // user tries to use a feature that requires the token.
+      if (session.reason === 'missing') {
+        setAiSessionReady(false);
+        return undefined;
+      }
+      markAiUnavailable(session.reason);
       return undefined;
     }
 
+    setAiSessionReady(true);
     const remainingMs = session.expiresAt - Date.now();
-    logoutTimer = window.setTimeout(() => forceRelogin('expired'), Math.max(0, remainingMs));
-    const handleExpired = (event) => forceRelogin(event.detail?.reason || 'expired');
+    aiExpiryTimer = window.setTimeout(() => markAiUnavailable('expired'), Math.max(0, remainingMs));
+    const handleExpired = (event) => markAiUnavailable(event.detail?.reason || 'expired');
     window.addEventListener('catlog-ai-session-expired', handleExpired);
 
     return () => {
-      window.clearTimeout(logoutTimer);
+      window.clearTimeout(aiExpiryTimer);
       window.removeEventListener('catlog-ai-session-expired', handleExpired);
     };
-  }, [user, logout]);
+  }, [user]);
 
   const updateUserState = (newData) => {
     const updatedUser = { ...user, ...newData };
@@ -261,7 +282,8 @@ export const AuthProvider = ({ children }) => {
       getPositionName,
       refreshInitData,
       isInitializing,
-      getPositionColor
+      getPositionColor,
+      aiSessionReady
     }}>
       {children}
     </AuthContext.Provider>
