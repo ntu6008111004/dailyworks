@@ -3,6 +3,7 @@ const {
   detectWorkDataset,
   detectWorkIntent,
   extractQueryFilters,
+  isHypotheticalOrCalculation,
   isWorkRelated,
   isSelfReference,
   signSession,
@@ -63,8 +64,10 @@ function applyTaskScope(query, user) {
 
 function applyCommonFilters(query, filters, dateColumn = 'StartDate') {
   let scoped = query;
-  if (filters.fromDate) scoped = scoped.gte(dateColumn, `${filters.fromDate}T00:00:00+07:00`);
-  if (filters.toDate) scoped = scoped.lte(dateColumn, `${filters.toDate}T23:59:59.999+07:00`);
+  // StartDate/DueDate are DATE columns in WorkLogs. Comparing them with a
+  // timezone timestamp can exclude rows from the selected day in PostgREST.
+  if (filters.fromDate) scoped = scoped.gte(dateColumn, filters.fromDate);
+  if (filters.toDate) scoped = scoped.lte(dateColumn, filters.toDate);
   if (filters.status) scoped = scoped.eq('Status', filters.status);
   return scoped;
 }
@@ -98,7 +101,11 @@ function safeDashboardFilters(raw) {
 
 function shouldIgnoreDashboardFilters(question) {
   const text = String(question || '').toLowerCase();
-  return ['ไม่ใช้ตัวกรอง', 'ล้างตัวกรอง', 'ทุกแผนก', 'ทุกพนักงาน', 'all departments', 'all staff'].some(term => text.includes(term));
+  return [
+    'ไม่ใช้ตัวกรอง', 'ล้างตัวกรอง', 'ทุกแผนก', 'ทุกพนักงาน',
+    'งานทั้งหมดของฉัน', 'งานทั้งหมดของผม', 'งานของฉันทั้งหมด', 'งานของผมทั้งหมด',
+    'all departments', 'all staff', 'all my tasks',
+  ].some(term => text.includes(term));
 }
 
 function mergeDashboardFilters(questionFilters, dashboardFilters, question) {
@@ -625,6 +632,8 @@ function decodeHtml(value) {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/<[^>]*>/g, '')
@@ -660,6 +669,20 @@ function safeExternalUrl(value) {
     if (['bing.com', 'google.com', 'duckduckgo.com'].some(domain => host === domain || host.endsWith(`.${domain}`))) return '';
     url.username = '';
     url.password = '';
+    return url.href;
+  } catch {
+    return '';
+  }
+}
+
+function unwrapBingSearchUrl(value) {
+  try {
+    const url = new URL(decodeHtml(value));
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'bing.com' && url.pathname.startsWith('/ck/')) {
+      const encoded = url.searchParams.get('u');
+      if (encoded?.startsWith('a1')) return Buffer.from(encoded.slice(2), 'base64').toString('utf8');
+    }
     return url.href;
   } catch {
     return '';
@@ -980,11 +1003,47 @@ async function bingSearch(question) {
     const seen = new Set();
     const pattern = /<li[^>]+class=["'][^"']*b_algo[^"']*["'][\s\S]*?<h2[^>]*>\s*<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/gi;
     for (const match of html.matchAll(pattern)) {
-      const targetUrl = safeExternalUrl(decodeHtml(match[1]));
+      const targetUrl = safeExternalUrl(unwrapBingSearchUrl(match[1]));
       if (!targetUrl || seen.has(targetUrl)) continue;
       seen.add(targetUrl);
       results.push({ title: clip(decodeHtml(match[2]), 140), snippet: clip(decodeHtml(match[3]), 500), url: clip(targetUrl, 500) });
       if (results.length >= 5) break;
+    }
+    return results;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function braveHtmlSearch(question) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const url = new URL('https://search.brave.com/search');
+    url.search = new URLSearchParams({ q: question, source: 'web' }).toString();
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+        'Accept-Language': 'th-TH,th;q=0.9,en;q=0.6',
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+    const html = (await response.text()).slice(0, 1200000);
+    const results = [];
+    const seen = new Set();
+    for (const chunk of html.split(/<div class="snippet/giu).slice(1)) {
+      if (!/data-type="web"/iu.test(chunk)) continue;
+      const href = chunk.match(/<div class="result-content[^>]*>[\s\S]*?<a href="([^"]+)"/iu)?.[1];
+      const title = chunk.match(/<div class="title[^>]*>([\s\S]*?)<\/div>/iu)?.[1];
+      const snippet = chunk.match(/<div class="generic-snippet[\s\S]*?<div class="content[^>]*>([\s\S]*?)<\/div>/iu)?.[1];
+      const targetUrl = href ? safeExternalUrl(decodeHtml(href)) : '';
+      if (!targetUrl || !title || seen.has(targetUrl)) continue;
+      seen.add(targetUrl);
+      results.push({ title: clip(decodeHtml(title), 140), snippet: clip(decodeHtml(snippet || ''), 500), url: clip(targetUrl, 500) });
+      if (results.length >= 8) break;
     }
     return results;
   } catch {
@@ -1164,11 +1223,44 @@ async function webSearch(question, env = {}) {
     const combined = mergeSearchResults(question, [bingResults, results]);
     if (combined.length >= 3) return { provider: 'bing+brave', results: combined, freshnessVerified: results.some(result => result.age) };
   }
+  const braveHtmlResults = rankRelevantSearchResults(question, await braveHtmlSearch(question));
+  const bingBraveResults = mergeSearchResults(question, [bingResults, braveHtmlResults]);
+  if (bingBraveResults.length >= 3) {
+    return { provider: bingResults.length ? 'bing+brave-web' : 'brave-web', results: bingBraveResults, freshnessVerified: false };
+  }
   const webResults = rankRelevantSearchResults(question, await duckDuckGoWebSearch(question));
-  const combined = mergeSearchResults(question, [bingResults, webResults]);
+  const combined = mergeSearchResults(question, [bingResults, braveHtmlResults, webResults]);
   if (combined.length) return { provider: combined.length > webResults.length ? 'bing+duckduckgo' : 'duckduckgo-web', results: combined, freshnessVerified: false };
   if (bingResults.length) return { provider: 'bing', results: bingResults, freshnessVerified: false };
   return { provider: 'duckduckgo-instant', results: rankRelevantSearchResults(question, await duckDuckGoSearch(question)), freshnessVerified: false };
+}
+
+function researchSearchQueries(question, now) {
+  const primary = enrichFreshSearchQuery(question, now);
+  const text = String(question || '').toLowerCase();
+  const variants = [primary];
+  if (/(?:แรม|ram|dram|ddr[345]|memory chip)/iu.test(text)) {
+    variants.push(
+      `RAM price forecast ${now.gregorianYear} TrendForce DRAM`,
+      `DRAM DDR5 price increase causes AI demand ${now.gregorianYear} TrendForce`,
+    );
+  } else if (/(?:ราคา|แพง|ถูกลง|ขึ้นราคา|ขาดตลาด|price)/iu.test(text)) {
+    variants.push(`${question} market outlook ${now.gregorianYear} latest analysis`);
+  }
+  return [...new Set(variants)].slice(0, 3);
+}
+
+async function performWebResearch(question, now, env = {}) {
+  const queries = researchSearchQueries(question, now);
+  const searches = await Promise.all(queries.map(query => webSearch(query, env)));
+  const results = mergeSearchResults(queries.join(' '), searches.map(search => search.results)).slice(0, 8);
+  const currentYearPattern = new RegExp(`(?:${now.gregorianYear}|${now.buddhistYear})`, 'u');
+  return {
+    provider: [...new Set(searches.map(search => search.provider).filter(Boolean))].join('+') || null,
+    results,
+    queries,
+    freshnessVerified: results.some(result => currentYearPattern.test(`${result.title || ''} ${result.snippet || ''}`)),
+  };
 }
 
 function bangkokNow() {
@@ -1183,14 +1275,17 @@ function bangkokNow() {
 function asksForFreshInformation(question) {
   const text = String(question || '').toLowerCase();
   return [
-    'ล่าสุด', 'ปัจจุบัน', 'วันนี้', 'ข่าว', 'ตอนนี้', 'ปีนี้', 'เมื่อวาน',
-    'latest', 'current', 'today', 'news', 'right now', 'this year',
-  ].some(term => text.includes(term));
+    /(?:ล่าสุด|ปัจจุบัน|วันนี้|ข่าว|ตอนนี้|ช่วงนี้|ปีนี้|เมื่อวาน|ข้อมูลสด|เรียลไทม์)/u,
+    /(?:ราคา|แพง|ถูกลง|ขึ้นราคา|ขาดตลาด|ค่าเงิน|หุ้น|ดอกเบี้ย|อากาศ|พยากรณ์|ผลการแข่งขัน|ตารางแข่งขัน)/u,
+    /\b(?:latest|current|today|news|right now|this year|price|weather|score|schedule)\b/iu,
+  ].some(pattern => pattern.test(text));
 }
 
 function enrichFreshSearchQuery(question, now) {
   if (!asksForFreshInformation(question)) return question;
-  return `${question} ${now.gregorianYear} ${now.buddhistYear}`;
+  // Put the current year first so search engines strongly prefer current
+  // evidence instead of resurfacing popular articles from 2020-2023.
+  return `${now.gregorianYear} ${now.buddhistYear} ${question}`.slice(0, 500);
 }
 
 function isTextSummaryRequest(question) {
@@ -1207,11 +1302,37 @@ function shouldSearchExternal(question) {
   const lower = text.toLowerCase();
   const noSearchCommands = ['แปล', 'ตรวจคำ', 'แก้ประโยค', 'เขียนใหม่', 'แต่ง', 'คำนวณ', 'translate', 'rewrite', 'proofread'];
   if (noSearchCommands.some(term => lower.includes(term)) && !asksForFreshInformation(text)) return false;
-  return [
-    'ค้นหา', 'หาให้', 'ข้อมูล', 'ข่าว', 'ล่าสุด', 'ปัจจุบัน', 'วันนี้', 'ตอนนี้', 'ปีนี้',
-    'ใคร', 'คืออะไร', 'ที่ไหน', 'เมื่อไหร่', 'เท่าไหร่', 'ราคา', 'อากาศ', 'กฎหมาย', 'แนะนำ',
-    'search', 'find', 'latest', 'current', 'news', 'who', 'what', 'where', 'when', 'how much',
-  ].some(term => lower.includes(term)) || /https?:\/\//i.test(text);
+  const explicitResearch = [
+    /(?:ค้น|หา|เช็ก|ตรวจสอบ)(?:ข้อมูล)?(?:จาก)?(?:เว็บ|อินเทอร์เน็ต|ออนไลน์|ข่าว)/u,
+    /(?:แหล่งอ้างอิง|แหล่งข้อมูล|อ้างอิง|ค้นเว็บ|ค้นอินเทอร์เน็ต)/u,
+    /\b(?:search|browse|online)\b/iu,
+  ].some(pattern => pattern.test(lower));
+  return explicitResearch || asksForFreshInformation(text) || /https?:\/\/|www\./i.test(text);
+}
+
+function classifyAssistantMode(question) {
+  if (isTextSummaryRequest(question)) return 'summary';
+  if (isHypotheticalOrCalculation(question)) return 'calculation';
+  if (isWorkRelated(question)) return 'worklogs';
+  if (shouldSearchExternal(question)) return 'research';
+  return 'general';
+}
+
+function resolveContextualQuestion(messages) {
+  const latest = String(messages[messages.length - 1]?.content || '').trim();
+  if (!latest) return '';
+
+  // Short follow-ups depend on the preceding user question. Rebuild a
+  // standalone query so “ทำไม เพราะ AI” keeps the current-year RAM topic.
+  const looksLikeFollowUp = latest.length <= 140 && /^(?:แล้ว|ถ้า|หาก|ทำไม|เพราะ|ยังไง|อย่างไร|จริงไหม|ใช่ไหม|อันไหน|เรื่องนี้|มัน|เขา|AI\b|why\b|how\b|what about\b)/iu.test(latest);
+  if (!looksLikeFollowUp) return latest;
+
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    if (messages[index]?.role !== 'user') continue;
+    const previous = String(messages[index].content || '').trim();
+    if (previous) return `${previous}\nคำถามต่อเนื่อง: ${latest}`;
+  }
+  return latest;
 }
 
 function parseModelContent(content, exposeThinking) {
@@ -1234,9 +1355,9 @@ function createAiRouter({ supabase, env = process.env }) {
   router.get('/', (_req, res) => res.json({
     status: 'online',
     service: 'CatLog AI API',
-    build: '2026-07-20-freshness-guard-v1',
+    build: '2026-07-21-flexible-router-v3',
     currentDate: bangkokNow(),
-    capabilities: ['worklogs-rbac', 'web-search', 'freshness-guard', 'text-summary'],
+    capabilities: ['worklogs-rbac', 'web-search', 'freshness-guard', 'conversation-memory', 'calculation-mode', 'text-summary'],
     endpoints: ['POST /api/ai/session', 'POST /api/ai/chat'],
   }));
 
@@ -1307,10 +1428,12 @@ function createAiRouter({ supabase, env = process.env }) {
     let dashboardSummary = null;
     try {
       const question = messages[messages.length - 1].content;
+      const contextualQuestion = resolveContextualQuestion(messages);
       const textSummaryRequest = isTextSummaryRequest(question);
-      workContext = textSummaryRequest
-        ? null
-        : await buildWorkContext(supabase, req.aiUser, question, req.body?.dashboardFilters);
+      const assistantMode = classifyAssistantMode(contextualQuestion);
+      workContext = assistantMode === 'worklogs'
+        ? await buildWorkContext(supabase, req.aiUser, contextualQuestion, req.body?.dashboardFilters)
+        : null;
       dashboardSummary = formatDashboardSummary(workContext, req.aiUser);
       // Totals and score questions are answered directly from Supabase. Calling
       // an LLM after this can only restate—or contradict—the trusted numbers.
@@ -1333,8 +1456,8 @@ function createAiRouter({ supabase, env = process.env }) {
       }
       const allowWebSearch = req.body?.enableWebSearch !== false;
       const now = bangkokNow();
-      if (!workContext && !textSummaryRequest && allowWebSearch && isNewsQuestion(question)) {
-        const newsResults = await newsSearch(question, new Date());
+      if (!workContext && !textSummaryRequest && allowWebSearch && isNewsQuestion(contextualQuestion)) {
+        const newsResults = await newsSearch(contextualQuestion, new Date());
         const newsSummary = formatNewsSummary(newsResults, now);
         if (newsSummary) {
           return res.json({
@@ -1363,15 +1486,16 @@ function createAiRouter({ supabase, env = process.env }) {
       if (!providerUrl || !env.THAILLM_API_KEY) {
         return res.status(503).json({ status: 'error', code: 'ai_not_configured' });
       }
-      const freshnessRequested = asksForFreshInformation(question);
-      const searchQuery = enrichFreshSearchQuery(question, now);
-      const search = !workContext && allowWebSearch && shouldSearchExternal(question)
-        ? await webSearch(searchQuery, env)
+      const freshnessRequested = asksForFreshInformation(contextualQuestion);
+      const searchQuery = enrichFreshSearchQuery(contextualQuestion, now);
+      const externalSearchRequested = assistantMode === 'research' && allowWebSearch;
+      const search = externalSearchRequested
+        ? await performWebResearch(contextualQuestion, now, env)
         : { provider: null, results: [], freshnessVerified: false };
 
       // Never let a current-year/news/price question silently fall back to the
       // model's training memory. A truthful retry is safer than an old answer.
-      if (freshnessRequested && search.results.length === 0) {
+      if (externalSearchRequested && freshnessRequested && search.results.length === 0) {
         return res.json({
           status: 'success',
           data: {
@@ -1397,6 +1521,8 @@ function createAiRouter({ supabase, env = process.env }) {
         'หาก totalMatches มากกว่าจำนวน items ให้ใช้ items เป็นเพียงตัวอย่างรายการล่าสุด และบอกจำนวนตัวอย่างอย่างชัดเจน',
         'หากผู้ใช้ถามงานทั้งหมด/แดชบอร์ด/ภาพรวม ให้สรุป total, byStatus, overdue และ dueSoon ก่อน แล้วจึงยกตัวอย่างรายการเมื่อจำเป็น',
         'หากผู้ใช้วางข้อความยาวแล้วขอให้สรุป ให้สรุปแก่นสำคัญเป็นหัวข้อ, สิ่งที่ต้องทำต่อ และความเสี่ยง/กำหนดเวลาเท่าที่ข้อมูลระบุ ห้ามเติมข้อเท็จจริงที่ไม่มีในข้อความ',
+        'แยกโหมดให้ชัด: worklogs เท่านั้นที่ใช้ฐานข้อมูล; calculation ใช้ตัวเลขสมมติและบริบทสนทนาโดยไม่ค้นฐานข้อมูล; general ตอบจากความรู้ของโมเดล; research ตอบจากผลค้นเว็บ',
+        'หาก assistantMode เป็น calculation ให้คำนวณจากตัวเลขที่ผู้ใช้ให้หรือคำตอบก่อนหน้า แสดงสูตรสั้น ๆ และคำตอบสุดท้าย ห้ามอ้างว่าเชื่อมต่อ WorkLogs ไม่สำเร็จ',
         'หากใช้ผลการค้นเว็บ ให้ตอบจาก snippets ที่ให้มาเท่านั้น และปิดท้ายด้วยหัวข้อ “แหล่งข้อมูล” เป็น Markdown links ของผลค้นหาที่ใช้; หากผลค้นหาไม่มีแหล่งที่น่าเชื่อถือให้บอกข้อจำกัดอย่างตรงไปตรงมา',
         'หาก appliedFilters.staffIdentityResolved เป็น true พนักงานถูกเลือกจากรหัสพนักงานบนเซิร์ฟเวอร์แล้ว ให้ยึดคนนี้เท่านั้นและห้ามเดาจากชื่อที่คล้ายกัน',
         'หาก freshnessRequested เป็น true ห้ามอ้างว่าข้อมูลเว็บเป็นล่าสุดหรือเรียลไทม์ เว้นแต่ search.freshnessVerified เป็น true และผลค้นหามีอายุ/วันที่ที่ยืนยันได้; ให้บอกวันที่ปัจจุบันและข้อจำกัดนี้อย่างตรงไปตรงมา',
@@ -1405,8 +1531,9 @@ function createAiRouter({ supabase, env = process.env }) {
         '<untrusted_data>',
         JSON.stringify({
           currentDate: now,
+          assistantMode,
           workContext,
-          search: { provider: search.provider, freshnessRequested, freshnessVerified: search.freshnessVerified, searchQuery, results: search.results },
+          search: { provider: search.provider, freshnessRequested, freshnessVerified: search.freshnessVerified, searchQuery, searchQueries: search.queries || [searchQuery], results: search.results },
         }),
         '</untrusted_data>',
       ].join('\n');
@@ -1484,8 +1611,10 @@ function createAiRouter({ supabase, env = process.env }) {
 }
 
 module.exports = {
+  applyCommonFilters,
   asksForFreshInformation,
   briefingMetrics,
+  classifyAssistantMode,
   createAiRouter,
   formatBriefingSummary,
   formatDashboardSummary,
@@ -1495,8 +1624,12 @@ module.exports = {
   isTextSummaryRequest,
   mergeDashboardFilters,
   newsQueryVariants,
+  performWebResearch,
   rankRelevantSearchResults,
+  researchSearchQueries,
+  resolveContextualQuestion,
   selectEmployeeByName,
   shouldSearchExternal,
   taskMetrics,
+  webSearch,
 };

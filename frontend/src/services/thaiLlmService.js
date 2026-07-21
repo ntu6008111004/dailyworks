@@ -238,20 +238,38 @@ function parseThinking(content) {
 }
 
 function normalizeConversation(messages) {
-  const recent = messages.slice(-8);
+  const recent = messages.slice(-12);
   return recent.map((message, index) => {
     const isLatest = index === recent.length - 1;
     return {
       role: message.role,
       // Keep a pasted document intact in the latest turn; compact older
       // context to remain below the backend's total request limit.
-      content: String(message.content || '').slice(0, isLatest ? 12000 : 2500),
+      content: String(message.content || '').slice(0, isLatest ? 12000 : 1400),
     };
   });
 }
 
+function isCalculationRequest(question) {
+  const text = String(question || '').trim();
+  const lower = text.toLowerCase();
+  const hasNumbers = (text.match(/\d+(?:[.,]\d+)?/g) || []).length >= 2;
+  const calculation = ['คำนวณ', 'คิดเลข', 'อีกกี่วัน', 'กี่วันจะ', 'จะครบ', 'ต้องทำอีก', 'วันละ', 'เฉลี่ยวันละ', 'calculate', 'per day']
+    .some(term => lower.includes(term));
+  return calculation && (hasNumbers || /(?:ถ้า|หาก|สมมติ|สมมุติ)/u.test(text));
+}
+
+function clientRoutingText(messages) {
+  const latest = String(messages[messages.length - 1]?.content || '').trim();
+  if (!latest || latest.length > 140 || !/^(?:แล้ว|ถ้า|หาก|ทำไม|เพราะ|ยังไง|อย่างไร|จริงไหม|ใช่ไหม|อันไหน|เรื่องนี้|มัน|เขา|AI\b)/iu.test(latest)) return latest;
+  const previous = [...messages.slice(0, -1)].reverse().find(message => message.role === 'user' && String(message.content || '').trim());
+  return previous ? `${previous.content}\n${latest}` : latest;
+}
+
 function needsTrustedWorkData(messages) {
-  const question = String(messages[messages.length - 1]?.content || '').toLowerCase();
+  const latest = String(messages[messages.length - 1]?.content || '');
+  if (isCalculationRequest(latest)) return false;
+  const question = clientRoutingText(messages).toLowerCase();
   const isPastedSummary = ['สรุปข้อความ', 'ช่วยสรุป', 'สรุปให้', 'สรุปเนื้อหา', 'จับใจความ', 'summary', 'summarize']
     .some(term => question.includes(term)) && question.length >= 350;
   if (isPastedSummary) return false;
@@ -263,10 +281,10 @@ function needsTrustedWorkData(messages) {
 }
 
 function needsFreshWebData(messages) {
-  const question = String(messages[messages.length - 1]?.content || '').toLowerCase();
+  const question = clientRoutingText(messages).toLowerCase();
   return [
     'ล่าสุด', 'ปัจจุบัน', 'วันนี้', 'ตอนนี้', 'ปีนี้', 'เมื่อวาน', 'ข่าว',
-    'ราคา', 'แพงขึ้น', 'ถูกลง', 'แนวโน้ม',
+    'ราคา', 'แพง', 'ถูกลง', 'ขึ้นราคา', 'ขาดตลาด', 'แนวโน้ม',
     'latest', 'current', 'today', 'news', 'right now', 'this year', 'price',
   ].some(term => question.includes(term));
 }

@@ -105,7 +105,7 @@ export const MiniChatBot = () => {
     setInput('');
     setIsLoading(true);
 
-    const historyMsgs = [...messages.slice(-6), userMsg].map(m => ({
+    const historyMsgs = [...messages.slice(-11), userMsg].map(m => ({
       role: m.role,
       content: m.content,
     }));

@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const {
+  applyCommonFilters,
   asksForFreshInformation,
   briefingMetrics,
+  classifyAssistantMode,
   createAiRouter,
   formatBriefingSummary,
   formatDashboardSummary,
@@ -14,11 +16,13 @@ const {
   mergeDashboardFilters,
   newsQueryVariants,
   rankRelevantSearchResults,
+  researchSearchQueries,
+  resolveContextualQuestion,
   selectEmployeeByName,
   shouldSearchExternal,
   taskMetrics,
 } = require('../aiRouter');
-const { detectWorkDataset, detectWorkIntent, verifySession } = require('../lib/aiSecurity');
+const { detectWorkDataset, detectWorkIntent, isHypotheticalOrCalculation, verifySession } = require('../lib/aiSecurity');
 
 const SECRET = 'router-test-session-secret-with-32-characters';
 
@@ -103,7 +107,7 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     const response = await fetch(`${baseUrl}/api/ai`);
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.build, '2026-07-20-freshness-guard-v1');
+    assert.equal(payload.build, '2026-07-21-flexible-router-v3');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
   });
 });
@@ -200,6 +204,51 @@ test('long pasted summaries do not trigger internal work queries or web search',
 
 test('current-year price questions are forced through fresh web search', () => {
   const question = 'ทำไมแรมถึงแพงขึ้นปีนี้';
+  assert.equal(asksForFreshInformation(question), true);
+  assert.equal(shouldSearchExternal(question), true);
+});
+
+test('RAM research puts the current year first and adds market-specific searches', () => {
+  const queries = researchSearchQueries('ทำไมแรมแพง', {
+    gregorianYear: 2026,
+    buddhistYear: 2569,
+  });
+  assert.match(queries[0], /^2026 2569 /);
+  assert.equal(queries.some(query => /TrendForce DRAM/i.test(query)), true);
+  assert.equal(queries.every(query => !/2023/.test(query)), true);
+});
+
+test('flexible router separates WorkLogs, calculations, research, and general chat', () => {
+  assert.equal(classifyAssistantMode('งานทั้งหมดของฉันมีกี่งาน'), 'worklogs');
+  assert.equal(classifyAssistantMode('ถ้ามีงาน 800 งาน ทำวันละ 5 งาน อีกกี่วันจะครบ 1000'), 'calculation');
+  assert.equal(classifyAssistantMode('ทำไมแรมแพง'), 'research');
+  assert.equal(classifyAssistantMode('อธิบายหลักการเขียนโปรแกรมเชิงวัตถุ'), 'general');
+  assert.equal(isHypotheticalOrCalculation('ถ้ามีงาน 800 งาน ทำวันละ 5 งาน อีกกี่วันจะครบ 1000'), true);
+  assert.equal(detectWorkIntent('ถ้ามีงาน 800 งาน ทำวันละ 5 งาน อีกกี่วันจะครบ 1000'), 'none');
+});
+
+test('task DATE filters use ISO dates without timezone timestamps', () => {
+  const calls = [];
+  const query = {
+    gte(column, value) { calls.push(['gte', column, value]); return query; },
+    lte(column, value) { calls.push(['lte', column, value]); return query; },
+    eq(column, value) { calls.push(['eq', column, value]); return query; },
+  };
+  applyCommonFilters(query, { fromDate: '2026-07-21', toDate: '2026-07-21' }, 'StartDate');
+  assert.deepEqual(calls, [
+    ['gte', 'StartDate', '2026-07-21'],
+    ['lte', 'StartDate', '2026-07-21'],
+  ]);
+});
+
+test('short follow-up questions retain the previous current-year web topic', () => {
+  const question = resolveContextualQuestion([
+    { role: 'user', content: 'ทำไมราคาแรมถึงแพงขึ้นปีนี้' },
+    { role: 'assistant', content: 'คำตอบก่อนหน้า' },
+    { role: 'user', content: 'ทำไม เพราะ AI' },
+  ]);
+  assert.match(question, /ราคาแรมถึงแพงขึ้นปีนี้/);
+  assert.match(question, /ทำไม เพราะ AI/);
   assert.equal(asksForFreshInformation(question), true);
   assert.equal(shouldSearchExternal(question), true);
 });
