@@ -90,6 +90,8 @@ test('AI session endpoint issues a signed subject-only token', async () => {
     const session = verifySession(payload.data.token, SECRET);
     assert.equal(session.sub, 'user-1');
     assert.deepEqual(Object.keys(session).sort(), ['exp', 'iat', 'sub', 'v']);
+    assert.equal(session.exp - session.iat, 10 * 365 * 24 * 60 * 60);
+    assert.equal(payload.data.expiresIn, 10 * 365 * 24 * 60 * 60);
   });
 });
 
@@ -109,7 +111,7 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     const response = await fetch(`${baseUrl}/api/ai`);
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.build, '2026-07-21-all-time-scope-v5');
+    assert.equal(payload.build, '2026-07-22-persistent-session-v6');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
     assert.equal(payload.capabilities.includes('data-agent-planner'), true);
   });
