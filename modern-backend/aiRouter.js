@@ -21,6 +21,10 @@ const TASK_METRIC_FIELDS = 'ID, Status, StartDate, DueDate, CreatedAt, Completed
 const BRIEFING_FIELDS = 'ID, RunningID, Title, Detail, CreatorID, Assignees, Status, Priority, StartDate, DueDate, CreatedAt, UpdatedAt, CompletedAt, Points, PostStatus';
 const TEAM_USER_FIELDS = 'ID, Name, Department, Role';
 const TASK_METRIC_PAGE_SIZE = 1000;
+// CatLog AI uses a persistent browser session so staff do not have to log in
+// again every working day. It is still revoked by logout, cleared browser
+// storage, account removal, or changing AI_SESSION_SECRET.
+const PERSISTENT_AI_SESSION_TTL_SECONDS = 10 * 365 * 24 * 60 * 60;
 
 function clip(value, maxLength = 240) {
   const text = String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
@@ -1563,7 +1567,7 @@ function createAiRouter({ supabase, env = process.env }) {
   router.get('/', (_req, res) => res.json({
     status: 'online',
     service: 'CatLog AI API',
-    build: '2026-07-21-all-time-scope-v5',
+    build: '2026-07-22-persistent-session-v6',
     currentDate: bangkokNow(),
     capabilities: ['data-agent-planner', 'worklogs-rbac', 'web-search', 'freshness-guard', 'conversation-memory', 'calculation-mode', 'text-summary'],
     endpoints: ['POST /api/ai/session', 'POST /api/ai/chat'],
@@ -1611,8 +1615,8 @@ function createAiRouter({ supabase, env = process.env }) {
         .maybeSingle();
       if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 
-      const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET);
-      return res.json({ status: 'success', data: { token, expiresIn: 8 * 60 * 60 } });
+      const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
+      return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
     } catch (error) {
       return res.status(500).json({ status: 'error', code: 'session_failed' });
     }
