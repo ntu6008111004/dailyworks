@@ -95,6 +95,20 @@ test('AI session endpoint issues a signed subject-only token', async () => {
   });
 });
 
+test('AI session endpoint auto-renews session for active user with userId', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/ai/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'user-1', username: 'staff' }),
+    });
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    const session = verifySession(payload.data.token, SECRET);
+    assert.equal(session.sub, 'user-1');
+  });
+});
+
 test('AI chat endpoint rejects requests without a signed session', async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/ai/chat`, {
@@ -111,7 +125,7 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     const response = await fetch(`${baseUrl}/api/ai`);
     assert.equal(response.status, 200);
     const payload = await response.json();
-    assert.equal(payload.build, '2026-07-22-persistent-session-v6');
+    assert.equal(payload.build, '2026-07-23-auto-session-renew-v7');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
     assert.equal(payload.capabilities.includes('data-agent-planner'), true);
   });

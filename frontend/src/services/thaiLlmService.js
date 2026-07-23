@@ -59,8 +59,47 @@ class RateLimiter {
 
 const rateLimiter = new RateLimiter();
 
+function setCookie(name, value, days = 365) {
+  try {
+    if (typeof document === 'undefined') return;
+    let expires = "";
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+      expires = "; expires=" + date.toUTCString();
+    }
+    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secureFlag;
+  } catch {}
+}
+
+function getCookie(name) {
+  try {
+    if (typeof document === 'undefined') return null;
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i].trim();
+      if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+  } catch { return null; }
+}
+
+function eraseCookie(name) {
+  try {
+    if (typeof document === 'undefined') return;
+    const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax' + secureFlag;
+  } catch {}
+}
+
 function getSessionToken() {
-  try { return sessionStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem(SESSION_STORAGE_KEY) || ''; } catch { return ''; }
+  try {
+    return sessionStorage.getItem(SESSION_STORAGE_KEY) ||
+           localStorage.getItem(SESSION_STORAGE_KEY) ||
+           getCookie(SESSION_STORAGE_KEY) || '';
+  } catch { return ''; }
 }
 
 function getSessionStatus() {
@@ -89,12 +128,12 @@ function setSessionToken(token) {
   try {
     if (token) {
       sessionStorage.setItem(SESSION_STORAGE_KEY, token);
-      // Keep the short-lived server token across a normal browser reload so a
-      // logged-in user is not asked to reconnect CatLog AI repeatedly.
       localStorage.setItem(SESSION_STORAGE_KEY, token);
+      setCookie(SESSION_STORAGE_KEY, token, 365);
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       localStorage.removeItem(SESSION_STORAGE_KEY);
+      eraseCookie(SESSION_STORAGE_KEY);
     }
   } catch { /* storage may be disabled */ }
 }
@@ -136,6 +175,30 @@ async function createSession(username, password) {
   lastSessionFailureCode = '';
   setSessionToken(token);
   return token;
+}
+
+async function autoRenewSession(userData) {
+  if (!userData) return null;
+  const userId = userData.ID || userData.id;
+  const username = userData.Username || userData.username;
+  if (!userId && !username) return null;
+
+  try {
+    const response = await fetch(apiEndpoint('session'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, username }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    const token = payload.data?.token;
+    if (response.ok && token) {
+      setSessionToken(token);
+      return token;
+    }
+  } catch (error) {
+    console.warn('Auto AI session renewal failed:', error);
+  }
+  return null;
 }
 
 async function sendClientProviderChat(messages, { recordUsage = true } = {}) {
@@ -600,7 +663,7 @@ async function webSearch() { return []; }
 async function buildWorklogContext() { return ''; }
 
 export const thaiLlmService = {
-  sendChat, createSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext,
+  sendChat, createSession, autoRenewSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext,
   getDashboardFilters, getSessionStatus, parseThinking, markdownToHtml, rateLimiter,
   quickActions: QUICK_ACTIONS, config: AI_CONFIG,
 };

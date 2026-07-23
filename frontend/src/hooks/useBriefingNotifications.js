@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { apiService } from '../services/api';
+import { apiService, supabase } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -8,23 +8,18 @@ export const useBriefingNotifications = () => {
   const lastUpdateRef = useRef({}); // Store max UpdatedAt for each briefing
   const isInitializedRef = useRef(false);
 
-  // Permission will be requested via NotificationPermissionModal
-
-
   useEffect(() => {
     if (!user?.ID) return;
 
     let isMounted = true;
     let timeoutId = null;
+    let lastPollTime = 0;
+
     const pollBriefings = async () => {
       try {
+        lastPollTime = Date.now();
         const briefings = await apiService.getBriefingsNoCache();
-        if (!isMounted) return;
-
-        // Make sure it's an array
-        if (!Array.isArray(briefings)) {
-          return;
-        }
+        if (!isMounted || !Array.isArray(briefings)) return;
 
         const incomingUpdates = {};
         let hasUpdates = false;
@@ -83,20 +78,60 @@ export const useBriefingNotifications = () => {
           window.dispatchEvent(new CustomEvent('remote-briefing-update'));
         }
       } catch (error) {
-        console.error('[Polling] Error in briefing poller:', error);
-      } finally {
-        if (isMounted) {
-          timeoutId = setTimeout(pollBriefings, 30000); // Poll every 30 seconds
-        }
+        console.error('[Notifications] Error in briefing poller:', error);
       }
     };
 
-    // Delay first poll slightly to not block initial render queries too much
-    timeoutId = setTimeout(pollBriefings, 5000);
+    // Initial check on mount
+    pollBriefings();
+
+    // 1. REALTIME WEBSOCKET: Subscribes directly to Supabase Postgres Changes
+    // Zero Vercel Function Requests, 0ms Delay for Instant Push Notifications!
+    let channel;
+    try {
+      if (supabase && typeof supabase.channel === 'function') {
+        channel = supabase
+          .channel(`briefing-notifications:${user.ID}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'Briefing' },
+            () => {
+              if (isMounted) pollBriefings();
+            }
+          )
+          .subscribe();
+      }
+    } catch (err) {
+      console.warn('[Realtime] Supabase subscription warning:', err);
+    }
+
+    // 2. ADAPTIVE POLLING FALLBACK: Polls every 60s when active (pauses when hidden)
+    const scheduleNextPoll = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (!document.hidden && isMounted) {
+          pollBriefings();
+        }
+        if (isMounted) scheduleNextPoll();
+      }, 60000);
+    };
+    scheduleNextPoll();
+
+    // Instant check when user switches back to active tab
+    const handleVisibilityChange = () => {
+      if (!document.hidden && Date.now() - lastPollTime > 15000) {
+        pollBriefings();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
+      if (channel && supabase && typeof supabase.removeChannel === 'function') {
+        supabase.removeChannel(channel);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user?.ID]);
 };
