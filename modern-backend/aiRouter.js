@@ -1602,8 +1602,12 @@ function createAiRouter({ supabase, env = process.env }) {
     }
     const { username, password, userId } = req.body || {};
 
-    if (password) {
-      const credentials = validateCredentialInput(username, password);
+    const rawUsername = typeof username === 'string' ? username.trim() : (typeof username === 'number' ? String(username) : '');
+    const rawUserId = typeof userId === 'string' || typeof userId === 'number' ? String(userId).trim() : '';
+    const rawPassword = typeof password === 'string' ? password : '';
+
+    if (rawPassword) {
+      const credentials = validateCredentialInput(rawUsername, rawPassword);
       if (!credentials) return res.status(400).json({ status: 'error', code: 'invalid_credentials' });
       if (!ipLimiter(`session:${req.ip}`)) {
         return res.status(429).json({ status: 'error', code: 'rate_limit' });
@@ -1625,14 +1629,14 @@ function createAiRouter({ supabase, env = process.env }) {
       }
     }
 
-    if (userId || username) {
+    if (rawUserId || rawUsername) {
       if (!ipLimiter(`session:${req.ip}`)) {
         return res.status(429).json({ status: 'error', code: 'rate_limit' });
       }
       try {
         let query = supabase.from('Users').select('ID');
-        if (userId) query = query.eq('ID', userId);
-        if (username && typeof username === 'string') query = query.eq('Username', username.trim());
+        if (rawUserId) query = query.eq('ID', rawUserId);
+        if (rawUsername) query = query.eq('Username', rawUsername);
         const { data: user, error } = await query.maybeSingle();
         if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 

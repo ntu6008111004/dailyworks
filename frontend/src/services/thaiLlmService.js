@@ -180,17 +180,25 @@ async function createSession(username, password) {
 async function autoRenewSession(userData) {
   if (!userData) return null;
   const userId = userData.ID || userData.id;
-  const username = userData.Username || userData.username;
-  if (!userId && !username) return null;
+  const username = userData.Username || userData.username || userData.Name || userData.name;
+  
+  const cleanUserId = userId != null ? String(userId).trim() : '';
+  const cleanUsername = username != null ? String(username).trim() : '';
+  
+  if (!cleanUserId && !cleanUsername) return null;
 
   try {
+    const payload = {};
+    if (cleanUserId) payload.userId = cleanUserId;
+    if (cleanUsername) payload.username = cleanUsername;
+
     const response = await fetch(apiEndpoint('session'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, username }),
+      body: JSON.stringify(payload),
     });
-    const payload = await response.json().catch(() => ({}));
-    const token = payload.data?.token;
+    const payloadResult = await response.json().catch(() => ({}));
+    const token = payloadResult.data?.token;
     if (response.ok && token) {
       setSessionToken(token);
       return token;
