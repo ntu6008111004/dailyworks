@@ -19,12 +19,18 @@ export const UpdateNotifier = () => {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
-  const checkInterval = useRef(null);
+  const lastCheckTime = useRef(0);
 
   const checkForUpdates = async () => {
+    // Throttle checks to at most once every 10 minutes
+    if (Date.now() - lastCheckTime.current < 10 * 60 * 1000) {
+      return;
+    }
+    lastCheckTime.current = Date.now();
+
     try {
-      // Add a random query parameter to bypass cache fully
-      const res = await fetch(`/version.json?t=${new Date().getTime()}`);
+      // Use standard no-cache fetch so CDN / ETag handles verification efficiently
+      const res = await fetch('/version.json', { cache: 'no-cache' });
       if (!res.ok) return;
       const data = await res.json();
       
@@ -56,17 +62,26 @@ export const UpdateNotifier = () => {
 
   useEffect(() => {
     // Check initially after a brief delay so it doesn't block rendering
-    setTimeout(checkForUpdates, 3000);
+    setTimeout(() => {
+      lastCheckTime.current = 0; // Force first check
+      checkForUpdates();
+    }, 5000);
     
-    // Check every 5 minutes
-    checkInterval.current = setInterval(checkForUpdates, 5 * 60 * 1000);
+    // Check every 30 minutes
+    checkInterval.current = setInterval(checkForUpdates, 30 * 60 * 1000);
     
-    // Also check when window regains focus
-    window.addEventListener('focus', checkForUpdates);
+    const handleFocus = () => {
+      // Check on focus if last check was more than 15 minutes ago
+      if (Date.now() - lastCheckTime.current > 15 * 60 * 1000) {
+        checkForUpdates();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
     
     return () => {
       clearInterval(checkInterval.current);
-      window.removeEventListener('focus', checkForUpdates);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 

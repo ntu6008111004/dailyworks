@@ -228,38 +228,66 @@ export const AuthProvider = ({ children }) => {
   React.useEffect(() => {
     if (!user) return undefined;
 
+    let isMounted = true;
     let aiExpiryTimer;
-    const markAiUnavailable = (reason = 'expired') => {
-      thaiLlmService.clearSession();
-      setAiSessionReady(false);
-      const message = reason === 'missing'
-        ? 'เข้าสู่ WorkLogs แล้ว แต่ CatLog AI ยังเชื่อมต่อไม่ได้ คุณยังใช้งานส่วนอื่นได้ตามปกติ'
-        : 'เซสชัน CatLog AI หมดอายุ ส่วนอื่นของ WorkLogs ยังใช้งานได้ตามปกติ';
-      toast(message, { icon: '⚠️', duration: 4500, id: 'catlog-ai-session-unavailable' });
+
+    const checkAndRenewSession = async () => {
+      const session = thaiLlmService.getSessionStatus();
+      if (session.valid) {
+        if (isMounted) setAiSessionReady(true);
+        const remainingMs = session.expiresAt - Date.now();
+        // Schedule auto-renewal 1 minute before expiration
+        const renewDelay = Math.max(1000, remainingMs - 60000);
+        aiExpiryTimer = window.setTimeout(async () => {
+          if (!isMounted) return;
+          await thaiLlmService.autoRenewSession(user);
+          if (isMounted) {
+            const renewedStatus = thaiLlmService.getSessionStatus();
+            setAiSessionReady(renewedStatus.valid);
+          }
+        }, renewDelay);
+        return;
+      }
+
+      // Session is missing, expired, or invalid.
+      // Auto-renew seamlessly in background for active logged in WorkLogs user.
+      try {
+        await thaiLlmService.autoRenewSession(user);
+        const renewedStatus = thaiLlmService.getSessionStatus();
+        if (renewedStatus.valid && isMounted) {
+          toast.dismiss('catlog-ai-session-unavailable');
+          setAiSessionReady(true);
+          return;
+        }
+      } catch (err) {
+        console.warn('Auto AI session renewal failed on load:', err);
+      }
+
+      if (isMounted) {
+        setAiSessionReady(false);
+      }
     };
 
-    const session = thaiLlmService.getSessionStatus();
-    if (!session.valid) {
-      // A remembered WorkLogs login can legitimately exist without an AI
-      // token (for example after a backend restart). Do not show a misleading
-      // connection error on page load; the chat itself will explain if the
-      // user tries to use a feature that requires the token.
-      if (session.reason === 'missing') {
-        setAiSessionReady(false);
-        return undefined;
-      }
-      markAiUnavailable(session.reason);
-      return undefined;
-    }
+    checkAndRenewSession();
 
-    setAiSessionReady(true);
-    const remainingMs = session.expiresAt - Date.now();
-    aiExpiryTimer = window.setTimeout(() => markAiUnavailable('expired'), Math.max(0, remainingMs));
-    const handleExpired = (event) => markAiUnavailable(event.detail?.reason || 'expired');
+    const handleExpired = async () => {
+      try {
+        await thaiLlmService.autoRenewSession(user);
+        const renewedStatus = thaiLlmService.getSessionStatus();
+        if (renewedStatus.valid && isMounted) {
+          toast.dismiss('catlog-ai-session-unavailable');
+          setAiSessionReady(true);
+          return;
+        }
+      } catch {}
+      if (isMounted) setAiSessionReady(false);
+    };
+
     window.addEventListener('catlog-ai-session-expired', handleExpired);
 
     return () => {
-      window.clearTimeout(aiExpiryTimer);
+      isMounted = false;
+      if (aiExpiryTimer) window.clearTimeout(aiExpiryTimer);
       window.removeEventListener('catlog-ai-session-expired', handleExpired);
     };
   }, [user]);

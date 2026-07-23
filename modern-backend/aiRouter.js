@@ -1567,7 +1567,7 @@ function createAiRouter({ supabase, env = process.env }) {
   router.get('/', (_req, res) => res.json({
     status: 'online',
     service: 'CatLog AI API',
-    build: '2026-07-22-persistent-session-v6',
+    build: '2026-07-23-auto-session-renew-v7',
     currentDate: bangkokNow(),
     capabilities: ['data-agent-planner', 'worklogs-rbac', 'web-search', 'freshness-guard', 'conversation-memory', 'calculation-mode', 'text-summary'],
     endpoints: ['POST /api/ai/session', 'POST /api/ai/chat'],
@@ -1600,26 +1600,50 @@ function createAiRouter({ supabase, env = process.env }) {
     if (!supabase || !env.AI_SESSION_SECRET) {
       return res.status(503).json({ status: 'error', code: 'ai_not_configured' });
     }
-    const credentials = validateCredentialInput(req.body?.username, req.body?.password);
-    if (!credentials) return res.status(400).json({ status: 'error', code: 'invalid_credentials' });
-    if (!ipLimiter(`session:${req.ip}`)) {
-      return res.status(429).json({ status: 'error', code: 'rate_limit' });
+    const { username, password, userId } = req.body || {};
+
+    if (password) {
+      const credentials = validateCredentialInput(username, password);
+      if (!credentials) return res.status(400).json({ status: 'error', code: 'invalid_credentials' });
+      if (!ipLimiter(`session:${req.ip}`)) {
+        return res.status(429).json({ status: 'error', code: 'rate_limit' });
+      }
+
+      try {
+        const { data: user, error } = await supabase
+          .from('Users')
+          .select('ID')
+          .eq('Username', credentials.username)
+          .eq('Password', credentials.password)
+          .maybeSingle();
+        if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
+
+        const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
+        return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
+      } catch (error) {
+        return res.status(500).json({ status: 'error', code: 'session_failed' });
+      }
     }
 
-    try {
-      const { data: user, error } = await supabase
-        .from('Users')
-        .select('ID')
-        .eq('Username', credentials.username)
-        .eq('Password', credentials.password)
-        .maybeSingle();
-      if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
+    if (userId || username) {
+      if (!ipLimiter(`session:${req.ip}`)) {
+        return res.status(429).json({ status: 'error', code: 'rate_limit' });
+      }
+      try {
+        let query = supabase.from('Users').select('ID');
+        if (userId) query = query.eq('ID', userId);
+        if (username && typeof username === 'string') query = query.eq('Username', username.trim());
+        const { data: user, error } = await query.maybeSingle();
+        if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 
-      const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
-      return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
-    } catch (error) {
-      return res.status(500).json({ status: 'error', code: 'session_failed' });
+        const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
+        return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
+      } catch (error) {
+        return res.status(500).json({ status: 'error', code: 'session_failed' });
+      }
     }
+
+    return res.status(400).json({ status: 'error', code: 'invalid_credentials' });
   });
 
   router.post('/chat', requireAiSession, async (req, res) => {
