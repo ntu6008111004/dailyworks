@@ -18,6 +18,7 @@ function formatPublishedAt(timestamp) {
 export const UpdateNotifier = () => {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const lastCheckTime = useRef(0);
   const checkInterval = useRef(null);
 

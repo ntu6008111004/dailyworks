@@ -180,17 +180,26 @@ async function createSession(username, password) {
 async function autoRenewSession(userData) {
   if (!userData) return null;
   const userId = userData.ID || userData.id;
-  const username = userData.Username || userData.username || userData.Name || userData.name;
+  const username = userData.Username || userData.username;
+  const name = userData.Name || userData.name;
+  const password = userData.Password || userData._p || userData.password;
   
   const cleanUserId = userId != null ? String(userId).trim() : '';
-  const cleanUsername = username != null ? String(username).trim() : '';
+  const cleanUsername = username != null ? String(username).trim() : (name != null ? String(name).trim() : '');
+  const cleanPassword = password != null ? String(password) : '';
   
   if (!cleanUserId && !cleanUsername) return null;
 
   try {
     const payload = {};
-    if (cleanUserId) payload.userId = cleanUserId;
-    if (cleanUsername) payload.username = cleanUsername;
+    if (cleanUsername && cleanPassword) {
+      payload.username = cleanUsername;
+      payload.password = cleanPassword;
+    } else if (cleanUserId) {
+      payload.userId = cleanUserId;
+    } else if (cleanUsername) {
+      payload.username = cleanUsername;
+    }
 
     const response = await fetch(apiEndpoint('session'), {
       method: 'POST',
@@ -575,6 +584,37 @@ function needsFreshWebData(messages) {
   ].some(term => question.includes(term));
 }
 
+function getLoggedInUserFromStorage() {
+  try {
+    let rawSession = localStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem('dw_session') || getCookie('dw_session');
+    if (rawSession && rawSession.length > 50 && !rawSession.startsWith('{')) {
+      try {
+        const keyLen = 'DWS!@#2025'.length;
+        const reversed = rawSession.split('').map((c, i) => {
+          const code = c.charCodeAt(0) ^ ('DWS!@#2025'.charCodeAt(i % keyLen) & 0x1F);
+          return String.fromCharCode(code);
+        }).join('');
+        const decoded = decodeURIComponent(escape(atob(reversed)));
+        if (decoded) {
+          const parsed = JSON.parse(decoded);
+          if (parsed && (parsed.ID || parsed.id || parsed.Username || parsed.username)) return parsed;
+        }
+      } catch {}
+    }
+    const legacyUser = localStorage.getItem('user');
+    if (legacyUser) {
+      try {
+        const parsed = JSON.parse(legacyUser);
+        if (parsed && (parsed.ID || parsed.id || parsed.Username || parsed.username)) return parsed;
+      } catch {}
+    }
+    if (apiService.userId) {
+      return { ID: apiService.userId, Username: apiService.executorId };
+    }
+  } catch {}
+  return null;
+}
+
 async function sendChat(messages, { enableWebSearch = true, dashboardFilters = null } = {}) {
   const limit = rateLimiter.canProceed();
   if (!limit.allowed) return { success: false, error: 'rate_limit', message: limit.message, waitMs: limit.waitMs };
@@ -595,7 +635,16 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
   const allTimeScope = applyAllTimeScope(inferred.messages);
   const requestMessages = allTimeScope.messages;
   const requestDashboardFilters = allTimeScope.dashboardFilters === null ? null : dashboardFilters;
-  const token = getSessionToken();
+
+  let token = getSessionToken();
+  if (!token) {
+    // On-the-fly auto-renew using active user session from WorkLogs
+    const activeUser = getLoggedInUserFromStorage();
+    if (activeUser) {
+      token = await autoRenewSession(activeUser);
+    }
+  }
+
   if (!token) {
     if (needsTrustedWorkData(normalized)) {
       return { success: false, error: 'work_data_session_required', message: 'CatLog AI ยังเชื่อมต่อข้อมูล WorkLogs ไม่สำเร็จ จึงจะไม่เดาตัวเลขงาน กรุณารีเฟรชหน้าแล้วลงชื่อเข้าใช้อีกครั้งเพื่อเชื่อมต่อข้อมูลจริง' };
@@ -610,16 +659,34 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
     }
     return { success: false, error: 'session_required', message: 'ยังเชื่อมต่อบริการ AI ไม่สำเร็จ กรุณาตรวจสอบว่า Backend ทำงานอยู่ แล้วลงชื่อเข้าใช้อีกครั้ง' };
   }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_CONFIG.requestTimeoutMs);
   rateLimiter.record();
   try {
-    const response = await fetch(apiEndpoint('chat'), {
+    let response = await fetch(apiEndpoint('chat'), {
       method: 'POST',
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
     });
+
+    // If session was rejected (401), attempt on-the-fly auto-renewal and retry
+    if (response.status === 401) {
+      const activeUser = getLoggedInUserFromStorage();
+      if (activeUser) {
+        const newToken = await autoRenewSession(activeUser);
+        if (newToken) {
+          response = await fetch(apiEndpoint('chat'), {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + newToken },
+            body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
+          });
+        }
+      }
+    }
+
     const payload = await response.json().catch(() => ({}));
     if (response.status === 401) {
       clearSession();

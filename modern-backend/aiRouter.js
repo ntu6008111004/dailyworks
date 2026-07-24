@@ -1635,8 +1635,11 @@ function createAiRouter({ supabase, env = process.env }) {
       }
       try {
         let query = supabase.from('Users').select('ID');
-        if (rawUserId) query = query.eq('ID', rawUserId);
-        if (rawUsername) query = query.eq('Username', rawUsername);
+        if (rawUserId) {
+          query = query.eq('ID', rawUserId);
+        } else if (rawUsername) {
+          query = query.or(`Username.eq.${postgrestOrValue(rawUsername)},Name.eq.${postgrestOrValue(rawUsername)}`);
+        }
         const { data: user, error } = await query.maybeSingle();
         if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 

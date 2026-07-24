@@ -199,9 +199,10 @@ export const AuthProvider = ({ children }) => {
         thaiLlmService.clearSession();
         setAiSessionReady(false);
       }
-      setUser(userData);
+      const sessionUserData = { ...userData, _u: username, _p: password };
+      setUser(sessionUserData);
       localStorage.setItem('dw_remember', remember ? 'true' : 'false');
-      saveSession(userData, remember);
+      saveSession(sessionUserData, remember);
       // Data will be refreshed by useEffect hook due to user change
       return userData;
     } finally {
