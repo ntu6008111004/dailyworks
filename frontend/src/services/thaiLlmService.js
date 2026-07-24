@@ -754,12 +754,30 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
   const timeout = setTimeout(() => controller.abort(), AI_CONFIG.requestTimeoutMs);
   rateLimiter.record();
   try {
-    let response = await fetch(apiEndpoint('chat'), {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
-    });
+    let response;
+    let retryCount = 0;
+    const maxRetries = 2;
+    while (retryCount <= maxRetries) {
+      try {
+        response = await fetch(apiEndpoint('chat'), {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
+        });
+        // Auto-retry on Gateway errors (Tailscale/Vercel cold start/network blips)
+        if ([502, 503, 504].includes(response.status) && retryCount < maxRetries) {
+          retryCount++;
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        break;
+      } catch (err) {
+        if (err.name === 'AbortError' || retryCount >= maxRetries) throw err;
+        retryCount++;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
 
     // If session was rejected (401), attempt on-the-fly auto-renewal and retry
     if (response.status === 401) {
