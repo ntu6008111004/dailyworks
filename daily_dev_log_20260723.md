@@ -109,3 +109,34 @@
 1. **Backend Tests:** รัน `node --test` ผ่าน 43/43 รายการ (รวมเคสทดสอบ Auto-Renew Session)
 2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error 
 3. **การใช้งานจริง:** หน้าเว็บและ WebApp ติดตั้ง เชื่อมต่อลื่นไหล ไม่หลุดเซสชัน ดึงโทเค็น AI จาก Supabase DB อัตโนมัติ และแจ้งเตือน Realtime ทันที
+
+---
+
+### เรื่องที่ 8: แก้ไขบั๊กวิกฤต `supabase` ไม่ถูก import + เพิ่มเงื่อนไข FORCE_RELOGIN สำหรับผู้ใช้รอบแรก (Critical Import Fix & First-Time Migration)
+- **ประเภท**: แก้ไขบั๊กวิกฤต & เพิ่มเงื่อนไขรอบแรก (Critical Bug Fix & Migration Strategy)
+- **สิ่งที่ทำ**:
+  - **แก้บั๊กวิกฤต**: ค้นพบว่า `supabase` client ไม่ได้ถูก import เข้ามาใน `thaiLlmService.js` เลย (import แค่ `apiService` จาก `./api`) ทำให้ตัวแปร `supabase` เป็น `undefined` ตลอดเวลา — **ฟีเจอร์ทั้งหมดที่เขียนไว้ (sync token ลง DB, อ่าน token จาก DB) ไม่ทำงานจริงเลยแม้แต่บรรทัดเดียว!**
+  - **แก้ไข import**: เปลี่ยน `import { apiService } from './api'` → `import { apiService, supabase } from './api'`
+  - **เพิ่มเงื่อนไข FORCE_RELOGIN สำหรับผู้ใช้รอบแรก**:
+    - หากผู้ใช้ยังไม่มี `aiToken` ในคอลัมน์ `Permissions` ของตาราง `Users` ใน Supabase DB เลย → ฟังก์ชัน `autoRenewSession()` จะ return `'FORCE_RELOGIN'`
+    - หาก `aiToken` ใน DB มีอยู่แล้วแต่หมดอายุครบ 1 ปี → return `'FORCE_RELOGIN'` เช่นกัน
+    - `AuthContext.jsx` จับค่า `FORCE_RELOGIN` แล้วแสดง Toast แจ้งเตือน *"ระบบ CatLog AI ได้อัปเดตใหม่ กรุณาเข้าสู่ระบบอีกครั้ง"* พร้อมบังคับ `logout()` อัตโนมัติ
+    - เมื่อผู้ใช้ login กลับเข้ามา → `login()` จะเรียก `createSession()` สร้างโทเค็น AI ใหม่และ `setSessionToken()` บันทึกลง Supabase DB ทันที → ครั้งต่อไปไม่ต้อง login ใหม่อีกเลย
+  - **เพิ่ม export**: export `getSessionToken` และ `setSessionToken` จาก `thaiLlmService` ให้ `AuthContext` เรียกใช้ sync token ลง DB ได้
+  - **Backend**: เพิ่ม `persistAiTokenToUser()` ใน `aiRouter.js` ให้ทุกครั้งที่ Backend ออกโทเค็น AI ใหม่ → บันทึก `aiToken` ลงตาราง `Users.Permissions` ใน Supabase DB ด้วย
+- **ผลลัพธ์**: 
+  - ✅ ผู้ใช้ทุกเครื่อง login ใหม่ **ครั้งเดียว** → ระบบบันทึก `aiToken` ลง Supabase DB ทันที
+  - ✅ ครั้งต่อไปเปิด WebApp/PWA จากทุกอุปกรณ์ → ดึงโทเค็นจาก DB ได้ทันทีไม่ต้อง login ซ้ำอีก
+  - ✅ เมื่อ token ครบ 1 ปี → ระบบบังคับ relogin อัตโนมัติ สร้าง token ใหม่ลง DB
+- **ไฟล์ที่เกี่ยวข้อง**: 
+  - [thaiLlmService.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/services/thaiLlmService.js)
+  - [AuthContext.jsx](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/context/AuthContext.jsx)
+  - [aiRouter.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/modern-backend/aiRouter.js)
+
+---
+
+### 📊 สรุปการทดสอบรอบสุดท้าย (Final Verification)
+1. **Backend Tests:** รัน `node --test` ผ่าน 43/43 รายการ — สะอาด ไม่มี warning
+2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error (✓ 3299 modules, 6.92s)
+3. **พร้อมขึ้น Production**: ผ่านการตรวจเช็ครอบด้านครบทุกจุดแล้ว
+
