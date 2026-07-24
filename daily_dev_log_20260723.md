@@ -172,7 +172,26 @@
 
 ---
 
+### เรื่องที่ 11: แก้ไขปัญหา 502 `provider_error` เมื่อ API AI ต้นทางไม่ตอบสนอง โดยใช้ข้อมูลจาก Supabase โดยตรง
+- **ประเภท**: แก้ไขความเสถียรฝั่ง Backend และระบบสำรองข้อมูล (Backend Resilience & Fallback)
+- **สิ่งที่ทำ**:
+  - **ค้นพบสาเหตุจริงของปัญหาการกดปุ่ม Quick Action แล้วเจอ 502**:
+    - จากการวิเคราะห์ Console Log และ JSON Payload `{"status": "error", "code": "provider_error"}` พบว่า 502 Bad Gateway ไม่ได้เกิดจากเครือข่าย Tailscale แต่เกิดจากตัว **`aiRouter.js` ฝั่ง Backend เป็นคนส่ง HTTP 502 ออกมาเอง** เมื่อยิงไปหาบริการ AI ต้นทาง (`thaillm.or.th`) แล้วไม่ได้คำตอบ
+    - ประกอบกับหน้าบ้านหลงคิดว่าเป็น Network Gateway Error จึงสั่งยิงซ้ำ (Retry) ไปยัง Backend 5 ครั้งติดกัน ซึ่งทุกครั้งที่ยิงไป Backend ก็คืน `502 provider_error` กลับมาเหมือนเดิม
+  - **แก้ไขฝั่ง Backend ([aiRouter.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/modern-backend/aiRouter.js))**:
+    - หากบริการ AI ต้นทาง (`thaillm.or.th`) เกิดการขัดข้อง หรือตอบกลับล่าช้า แต่คำถามนั้นเป็นคำถามเกี่ยวกับงานในระบบ WorkLogs ที่ถูกคิวรีข้อมูลมาจาก Supabase เรียบร้อยแล้ว (`workContext`) ให้ระบบ **นำสรุปจาก Supabase ตอบกลับผู้ใช้ทันที 100% โดยไม่ต้องพึ่ง AI ต้นทาง**
+    - หากไม่มีข้อมูลคิวรีเดิมอยู่เลย ให้ส่ง HTTP Status `503` (แทน `502`) พร้อมข้อความแจ้งเตือนที่เป็นมิตร เพื่อไม่ให้สับสนกับ Network Gateway Error
+  - **แก้ไขฝั่ง Frontend ([thaiLlmService.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/services/thaiLlmService.js))**:
+    - ปรับเงื่อนไข `fetchWithGatewayRetry` ให้เช็ค `Content-Type: application/json` หากตอบกลับเป็น JSON จาก Backend ของเราเอง ให้ถือว่า Backend ทำงานอยู่และส่งผลลัพธ์ออกหน้าจอทันที ไม่ต้องยิงวนซ้ำ 5 ครั้ง
+- **ผลลัพธ์**: 
+  - ✅ เมื่อกดปุ่ม Quick Action เช่น *“สรุปงานทั้งหมดของฉัน...”* แม้บริการ AI ต้นทางขัดข้อง ผู้ใช้จะได้รับสรุปตัวเลขอัพเดตจริงจาก Supabase DB ทันทีตั้งแต่การกดครั้งแรก ไม่เจอ 502 อีกต่อไป
+- **ไฟล์ที่เกี่ยวข้อง**: 
+  - [aiRouter.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/modern-backend/aiRouter.js)
+  - [thaiLlmService.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/services/thaiLlmService.js)
+
+---
+
 ### 📊 สรุปการทดสอบรอบสุดท้าย (Final Verification)
 1. **Backend Tests:** รัน `node --test` ผ่าน 43/43 รายการ — สะอาด ไม่มี warning
-2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error (✓ 3299 modules, 6.82s)
-3. **พร้อมขึ้น Production**: ผ่านการทดสอบขยายเวลา Retry และ Pre-warm สำหรับ PWA สมบูรณ์แล้ว
+2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error (✓ 3299 modules, 8.10s)
+3. **พร้อมขึ้น Production**: ผ่านการทดสอบ Fallback ข้อมูล Supabase เมื่อ AI ต้นทางขัดข้อง สมบูรณ์แล้ว 100%
