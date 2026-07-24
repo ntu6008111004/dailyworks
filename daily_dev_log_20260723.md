@@ -135,8 +135,26 @@
 
 ---
 
+### เรื่องที่ 9: แก้ไข Timing Bug ในกระบวนการ Login (แก้ปัญหาเซสชัน AI ไม่บันทึกลง DB เมื่อผู้ใช้ใหม่ล็อกอิน)
+- **ประเภท**: แก้ไขบั๊กจังหวะการทำงาน (Timing Bug Fix & Data Integrity)
+- **สิ่งที่ทำ**:
+  - **วิเคราะห์สาเหตุที่ไม่เห็น aiToken ของยูสเซอร์อื่นบน DB**:
+    - ในฟังก์ชัน `login()` ของ `AuthContext.jsx` เดิมมีการเรียก `createSession()` *ก่อน* การเรียก `setUser()` และ `apiService.setUserSession()`
+    - ทำให้ขณะที่ `createSession()` และ `setSessionToken()` ทำงาน ค่า `apiService.userId` ยังคงเป็น `null` และในกรณี Fresh Login บนเครื่องผู้ใช้ใหม่ ค่าใน LocalStorage ก็ยังว่างอยู่ ส่งผลให้ `targetId` เป็น `null` และฟังก์ชัน `syncAiTokenToDb()` ถูกข้ามไปโดยไม่บันทึกข้อมูลลง DB
+  - **แก้ไขการทำงาน**:
+    - ปรับลำดับใน `AuthContext.jsx` ให้เรียก `apiService.setUserSession(userId, ...)` ทันทีที่ล็อกอินผ่าน *ก่อน* ที่จะสร้างเซสชัน AI (`createSession()`)
+    - เพิ่มการถอดรหัสฟิลด์ `sub` (User ID) จาก JWT Token ใน `thaiLlmService.js` เป็น Fallback สำรอง เพื่อให้รู้ User ID เสมอแม้ `apiService.userId` ยังไม่อัปเดต
+    - บังคับเรียก `setSessionToken(currentToken, userId)` ซ้ำอีกครั้งหลังจบกระบวนการ Login เพื่อการันตีการบันทึกโทเค็นลง Supabase DB 100%
+- **ผลลัพธ์**: 
+  - ✅ เมื่อผู้ใช้คนใดก็ตาม (รวมถึงผู้ใช้ใหม่) ล็อกอินเข้าสู่ระบบ โทเค็น AI จะถูกเขียนลงในคอลัมน์ `Permissions` (`aiToken`) ของตาราง `Users` บน Supabase DB ทันทีโดยไม่ตกหล่น
+  - ✅ รองรับการใช้งานข้ามอุปกรณ์และ PWA Desktop โดยไม่ต้องล็อกอินซ้ำ
+- **ไฟล์ที่เกี่ยวข้อง**: 
+  - [AuthContext.jsx](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/context/AuthContext.jsx)
+  - [thaiLlmService.js](file:///d:/จัดสเปค%20ยื่นข้อเสนอ/ระบบลงบันทึกงาน/frontend/src/services/thaiLlmService.js)
+
+---
+
 ### 📊 สรุปการทดสอบรอบสุดท้าย (Final Verification)
 1. **Backend Tests:** รัน `node --test` ผ่าน 43/43 รายการ — สะอาด ไม่มี warning
-2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error (✓ 3299 modules, 6.92s)
-3. **พร้อมขึ้น Production**: ผ่านการตรวจเช็ครอบด้านครบทุกจุดแล้ว
-
+2. **Frontend Build:** รัน `npm run build` ผ่าน 100% ปราศจาก Error (✓ 3299 modules, 7.36s)
+3. **พร้อมขึ้น Production**: ผ่านการตรวจเช็ครอบด้านและแก้ปัญหาจังหวะล็อกอินครบถ้วนเรียบร้อยแล้วครับ
