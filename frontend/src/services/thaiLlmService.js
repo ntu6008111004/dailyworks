@@ -185,20 +185,22 @@ function getDashboardFilters(userId) {
  * Retries up to `maxRetries` times with exponential backoff (1s, 2s, ...).
  * Also catches network-level fetch errors (TypeError) and retries those.
  */
-async function fetchWithGatewayRetry(url, options, { maxRetries = 2 } = {}) {
+async function fetchWithGatewayRetry(url, options, { maxRetries = 5 } = {}) {
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(url, options);
       if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        const delayMs = Math.min(3000, 1000 + attempt * 500);
+        await new Promise(r => setTimeout(r, delayMs));
         continue;
       }
       return response;
     } catch (err) {
       lastError = err;
       if (err.name === 'AbortError' || attempt >= maxRetries) throw err;
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      const delayMs = Math.min(3000, 1000 + attempt * 500);
+      await new Promise(r => setTimeout(r, delayMs));
     }
   }
   throw lastError;
@@ -851,15 +853,14 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
 async function webSearch() { return []; }
 async function buildWorklogContext() { return ''; }
 
-/**
- * Silently ping the backend to wake it up (Tailscale/Docker cold-start).
- * Called once on module load — by the time user types and sends a message,
- * the backend is already warm and POST /chat will succeed on first attempt.
- */
 async function prewarmBackend() {
-  try {
-    await fetch(apiEndpoint('ping'), { method: 'GET', signal: AbortSignal.timeout(8000) });
-  } catch { /* ignore — prewarm is best-effort */ }
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(apiEndpoint('ping'), { method: 'GET' });
+      if (res.ok) break;
+    } catch { /* ignore — prewarm is best-effort */ }
+    await new Promise(r => setTimeout(r, 1500));
+  }
 }
 
 // Fire-and-forget prewarm on every page load / PWA launch

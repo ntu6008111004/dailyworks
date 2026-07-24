@@ -89,6 +89,7 @@ export const MiniChatBot = () => {
       setShowDiscoveryHint(false);
       try { localStorage.setItem(miniHintStorageKey(userId), '1'); } catch { /* storage unavailable */ }
       setIsOpen(true);
+      thaiLlmService.prewarmBackend();
     }
   }, [isOpen, userId]);
 
