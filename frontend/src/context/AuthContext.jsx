@@ -184,6 +184,11 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const userData = await apiService.login(username, password);
+      const userId = userData.ID || userData.id;
+
+      // ⚡ CRITICAL: Set userId BEFORE createSession so syncAiTokenToDb has targetId
+      apiService.setUserSession(userId, userData.Name || userData.name || username);
+
       try {
         await thaiLlmService.createSession(username, password);
         const verifiedAiSession = thaiLlmService.getSessionStatus();
@@ -191,6 +196,11 @@ export const AuthProvider = ({ children }) => {
           const sessionError = new Error('AI session token could not be verified');
           sessionError.code = `session_${verifiedAiSession.reason}`;
           throw sessionError;
+        }
+        // ⚡ Force sync to DB with correct userId (belt-and-suspenders)
+        const currentToken = thaiLlmService.getSessionToken();
+        if (currentToken && userId) {
+          thaiLlmService.setSessionToken(currentToken, userId);
         }
         toast.dismiss('catlog-ai-session-unavailable');
         setAiSessionReady(true);

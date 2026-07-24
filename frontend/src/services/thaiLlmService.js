@@ -195,7 +195,16 @@ async function createSession(username, password) {
     throw error;
   }
   lastSessionFailureCode = '';
-  setSessionToken(token, apiService.userId);
+  // Extract userId from token payload (sub field) as reliable fallback
+  let tokenUserId = apiService.userId;
+  if (!tokenUserId) {
+    try {
+      const base64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(decodeURIComponent(escape(atob(base64))));
+      tokenUserId = decoded.sub || null;
+    } catch {}
+  }
+  setSessionToken(token, tokenUserId);
   return token;
 }
 
