@@ -72,6 +72,11 @@ export const ChatbotWorklog = () => {
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Pre-warm backend on mount
+  useEffect(() => {
+    thaiLlmService.prewarmBackend();
+  }, []);
+
   // Save to localStorage on change
   useEffect(() => { saveRooms(userId, rooms); }, [rooms, userId]);
   useEffect(() => { saveActiveRoomId(userId, activeRoomId); }, [activeRoomId, userId]);
