@@ -236,12 +236,25 @@ export const AuthProvider = ({ children }) => {
       const session = thaiLlmService.getSessionStatus();
       if (session.valid) {
         if (isMounted) setAiSessionReady(true);
+        // Sync existing valid token to DB (fire-and-forget)
+        const existingToken = thaiLlmService.getSessionToken();
+        const userId = user?.ID || user?.id;
+        if (existingToken && userId) {
+          thaiLlmService.setSessionToken(existingToken, userId);
+        }
         const remainingMs = session.expiresAt - Date.now();
         // Schedule auto-renewal 1 minute before expiration
         const renewDelay = Math.max(1000, remainingMs - 60000);
         aiExpiryTimer = window.setTimeout(async () => {
           if (!isMounted) return;
-          await thaiLlmService.autoRenewSession(user);
+          const result = await thaiLlmService.autoRenewSession(user);
+          if (result === 'FORCE_RELOGIN') {
+            if (isMounted) {
+              toast.error('เซสชัน AI หมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง', { id: 'ai-force-relogin', duration: 6000 });
+              logout();
+            }
+            return;
+          }
           if (isMounted) {
             const renewedStatus = thaiLlmService.getSessionStatus();
             setAiSessionReady(renewedStatus.valid);
@@ -253,7 +266,18 @@ export const AuthProvider = ({ children }) => {
       // Session is missing, expired, or invalid.
       // Auto-renew seamlessly in background for active logged in WorkLogs user.
       try {
-        await thaiLlmService.autoRenewSession(user);
+        const result = await thaiLlmService.autoRenewSession(user);
+        
+        // FORCE_RELOGIN: ผู้ใช้ยังไม่มี aiToken ใน DB (รอบแรก) หรือ token หมดอายุ 1 ปี
+        // → บังคับ logout แล้ว login ใหม่เพื่อสร้าง token บันทึกลง DB
+        if (result === 'FORCE_RELOGIN') {
+          if (isMounted) {
+            toast.error('ระบบ CatLog AI ได้อัปเดตใหม่ กรุณาเข้าสู่ระบบอีกครั้งเพื่อเปิดใช้งาน AI', { id: 'ai-force-relogin', duration: 8000 });
+            logout();
+          }
+          return;
+        }
+
         const renewedStatus = thaiLlmService.getSessionStatus();
         if (renewedStatus.valid && isMounted) {
           toast.dismiss('catlog-ai-session-unavailable');
@@ -273,7 +297,14 @@ export const AuthProvider = ({ children }) => {
 
     const handleExpired = async () => {
       try {
-        await thaiLlmService.autoRenewSession(user);
+        const result = await thaiLlmService.autoRenewSession(user);
+        if (result === 'FORCE_RELOGIN') {
+          if (isMounted) {
+            toast.error('เซสชัน AI หมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง', { id: 'ai-force-relogin', duration: 6000 });
+            logout();
+          }
+          return;
+        }
         const renewedStatus = thaiLlmService.getSessionStatus();
         if (renewedStatus.valid && isMounted) {
           toast.dismiss('catlog-ai-session-unavailable');
@@ -291,7 +322,7 @@ export const AuthProvider = ({ children }) => {
       if (aiExpiryTimer) window.clearTimeout(aiExpiryTimer);
       window.removeEventListener('catlog-ai-session-expired', handleExpired);
     };
-  }, [user]);
+  }, [user, logout]);
 
   const updateUserState = (newData) => {
     const updatedUser = { ...user, ...newData };

@@ -1,4 +1,4 @@
-import { apiService } from './api';
+import { apiService, supabase } from './api';
 
 /**
  * WorkLogs AI client.
@@ -124,6 +124,22 @@ function notifySessionExpired(reason = 'expired') {
   window.dispatchEvent(new CustomEvent('catlog-ai-session-expired', { detail: { reason } }));
 }
 
+async function syncAiTokenToDb(userId, token) {
+  if (!userId || !token || !supabase) return;
+  try {
+    const idStr = String(userId);
+    const { data } = await supabase.from('Users').select('Permissions').eq('ID', idStr).maybeSingle();
+    const currentPerms = data?.Permissions || {};
+    if (currentPerms.aiToken !== token) {
+      await supabase.from('Users').update({
+        Permissions: { ...currentPerms, aiToken: token, aiTokenUpdated: new Date().toISOString() }
+      }).eq('ID', idStr);
+    }
+  } catch (e) {
+    console.warn('Could not sync AI token to Supabase DB:', e);
+  }
+}
+
 function setSessionToken(token, userId = null) {
   try {
     if (token) {
@@ -131,16 +147,10 @@ function setSessionToken(token, userId = null) {
       localStorage.setItem(SESSION_STORAGE_KEY, token);
       setCookie(SESSION_STORAGE_KEY, token, 365);
       
-      const targetId = userId || apiService.userId;
-      if (targetId && supabase) {
-        supabase.from('Users').select('Permissions').eq('ID', String(targetId)).maybeSingle().then(({ data }) => {
-          const currentPermissions = data?.Permissions || {};
-          if (currentPermissions.aiToken !== token) {
-            supabase.from('Users').update({
-              Permissions: { ...currentPermissions, aiToken: token, aiTokenUpdated: new Date().toISOString() }
-            }).eq('ID', String(targetId)).then(() => {}).catch(() => {});
-          }
-        }).catch(() => {});
+      const activeUser = getLoggedInUserFromStorage();
+      const targetId = userId || apiService.userId || activeUser?.ID || activeUser?.id;
+      if (targetId) {
+        syncAiTokenToDb(targetId, token);
       }
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -189,6 +199,14 @@ async function createSession(username, password) {
   return token;
 }
 
+/**
+ * autoRenewSession — ลำดับการทำงาน:
+ *  1. โทเค็นในเครื่องยัง valid → ใช้เลย + sync ลง DB (ถ้ายังไม่มี)
+ *  2. อ่าน aiToken จาก Supabase DB → ถ้ายัง valid → เอามาใช้
+ *  3. ถ้า DB ไม่มี aiToken เลย หรือ หมดอายุแล้ว (1 ปี) → return 'FORCE_RELOGIN'
+ *     เพื่อให้ AuthContext บังคับ logout แล้ว login ใหม่ ครั้งเดียวเพื่อสร้าง token ลง DB
+ *  4. Fallback: ขอ token ใหม่จาก backend (ถ้ามี credentials)
+ */
 async function autoRenewSession(userData) {
   if (!userData) return null;
   const userId = userData.ID || userData.id;
@@ -203,10 +221,14 @@ async function autoRenewSession(userData) {
   // 1. Check if local token is already valid
   const existingStatus = getSessionStatus();
   if (existingStatus.valid) {
+    // Sync existing valid token to DB if not there yet
+    if (cleanUserId && supabase) {
+      syncAiTokenToDb(cleanUserId, getSessionToken()).catch(() => {});
+    }
     return getSessionToken();
   }
 
-  // 2. Read 1-year AI Token directly from Supabase Database for instant auto-renew
+  // 2. Read 1-year AI Token directly from Supabase Database
   if (cleanUserId && supabase) {
     try {
       const { data: dbUser } = await supabase
@@ -215,40 +237,55 @@ async function autoRenewSession(userData) {
         .eq('ID', cleanUserId)
         .maybeSingle();
       const dbToken = dbUser?.Permissions?.aiToken;
+
       if (dbToken) {
+        // Token exists in DB — check if still valid
         try {
           const base64 = dbToken.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
           const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
           const expMs = Number(payload.exp) * 1000;
           if (expMs > Date.now()) {
+            // Valid token from DB — use it
             setSessionToken(dbToken, cleanUserId);
             return dbToken;
           }
-        } catch {}
+          // Token in DB has expired (>1 year) → force relogin to create fresh token
+          console.warn('AI token in DB expired, force relogin required');
+          return 'FORCE_RELOGIN';
+        } catch {
+          // Token in DB is malformed → force relogin
+          return 'FORCE_RELOGIN';
+        }
+      } else {
+        // 3. No aiToken in DB at all (first-time user on new system)
+        //    → force relogin so login() creates the token and saves to DB
+        console.warn('No AI token found in DB for user', cleanUserId, '— force relogin required');
+        return 'FORCE_RELOGIN';
       }
     } catch (e) {
       console.warn('Could not read AI token from Supabase DB:', e);
+      // DB read failed — fall through to backend fallback
     }
   }
 
-  // 3. Fallback: Request fresh token from backend if needed
+  // 4. Fallback: Request fresh token from backend (when supabase unavailable or no userId)
   if (!cleanUserId && !cleanUsername) return null;
 
   try {
-    const payload = {};
+    const reqPayload = {};
     if (cleanUsername && cleanPassword) {
-      payload.username = cleanUsername;
-      payload.password = cleanPassword;
+      reqPayload.username = cleanUsername;
+      reqPayload.password = cleanPassword;
     } else if (cleanUserId) {
-      payload.userId = cleanUserId;
+      reqPayload.userId = cleanUserId;
     } else if (cleanUsername) {
-      payload.username = cleanUsername;
+      reqPayload.username = cleanUsername;
     }
 
     const response = await fetch(apiEndpoint('session'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(reqPayload),
     });
     const payloadResult = await response.json().catch(() => ({}));
     const token = payloadResult.data?.token;
@@ -783,6 +820,6 @@ async function buildWorklogContext() { return ''; }
 
 export const thaiLlmService = {
   sendChat, createSession, autoRenewSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext,
-  getDashboardFilters, getSessionStatus, parseThinking, markdownToHtml, rateLimiter,
+  getDashboardFilters, getSessionStatus, getSessionToken, setSessionToken, parseThinking, markdownToHtml, rateLimiter,
   quickActions: QUICK_ACTIONS, config: AI_CONFIG,
 };
