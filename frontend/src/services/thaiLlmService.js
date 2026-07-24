@@ -180,8 +180,32 @@ function getDashboardFilters(userId) {
   }
 }
 
+/**
+ * Fetch wrapper that auto-retries on 502/503/504 (Tailscale cold-start, Vercel gateway blips).
+ * Retries up to `maxRetries` times with exponential backoff (1s, 2s, ...).
+ * Also catches network-level fetch errors (TypeError) and retries those.
+ */
+async function fetchWithGatewayRetry(url, options, { maxRetries = 2 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (err.name === 'AbortError' || attempt >= maxRetries) throw err;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 async function createSession(username, password) {
-  const response = await fetch(apiEndpoint('session'), {
+  const response = await fetchWithGatewayRetry(apiEndpoint('session'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -291,7 +315,7 @@ async function autoRenewSession(userData) {
       reqPayload.username = cleanUsername;
     }
 
-    const response = await fetch(apiEndpoint('session'), {
+    const response = await fetchWithGatewayRetry(apiEndpoint('session'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reqPayload),
@@ -754,30 +778,12 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
   const timeout = setTimeout(() => controller.abort(), AI_CONFIG.requestTimeoutMs);
   rateLimiter.record();
   try {
-    let response;
-    let retryCount = 0;
-    const maxRetries = 2;
-    while (retryCount <= maxRetries) {
-      try {
-        response = await fetch(apiEndpoint('chat'), {
-          method: 'POST',
-          signal: controller.signal,
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
-        });
-        // Auto-retry on Gateway errors (Tailscale/Vercel cold start/network blips)
-        if ([502, 503, 504].includes(response.status) && retryCount < maxRetries) {
-          retryCount++;
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
-        break;
-      } catch (err) {
-        if (err.name === 'AbortError' || retryCount >= maxRetries) throw err;
-        retryCount++;
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
+    let response = await fetchWithGatewayRetry(apiEndpoint('chat'), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ messages: requestMessages, enableWebSearch, dashboardFilters: requestDashboardFilters }),
+    });
 
     // If session was rejected (401), attempt on-the-fly auto-renewal and retry
     if (response.status === 401) {
@@ -785,7 +791,7 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
       if (activeUser) {
         const newToken = await autoRenewSession(activeUser);
         if (newToken) {
-          response = await fetch(apiEndpoint('chat'), {
+          response = await fetchWithGatewayRetry(apiEndpoint('chat'), {
             method: 'POST',
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + newToken },
