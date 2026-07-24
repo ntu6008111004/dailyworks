@@ -1596,6 +1596,19 @@ function createAiRouter({ supabase, env = process.env }) {
     }
   }
 
+  async function persistAiTokenToUser(userId, token) {
+    if (!supabase || !userId || !token) return;
+    try {
+      const table = supabase.from('Users');
+      if (typeof table?.update !== 'function') return;
+      const { data: user } = await table.select('Permissions').eq('ID', String(userId)).maybeSingle();
+      const perms = user?.Permissions || {};
+      await table.update({
+        Permissions: { ...perms, aiToken: token, aiTokenUpdated: new Date().toISOString() }
+      }).eq('ID', String(userId));
+    } catch { /* DB update warning suppressed */ }
+  }
+
   router.post('/session', async (req, res) => {
     if (!supabase || !env.AI_SESSION_SECRET) {
       return res.status(503).json({ status: 'error', code: 'ai_not_configured' });
@@ -1623,6 +1636,7 @@ function createAiRouter({ supabase, env = process.env }) {
         if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 
         const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
+        persistAiTokenToUser(user.ID, token).catch(() => {});
         return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
       } catch (error) {
         return res.status(500).json({ status: 'error', code: 'session_failed' });
@@ -1644,6 +1658,7 @@ function createAiRouter({ supabase, env = process.env }) {
         if (error || !user) return res.status(401).json({ status: 'error', code: 'invalid_credentials' });
 
         const token = signSession({ sub: user.ID }, env.AI_SESSION_SECRET, PERSISTENT_AI_SESSION_TTL_SECONDS);
+        persistAiTokenToUser(user.ID, token).catch(() => {});
         return res.json({ status: 'success', data: { token, expiresIn: PERSISTENT_AI_SESSION_TTL_SECONDS } });
       } catch (error) {
         return res.status(500).json({ status: 'error', code: 'session_failed' });

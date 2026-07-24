@@ -124,6 +124,22 @@ function notifySessionExpired(reason = 'expired') {
   window.dispatchEvent(new CustomEvent('catlog-ai-session-expired', { detail: { reason } }));
 }
 
+async function syncAiTokenToDb(userId, token) {
+  if (!userId || !token || !supabase) return;
+  try {
+    const idStr = String(userId);
+    const { data } = await supabase.from('Users').select('Permissions').eq('ID', idStr).maybeSingle();
+    const currentPerms = data?.Permissions || {};
+    if (currentPerms.aiToken !== token) {
+      await supabase.from('Users').update({
+        Permissions: { ...currentPerms, aiToken: token, aiTokenUpdated: new Date().toISOString() }
+      }).eq('ID', idStr);
+    }
+  } catch (e) {
+    console.warn('Could not sync AI token to Supabase DB:', e);
+  }
+}
+
 function setSessionToken(token, userId = null) {
   try {
     if (token) {
@@ -131,16 +147,10 @@ function setSessionToken(token, userId = null) {
       localStorage.setItem(SESSION_STORAGE_KEY, token);
       setCookie(SESSION_STORAGE_KEY, token, 365);
       
-      const targetId = userId || apiService.userId;
-      if (targetId && supabase) {
-        supabase.from('Users').select('Permissions').eq('ID', String(targetId)).maybeSingle().then(({ data }) => {
-          const currentPermissions = data?.Permissions || {};
-          if (currentPermissions.aiToken !== token) {
-            supabase.from('Users').update({
-              Permissions: { ...currentPermissions, aiToken: token, aiTokenUpdated: new Date().toISOString() }
-            }).eq('ID', String(targetId)).then(() => {}).catch(() => {});
-          }
-        }).catch(() => {});
+      const activeUser = getLoggedInUserFromStorage();
+      const targetId = userId || apiService.userId || activeUser?.ID || activeUser?.id;
+      if (targetId) {
+        syncAiTokenToDb(targetId, token);
       }
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);

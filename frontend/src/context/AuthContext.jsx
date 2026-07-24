@@ -236,6 +236,11 @@ export const AuthProvider = ({ children }) => {
       const session = thaiLlmService.getSessionStatus();
       if (session.valid) {
         if (isMounted) setAiSessionReady(true);
+        const existingToken = thaiLlmService.getSessionToken();
+        const userId = user?.ID || user?.id;
+        if (existingToken && userId) {
+          thaiLlmService.setSessionToken(existingToken, userId);
+        }
         const remainingMs = session.expiresAt - Date.now();
         // Schedule auto-renewal 1 minute before expiration
         const renewDelay = Math.max(1000, remainingMs - 60000);
