@@ -851,8 +851,22 @@ async function sendChat(messages, { enableWebSearch = true, dashboardFilters = n
 async function webSearch() { return []; }
 async function buildWorklogContext() { return ''; }
 
+/**
+ * Silently ping the backend to wake it up (Tailscale/Docker cold-start).
+ * Called once on module load — by the time user types and sends a message,
+ * the backend is already warm and POST /chat will succeed on first attempt.
+ */
+async function prewarmBackend() {
+  try {
+    await fetch(apiEndpoint('ping'), { method: 'GET', signal: AbortSignal.timeout(8000) });
+  } catch { /* ignore — prewarm is best-effort */ }
+}
+
+// Fire-and-forget prewarm on every page load / PWA launch
+prewarmBackend();
+
 export const thaiLlmService = {
-  sendChat, createSession, autoRenewSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext,
+  sendChat, createSession, autoRenewSession, clearSession, sendClientProviderChat, webSearch, buildWorklogContext, prewarmBackend,
   getDashboardFilters, getSessionStatus, getSessionToken, setSessionToken, parseThinking, markdownToHtml, rateLimiter,
   quickActions: QUICK_ACTIONS, config: AI_CONFIG,
 };

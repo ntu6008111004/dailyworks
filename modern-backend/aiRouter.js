@@ -1668,6 +1668,13 @@ function createAiRouter({ supabase, env = process.env }) {
     return res.status(400).json({ status: 'error', code: 'invalid_credentials' });
   });
 
+  // Lightweight wakeup ping — no auth required, used by frontend to pre-warm
+  // the Tailscale/Docker backend before the user sends their first AI message.
+  // This eliminates cold-start 502 errors on first real POST /chat request.
+  router.get('/ping', (_req, res) => {
+    res.json({ ok: true, ts: Date.now() });
+  });
+
   router.post('/chat', requireAiSession, async (req, res) => {
     const messages = validateChatMessages(req.body?.messages);
     if (!messages) return res.status(400).json({ status: 'error', code: 'invalid_messages' });
