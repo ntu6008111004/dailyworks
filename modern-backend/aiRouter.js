@@ -1839,7 +1839,25 @@ function createAiRouter({ supabase, env = process.env }) {
       }
 
       if (!response.ok) {
-        return res.status(502).json({ status: 'error', code: 'provider_error' });
+        const fallbackSummary = dashboardSummary ||
+          (workContext ? (formatDashboardSummary(workContext, req.aiUser) || formatConciseTaskList(workContext) || formatBriefingSummary(workContext, req.aiUser) || formatTeamSummary(workContext)) : null);
+        if (fallbackSummary) {
+          return res.json({
+            status: 'success',
+            data: {
+              answer: fallbackSummary,
+              thinking: null,
+              searchPerformed: false,
+              searchProvider: null,
+              usage: null,
+              appliedFilters: workContext?.appliedFilters || null,
+              totalMatches: workContext ? { tasks: workContext.tasks?.totalMatches || 0, briefings: workContext.briefings?.totalMatches || 0 } : null,
+              sources: [],
+              deterministic: true,
+            },
+          });
+        }
+        return res.status(503).json({ status: 'error', code: 'provider_error', message: 'บริการ AI ต้นทางยังไม่ตอบสนอง กรุณาลองใหม่อีกครั้ง' });
       }
       const data = await response.json();
       const parsed = parseModelContent(data.choices?.[0]?.message?.content, env.THAILLM_EXPOSE_THINKING === 'true');
@@ -1863,25 +1881,26 @@ function createAiRouter({ supabase, env = process.env }) {
         },
       });
     } catch (error) {
-      if (dashboardSummary) {
+      const fallbackSummary = dashboardSummary ||
+        (workContext ? (formatDashboardSummary(workContext, req.aiUser) || formatConciseTaskList(workContext) || formatBriefingSummary(workContext, req.aiUser) || formatTeamSummary(workContext)) : null);
+      if (fallbackSummary) {
         return res.json({
           status: 'success',
           data: {
-            answer: dashboardSummary,
+            answer: fallbackSummary,
             thinking: null,
-            dashboardSummary: null,
             searchPerformed: false,
             searchProvider: null,
             usage: null,
             appliedFilters: workContext?.appliedFilters || null,
-            totalMatches: workContext ? { tasks: workContext.tasks.totalMatches, briefings: workContext.briefings.totalMatches } : null,
+            totalMatches: workContext ? { tasks: workContext.tasks?.totalMatches || 0, briefings: workContext.briefings?.totalMatches || 0 } : null,
             sources: [],
-            providerUnavailable: true,
+            deterministic: true,
           },
         });
       }
       const code = error?.name === 'AbortError' ? 'provider_timeout' : 'ai_request_failed';
-      return res.status(502).json({ status: 'error', code });
+      return res.status(503).json({ status: 'error', code, message: 'ไม่สามารถประมวลผลคำตอบจาก AI ได้ กรุณาลองใหม่อีกครั้ง' });
     }
   });
 

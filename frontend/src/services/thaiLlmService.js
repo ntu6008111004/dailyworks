@@ -190,7 +190,10 @@ async function fetchWithGatewayRetry(url, options, { maxRetries = 5 } = {}) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(url, options);
-      if ([502, 503, 504].includes(response.status) && attempt < maxRetries) {
+      const isJsonResponse = (response.headers.get('content-type') || '').includes('application/json');
+      // Only retry on network/proxy gateway errors (HTML pages from Tailscale/Nginx).
+      // If the response is JSON from our own backend, return it immediately without retrying.
+      if ([502, 503, 504].includes(response.status) && !isJsonResponse && attempt < maxRetries) {
         const delayMs = Math.min(3000, 1000 + attempt * 500);
         await new Promise(r => setTimeout(r, delayMs));
         continue;
