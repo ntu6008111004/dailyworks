@@ -124,12 +124,24 @@ function notifySessionExpired(reason = 'expired') {
   window.dispatchEvent(new CustomEvent('catlog-ai-session-expired', { detail: { reason } }));
 }
 
-function setSessionToken(token) {
+function setSessionToken(token, userId = null) {
   try {
     if (token) {
       sessionStorage.setItem(SESSION_STORAGE_KEY, token);
       localStorage.setItem(SESSION_STORAGE_KEY, token);
       setCookie(SESSION_STORAGE_KEY, token, 365);
+      
+      const targetId = userId || apiService.userId;
+      if (targetId && supabase) {
+        supabase.from('Users').select('Permissions').eq('ID', String(targetId)).maybeSingle().then(({ data }) => {
+          const currentPermissions = data?.Permissions || {};
+          if (currentPermissions.aiToken !== token) {
+            supabase.from('Users').update({
+              Permissions: { ...currentPermissions, aiToken: token, aiTokenUpdated: new Date().toISOString() }
+            }).eq('ID', String(targetId)).then(() => {}).catch(() => {});
+          }
+        }).catch(() => {});
+      }
     } else {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -173,7 +185,7 @@ async function createSession(username, password) {
     throw error;
   }
   lastSessionFailureCode = '';
-  setSessionToken(token);
+  setSessionToken(token, apiService.userId);
   return token;
 }
 
@@ -187,7 +199,39 @@ async function autoRenewSession(userData) {
   const cleanUserId = userId != null ? String(userId).trim() : '';
   const cleanUsername = username != null ? String(username).trim() : (name != null ? String(name).trim() : '');
   const cleanPassword = password != null ? String(password) : '';
-  
+
+  // 1. Check if local token is already valid
+  const existingStatus = getSessionStatus();
+  if (existingStatus.valid) {
+    return getSessionToken();
+  }
+
+  // 2. Read 1-year AI Token directly from Supabase Database for instant auto-renew
+  if (cleanUserId && supabase) {
+    try {
+      const { data: dbUser } = await supabase
+        .from('Users')
+        .select('Permissions')
+        .eq('ID', cleanUserId)
+        .maybeSingle();
+      const dbToken = dbUser?.Permissions?.aiToken;
+      if (dbToken) {
+        try {
+          const base64 = dbToken.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+          const expMs = Number(payload.exp) * 1000;
+          if (expMs > Date.now()) {
+            setSessionToken(dbToken, cleanUserId);
+            return dbToken;
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('Could not read AI token from Supabase DB:', e);
+    }
+  }
+
+  // 3. Fallback: Request fresh token from backend if needed
   if (!cleanUserId && !cleanUsername) return null;
 
   try {
@@ -209,7 +253,7 @@ async function autoRenewSession(userData) {
     const payloadResult = await response.json().catch(() => ({}));
     const token = payloadResult.data?.token;
     if (response.ok && token) {
-      setSessionToken(token);
+      setSessionToken(token, cleanUserId);
       return token;
     }
   } catch (error) {
