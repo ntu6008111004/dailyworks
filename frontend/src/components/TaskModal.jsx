@@ -5,6 +5,7 @@ import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
+import { compressImage, getImageFiles } from '../utils/imageProcessing';
 
 export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true }) => {
   
@@ -45,6 +46,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
   });
   const [newImages, setNewImages] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
@@ -59,7 +61,9 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     return [];
   });
 
-  const processFiles = (files) => {
+  // Kept temporarily for backward compatibility with an already-open modal.
+  // New selections use processFiles below, which enforces the safe payload size.
+  const LegacyProcessFiles = (files) => {
     if (images.length + newImages.length + files.length > 4) {
       toast.error('คุณสามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปเท่านั้น');
       return;
@@ -128,9 +132,38 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     });
   };
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) processFiles(files);
+  const processFiles = async (inputFiles) => {
+    const files = getImageFiles(inputFiles);
+    if (!files.length) {
+      toast.error('กรุณาเลือกไฟล์รูปภาพ JPG, PNG หรือ WebP');
+      return false;
+    }
+    if (images.length + newImages.length + files.length > 4) {
+      toast.error('แนบรูปงานได้สูงสุด 4 รูป');
+      return false;
+    }
+
+    setIsProcessingImages(true);
+    try {
+      const results = await Promise.all(files.map(async (file) => ({
+        file,
+        preview: await compressImage(file)
+      })));
+      setNewImages((previous) => [...previous, ...results]);
+      toast.success(`เตรียมรูปภาพ ${results.length} รูปเรียบร้อย`);
+      return true;
+    } catch (error) {
+      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้');
+      return false;
+    } finally {
+      setIsProcessingImages(false);
+    }
+  };
+
+  const handleImageChange = async (e) => {
+    const files = e.target.files;
+    e.target.value = '';
+    await processFiles(files);
   };
 
   const handlePaste = (e) => {
@@ -184,10 +217,18 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
 
   const attemptSubmit = (e) => {
     e.preventDefault();
+    if (isProcessingImages) {
+      toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่');
+      return;
+    }
     setShowSaveConfirm(true);
   };
 
   const executeSubmit = async () => {
+    if (isProcessingImages) {
+      toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่');
+      return;
+    }
     setShowSaveConfirm(false);
     setIsUploading(true);
 
@@ -459,7 +500,8 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
           <button
             type="submit"
             form="task-form"
-            className="px-8 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+            disabled={isUploading || isProcessingImages}
+            className="px-8 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-60"
           >
             บันทึกข้อมูลงาน
           </button>

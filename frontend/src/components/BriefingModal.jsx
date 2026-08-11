@@ -6,6 +6,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
 import { apiService } from '../services/api';
+import { compressImage, getImageFiles } from '../utils/imageProcessing';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -71,6 +72,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   
   const isCreator = !briefing || String(briefing.CreatorID) === String(user?.ID);
   const canEditCore = !briefing || isCreator || isAdmin || isDeptHead;
+  // คะแนนเป็นสิทธิ์เฉพาะเจ้าของบรีฟ แม้ Admin/Head จะยังแก้รายละเอียดงานได้ตามเดิม
+  const canEditPoints = !briefing || isCreator;
   
   const [formData, setFormData] = useState({
     Title: briefing?.Title || '',
@@ -90,6 +93,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   });
 
   const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
+  const [isProcessingImages, setIsProcessingImages] = useState(false);
 
   useEffect(() => {
     const loadFullBriefing = async () => {
@@ -207,7 +211,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       }
       
       if (files.length > 0) {
-        const news = await Promise.all(files.map(processImage));
+        const news = await processImages(files);
         // If we're an assignee and on our tab, or if we're the creator
         if (selectedAssigneeId === String(user?.ID || '')) {
           if (myResponse.ResultImages.length + news.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
@@ -226,7 +230,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   }, [canEditCore, refImages, myResponse, selectedAssigneeId, user?.ID]);
 
   const handleSaveBriefing = async () => {
-    if (saving) return;
+    if (saving || isProcessingImages) {
+      if (isProcessingImages) toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
+      return;
+    }
     setSaving(true);
     try {
       const refImagePayload = {};
@@ -237,6 +244,12 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
         ...formData,
         ...refImagePayload
       };
+
+      // Do not send Points when this is someone else's briefing. This protects
+      // the value even when that user can edit other briefing details.
+      if (briefing?.ID && !canEditPoints) {
+        delete payload.Points;
+      }
       
       if (briefing?.ID) {
         payload.ID = briefing.ID;
@@ -254,7 +267,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   };
 
   const handleSaveResponse = async () => {
-    if (saving) return;
+    if (saving || isProcessingImages) {
+      if (isProcessingImages) toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
+      return;
+    }
     setSaving(true);
     try {
       // Auto status trigger: เมื่อผู้รับมอบหมายแนบงาน (รูป/URL/โน้ต) ให้เปลี่ยนสถานะเป็น 'รอตรวจ' เสมอ
@@ -335,14 +351,16 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
       if (newOverallStatus !== formData.Status) {
         setFormData(prev => ({ ...prev, Status: newOverallStatus }));
-        await apiService.updateBriefing({ ...formData, ID: briefing.ID, Status: newOverallStatus });
+        const briefingUpdate = { ...formData, ID: briefing.ID, Status: newOverallStatus };
+        if (!canEditPoints) delete briefingUpdate.Points;
+        await apiService.updateBriefing(briefingUpdate);
       }
     } catch (e) {
       console.error('Failed to trigger auto overall status:', e);
     }
   };
 
-  const processImage = (file) => {
+  const LegacyProcessImage = (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -395,18 +413,47 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     });
   };
 
+  const processImages = async (files) => {
+    setIsProcessingImages(true);
+    try {
+      return await Promise.all(files.map(compressImage));
+    } finally {
+      setIsProcessingImages(false);
+    }
+  };
+
   const handleRefImageAdd = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = getImageFiles(e.target.files);
+    e.target.value = '';
+    if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
     if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-    const news = await Promise.all(files.map(processImage));
-    setRefImages([...refImages, ...news]);
+    try {
+      setIsProcessingImages(true);
+      const news = await Promise.all(files.map(compressImage));
+      setRefImages((previous) => [...previous, ...news]);
+      toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
+    } catch (error) {
+      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
+    } finally {
+      setIsProcessingImages(false);
+    }
   };
 
   const handleResultImageAdd = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = getImageFiles(e.target.files);
+    e.target.value = '';
+    if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
     if (myResponse.ResultImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-    const news = await Promise.all(files.map(processImage));
-    setMyResponse({ ...myResponse, ResultImages: [...myResponse.ResultImages, ...news] });
+    try {
+      setIsProcessingImages(true);
+      const news = await Promise.all(files.map(compressImage));
+      setMyResponse((previous) => ({ ...previous, ResultImages: [...previous.ResultImages, ...news] }));
+      toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
+    } catch (error) {
+      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
+    } finally {
+      setIsProcessingImages(false);
+    }
   };
 
   const selectedUserInfo = allUsers.find(u => String(u.ID) === String(selectedAssigneeId));
@@ -440,18 +487,18 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     
     if (String(user?.ID) === selectedAssigneeId && myResponse) {
       if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-      const processed = await Promise.all(files.map(processImage));
+      const processed = await processImages(files);
       setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
       toast.success(`ลากวางรูป ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
     } else if (canEditCore) {
       if (focusedSide === 'right') {
         if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป (ลบรูปเดิมก่อน)', { position: 'bottom-right' }); return; }
-        const processed = await Promise.all(files.map(processImage));
+        const processed = await processImages(files);
         setReviewerImages(prev => [...prev, ...processed]);
         toast.success(`ลากวางรูปตรวจประเมิน ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
       } else {
         if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-        const processed = await Promise.all(files.map(processImage));
+        const processed = await processImages(files);
         setRefImages(prev => [...prev, ...processed]);
         toast.success(`ลากวางรูปอ้างอิง ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
       }
@@ -471,18 +518,18 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     if (files.length > 0) {
       if (String(user?.ID) === selectedAssigneeId && myResponse) {
         if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-        const processed = await Promise.all(files.map(processImage));
+        const processed = await processImages(files);
         setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
         toast.success(`เพิ่มรูป ${files.length} รูป`, { position: 'bottom-right' });
       } else if (canEditCore) {
         if (focusedSide === 'right') {
           if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          const processed = await Promise.all(files.map(processImage));
+          const processed = await processImages(files);
           setReviewerImages(prev => [...prev, ...processed]);
           toast.success(`เพิ่มรูปตรวจประเมิน ${files.length} รูป`, { position: 'bottom-right' });
         } else {
           if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          const processed = await Promise.all(files.map(processImage));
+          const processed = await processImages(files);
           setRefImages(prev => [...prev, ...processed]);
           toast.success(`เพิ่มรูปอ้างอิง ${files.length} รูป`, { position: 'bottom-right' });
         }
@@ -603,9 +650,12 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                          value={formData.Points || ''}
                          onChange={e => setFormData({...formData, Points: parseInt(e.target.value) || 0})}
                          placeholder="ใส่คะแนน..."
-                         className="w-24 px-3 py-1 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-sm"
-                         readOnly={!canEditCore}
+                         disabled={!canEditPoints}
+                         className="w-24 px-3 py-1 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                        />
+                       {!canEditPoints && (
+                         <p className="text-[10px] font-medium text-slate-400">เฉพาะผู้สร้างบรีฟแก้ไขคะแนนได้</p>
+                       )}
                     </div>
 
                     <div className="space-y-2">
@@ -888,11 +938,11 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                     {canEditCore && (
                       <button 
                         onClick={handleSaveBriefing}
-                        disabled={saving}
-                        className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 h-fit ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={saving || isProcessingImages}
+                        className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 h-fit ${(saving || isProcessingImages) ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />} 
-                        {saving ? 'กำลังบันทึก...' : 'บันทึกข้อมูลบรีฟ'}
+                        {saving ? 'กำลังบันทึก...' : isProcessingImages ? 'กำลังเตรียมรูป...' : 'บันทึกข้อมูลบรีฟ'}
                       </button>
                     )}
                   </div>
@@ -1027,11 +1077,11 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
                          <button 
                           onClick={handleSaveResponse}
-                          disabled={saving}
-                          className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-2xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-all active:scale-95 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          disabled={saving || isProcessingImages}
+                          className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-2xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-all active:scale-95 ${(saving || isProcessingImages) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                          {saving ? 'กำลังบันทึก...' : 'อัปเดตการทำงานของฉัน'}
+                          {saving ? 'กำลังบันทึก...' : isProcessingImages ? 'กำลังเตรียมรูป...' : 'อัปเดตการทำงานของฉัน'}
                         </button>
                       </div>
                     ) : (
@@ -1156,7 +1206,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                               toast.error('แนบรูปได้สูงสุด 6 รูปเท่านั้น');
                                               return;
                                             }
-                                            const processed = await Promise.all(files.map(processImage));
+                                            const processed = await processImages(files);
                                             setReviewerImages(prev => [...prev, ...processed]);
                                           }} 
                                         />
