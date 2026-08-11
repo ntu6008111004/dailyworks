@@ -5,7 +5,7 @@ import { LoadingModal } from './LoadingModal';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
-import { compressImage, getImageFiles } from '../utils/imageProcessing';
+import { compressImageDetails, formatImageSize, getImageFiles } from '../utils/compressImage';
 
 export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true }) => {
   
@@ -61,78 +61,11 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     return [];
   });
 
-  // Kept temporarily for backward compatibility with an already-open modal.
-  // New selections use processFiles below, which enforces the safe payload size.
-  const LegacyProcessFiles = (files) => {
-    if (images.length + newImages.length + files.length > 4) {
-      toast.error('คุณสามารถอัปโหลดรูปภาพได้สูงสุด 4 รูปเท่านั้น');
-      return;
-    }
-
-    const newPromises = files.map(file => {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const img = new Image();
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            
-            let currentMaxDim = 2560; // Start large for clarity
-            let currentQuality = 0.9;  // High initial quality
-            let dataUrl = '';
-            let sizeBytes = Infinity;
-            const maxByteSize = 2 * 1024 * 1024; // 2MB
-
-            while (sizeBytes > maxByteSize) {
-              let curWidth = img.width;
-              let curHeight = img.height;
-              
-              if (curWidth > curHeight) { 
-                if (curWidth > currentMaxDim) { curHeight *= currentMaxDim / curWidth; curWidth = currentMaxDim; } 
-              } else { 
-                if (curHeight > currentMaxDim) { curWidth *= currentMaxDim / curHeight; curHeight = currentMaxDim; } 
-              }
-              
-              canvas.width = curWidth;
-              canvas.height = curHeight;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, curWidth, curHeight);
-              
-              dataUrl = canvas.toDataURL('image/webp', currentQuality);
-              
-              // Calculate size in bytes from the base64 string
-              const base64Str = dataUrl.split(',')[1] || '';
-              sizeBytes = Math.round((base64Str.length * 3) / 4);
-              
-              if (sizeBytes > maxByteSize) {
-                if (currentQuality > 0.3) {
-                  // Gradually reduce quality to preserve dimensions and clarity
-                  currentQuality -= 0.05;
-                } else if (currentMaxDim > 400) {
-                  // If quality is already low, reduce dimensions and reset quality to moderate
-                  currentMaxDim = Math.round(currentMaxDim * 0.8);
-                  currentQuality = 0.8;
-                } else {
-                  // Cannot compress further without excessive degradation, break and keep best effort
-                  break;
-                }
-              }
-            }
-
-            resolve({ file, preview: dataUrl });
-          };
-          img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-
-    Promise.all(newPromises).then(results => {
-      setNewImages(prev => [...prev, ...results]);
-    });
-  };
-
   const processFiles = async (inputFiles) => {
+    if (isProcessingImages) {
+      toast.error('กำลังบีบอัดรูปภาพ กรุณารอสักครู่');
+      return false;
+    }
     const files = getImageFiles(inputFiles);
     if (!files.length) {
       toast.error('กรุณาเลือกไฟล์รูปภาพ JPG, PNG หรือ WebP');
@@ -145,12 +78,12 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
 
     setIsProcessingImages(true);
     try {
-      const results = await Promise.all(files.map(async (file) => ({
-        file,
-        preview: await compressImage(file)
-      })));
+      const results = await Promise.all(files.map(async (file) => {
+        const compressed = await compressImageDetails(file);
+        return { file, preview: compressed.dataUrl, sizeBytes: compressed.sizeBytes };
+      }));
       setNewImages((previous) => [...previous, ...results]);
-      toast.success(`เตรียมรูปภาพ ${results.length} รูปเรียบร้อย`);
+      toast.success(`เตรียมรูปภาพ ${results.length} รูปเรียบร้อย (${results.map((image) => formatImageSize(image.sizeBytes)).join(', ')})`);
       return true;
     } catch (error) {
       toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้');
@@ -416,6 +349,9 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                   {newImages.map((img, idx) => (
                     <div key={`new-${idx}`} className="relative group aspect-square rounded-2xl bg-white/30 border border-white/50 overflow-hidden shadow-sm">
                       <img src={img.preview} alt={`upload-${idx}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" onClick={() => setPreviewImage(img.preview)} />
+                      <span className="absolute bottom-1 left-1 rounded-md bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                        {formatImageSize(img.sizeBytes)}
+                      </span>
                       <button type="button" onClick={(e) => { e.stopPropagation(); removeNewImage(idx); }} className="absolute top-1.5 right-1.5 p-1.5 bg-red-500 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg scale-90 group-hover:scale-100">
                         <X size={14} />
                       </button>
@@ -423,17 +359,17 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
                   ))}
 
                   {images.length + newImages.length < 4 && (
-                    <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-white/60 rounded-2xl hover:bg-white/60 hover:border-blue-400 cursor-pointer transition-all group">
+                    <label className={`flex flex-col items-center justify-center aspect-square border-2 border-dashed border-white/60 rounded-2xl transition-all group ${isProcessingImages ? 'cursor-wait opacity-60' : 'hover:bg-white/60 hover:border-blue-400 cursor-pointer'}`}>
                       <div className="p-3 bg-white/50 rounded-2xl text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all">
                         <UploadCloud size={28} />
                       </div>
-                      <span className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tighter">Add Photo</span>
-                      <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} />
+                      <span className="text-[10px] text-slate-500 font-bold mt-2 uppercase tracking-tighter">{isProcessingImages ? 'Compressing...' : 'Add Photo'}</span>
+                      <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageChange} disabled={isProcessingImages} />
                     </label>
                   )}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-4 text-center italic">
-                  * สามารถวางรูปภาพได้ทันทีด้วย Ctrl + V
+                  ระบบย่อและแปลงเป็น WebP อัตโนมัติก่อนบันทึก • วางรูปได้ด้วย Ctrl + V
                 </p>
               </div>
             </div>
