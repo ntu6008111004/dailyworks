@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
@@ -40,6 +40,8 @@ export const Dashboard = () => {
   const [endDate, setEndDate] = useState('');
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const statusChartRef = useRef(null);
+  const [statusChartSize, setStatusChartSize] = useState({ width: 0, height: 0 });
 
   const userRole = user?.Role || user?.role;
   const userName = user?.Name || user?.name;
@@ -74,6 +76,20 @@ export const Dashboard = () => {
       }));
     } catch { /* storage may be unavailable */ }
   }, [userId, savedFiltersUserId, filterDepartment, filterUser, filterYear, startDate, endDate]);
+
+  useEffect(() => {
+    const element = statusChartRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        setStatusChartSize({ width: Math.floor(width), height: Math.floor(height) });
+      }
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -338,9 +354,10 @@ export const Dashboard = () => {
           </div>
         </div>
         
-        <div className="h-[400px] min-h-[320px] w-full min-w-0">
+        <div ref={statusChartRef} className="h-[400px] min-h-[320px] w-full min-w-0">
           {statusChartData && statusChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            statusChartSize.width > 0 && statusChartSize.height > 0 ? (
+              <ResponsiveContainer width={statusChartSize.width} height={statusChartSize.height}>
               <PieChart>
                 <Pie
                   data={statusChartData}
@@ -362,7 +379,12 @@ export const Dashboard = () => {
                 />
                 <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
               </PieChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-slate-400">
+                กำลังเตรียมกราฟ...
+              </div>
+            )
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-400">
               <Activity size={48} className="mb-4 opacity-20" />

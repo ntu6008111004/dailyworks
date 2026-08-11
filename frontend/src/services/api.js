@@ -25,6 +25,20 @@ const CACHE_TTL = {
   _default:        30 * 1000,
 };
 
+// Keep client updates aligned with the deployed Users schema.  Older browser
+// sessions can still contain retired fields (for example Phone), which must
+// not be sent to PostgREST because it rejects the entire update.
+const USER_WRITE_FIELDS = new Set([
+  'Username', 'Password', 'Role', 'Department', 'Name',
+  'ProfileImage', 'Position', 'Permissions'
+]);
+
+function pickUserWriteFields(data = {}) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => USER_WRITE_FIELDS.has(key))
+  );
+}
+
 function getTTL(action) {
   return CACHE_TTL[action] || CACHE_TTL._default;
 }
@@ -422,10 +436,11 @@ export const apiService = {
 
           case 'addUser': {
             const newId = crypto.randomUUID();
+            const userFields = pickUserWriteFields(data);
             const { error } = await supabase
               .from('Users')
               .insert([{
-                ...data,
+                ...userFields,
                 ID: data.ID || newId
               }]);
             if (error) throw error;
@@ -435,7 +450,7 @@ export const apiService = {
           }
 
           case 'updateUser': {
-            const updateFields = { ...data };
+            const updateFields = pickUserWriteFields(data);
             updateFields.UpdatedAt = new Date().toISOString();
             
             const { error } = await supabase
