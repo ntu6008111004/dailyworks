@@ -38,7 +38,9 @@ function parseJson(val, defaultVal = {}) {
     if (cleaned.startsWith('{') || cleaned.startsWith('[')) {
       return JSON.parse(cleaned);
     }
-  } catch (e) {}
+  } catch {
+    // Invalid JSON falls back to the supplied default value.
+  }
   return defaultVal;
 }
 
@@ -160,7 +162,7 @@ export const apiService = {
         // BUT: skip this if there was a recent mutation (force fresh fetch)
         if (age < ttl * 3 && !createdBeforeMutation) {
           if (!pendingRequests.has(cacheKey)) {
-            this._fetchAndCache(action, data, cacheKey, ttl);
+            this._fetchAndCache(action, data, cacheKey);
           }
           return cached.data;  // Return stale immediately
         }
@@ -173,11 +175,11 @@ export const apiService = {
       }
     }
 
-    return this._fetchAndCache(action, data, cacheKey, ttl);
+    return this._fetchAndCache(action, data, cacheKey);
   },
 
   // Internal: performs the actual fetch from Supabase and updates cache
-  async _fetchAndCache(action, data, cacheKey, ttl) {
+  async _fetchAndCache(action, data, cacheKey) {
     const fetchPromise = (async () => {
       try {
         let resultData;
@@ -585,6 +587,19 @@ export const apiService = {
 
           case 'updateBriefing': {
             const updateFields = { ...data };
+            // คะแนนบรีฟเป็นของผู้สร้างบรีฟเท่านั้น แม้ผู้ใช้รายอื่นจะมีสิทธิ์
+            // แก้ไขรายละเอียด/สถานะของบรีฟได้ตามบทบาทของตน
+            if (Object.prototype.hasOwnProperty.call(updateFields, 'Points')) {
+              const { data: currentBriefing, error: ownerError } = await supabase
+                .from('Briefings')
+                .select('CreatorID')
+                .eq('ID', data.ID)
+                .maybeSingle();
+              if (ownerError) throw ownerError;
+              if (!currentBriefing || String(currentBriefing.CreatorID) !== String(this.userId)) {
+                delete updateFields.Points;
+              }
+            }
             if (updateFields.Status === 'เสร็จสิ้น') {
               updateFields.CompletedAt = new Date().toISOString();
             } else if (updateFields.Status && updateFields.Status !== 'เสร็จสิ้น') {
@@ -821,7 +836,7 @@ export const apiService = {
     });
   },
 
-  uploadImage(base64, filename, mimeType) {
+  uploadImage(base64) {
     return Promise.resolve({
       id: crypto.randomUUID(),
       url: base64,
