@@ -18,7 +18,6 @@ export const MyProfile = () => {
     Username: user?.Username || user?.username || '',
     Password: '',
     Name: user?.Name || user?.name || '',
-    Phone: user?.Phone || '',
     ProfileImage: user?.ProfileImage || '',
     Department: user?.Department || '',
     Position: user?.Position || '',
