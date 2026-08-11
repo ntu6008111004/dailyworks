@@ -5,6 +5,7 @@ import { Upload, Camera, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { LoadingModal } from '../components/LoadingModal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { compressImage } from '../utils/compressImage';
 
 export const MyProfile = () => {
   const { user, updateUserState, getPositionName } = useAuth();
@@ -27,49 +28,11 @@ export const MyProfile = () => {
     // Positions are now managed globally in AuthContext
   }, []);
 
-  const compressProfileImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_SIZE = 300; 
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          const currentQuality = 0.8;
-          const dataUrl = canvas.toDataURL('image/webp', currentQuality);
-          
-          if (dataUrl.length > 600000) {
-            // Drop quality if somehow 300x300 is still too big
-            resolve(canvas.toDataURL('image/webp', 0.1));
-          } else {
-            resolve(dataUrl);
-          }
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
+  const compressProfileImage = (file) => compressImage(file, {
+    maxEdge: 300,
+    targetBase64Chars: 100 * 1024,
+    maxBase64Chars: 200 * 1024,
+  });
 
   const handleImageChange = async (e) => {
     const file = e.target.files[0];

@@ -6,7 +6,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { CustomSelect } from './CustomSelect';
 import { CustomDatePicker } from './CustomDatePicker';
 import { apiService } from '../services/api';
-import { compressImage, getImageFiles } from '../utils/imageProcessing';
+import { compressImageDetails, formatImageSize, getImageFiles } from '../utils/compressImage';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -94,6 +94,28 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
   const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
   const [isProcessingImages, setIsProcessingImages] = useState(false);
+  const [imageSizeByUrl, setImageSizeByUrl] = useState({});
+
+  const processImages = useCallback(async (files) => {
+    if (isProcessingImages) {
+      toast.error('กำลังบีบอัดรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
+      return [];
+    }
+    setIsProcessingImages(true);
+    try {
+      const results = await Promise.all(files.map((file) => compressImageDetails(file)));
+      setImageSizeByUrl((current) => ({
+        ...current,
+        ...Object.fromEntries(results.map((result) => [result.dataUrl, result.sizeBytes])),
+      }));
+      return results.map((result) => result.dataUrl);
+    } catch (error) {
+      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
+      return [];
+    } finally {
+      setIsProcessingImages(false);
+    }
+  }, [isProcessingImages]);
 
   useEffect(() => {
     const loadFullBriefing = async () => {
@@ -206,12 +228,14 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       const files = [];
       for (let i = 0; i < items.length; i++) {
         if (items[i].type.indexOf('image') !== -1) {
-          files.push(items[i].getAsFile());
+          const file = items[i].getAsFile();
+          if (file) files.push(file);
         }
       }
       
       if (files.length > 0) {
         const news = await processImages(files);
+        if (!news.length) return;
         // If we're an assignee and on our tab, or if we're the creator
         if (selectedAssigneeId === String(user?.ID || '')) {
           if (myResponse.ResultImages.length + news.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
@@ -227,7 +251,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [canEditCore, refImages, myResponse, selectedAssigneeId, user?.ID]);
+  }, [canEditCore, refImages, myResponse, processImages, selectedAssigneeId, user?.ID]);
 
   const handleSaveBriefing = async () => {
     if (saving || isProcessingImages) {
@@ -360,82 +384,18 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     }
   };
 
-  const LegacyProcessImage = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let currentMaxDim = 2560; // Start large for clarity
-          let currentQuality = 0.9;  // High initial quality
-          let dataUrl = '';
-          let sizeBytes = Infinity;
-          const maxByteSize = 2 * 1024 * 1024; // 2MB
-
-          while (sizeBytes > maxByteSize) {
-            let width = img.width;
-            let height = img.height;
-            if (width > height) { if (width > currentMaxDim) { height *= currentMaxDim / width; width = currentMaxDim; } }
-            else { if (height > currentMaxDim) { width *= currentMaxDim / height; height = currentMaxDim; } }
-            
-            canvas.width = width; 
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            dataUrl = canvas.toDataURL('image/webp', currentQuality);
-            
-            // Calculate size in bytes from the base64 string
-            const base64Str = dataUrl.split(',')[1] || '';
-            sizeBytes = Math.round((base64Str.length * 3) / 4);
-            
-            if (sizeBytes > maxByteSize) {
-              if (currentQuality > 0.3) {
-                // Gradually reduce quality to preserve dimensions and clarity
-                currentQuality -= 0.05;
-              } else if (currentMaxDim > 400) {
-                // If quality is already low, reduce dimensions and reset quality to moderate
-                currentMaxDim = Math.round(currentMaxDim * 0.8);
-                currentQuality = 0.8;
-              } else {
-                // Cannot compress further without excessive degradation, break and keep best effort
-                break;
-              }
-            }
-          }
-
-          resolve(dataUrl);
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const processImages = async (files) => {
-    setIsProcessingImages(true);
-    try {
-      return await Promise.all(files.map(compressImage));
-    } finally {
-      setIsProcessingImages(false);
-    }
-  };
-
   const handleRefImageAdd = async (e) => {
     const files = getImageFiles(e.target.files);
     e.target.value = '';
     if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
     if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
     try {
-      setIsProcessingImages(true);
-      const news = await Promise.all(files.map(compressImage));
+      const news = await processImages(files);
+      if (!news.length) return;
       setRefImages((previous) => [...previous, ...news]);
       toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
     } catch (error) {
       toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
-    } finally {
-      setIsProcessingImages(false);
     }
   };
 
@@ -445,14 +405,12 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
     if (myResponse.ResultImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
     try {
-      setIsProcessingImages(true);
-      const news = await Promise.all(files.map(compressImage));
+      const news = await processImages(files);
+      if (!news.length) return;
       setMyResponse((previous) => ({ ...previous, ResultImages: [...previous.ResultImages, ...news] }));
       toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
     } catch (error) {
       toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
-    } finally {
-      setIsProcessingImages(false);
     }
   };
 
@@ -488,17 +446,20 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
     if (String(user?.ID) === selectedAssigneeId && myResponse) {
       if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
       const processed = await processImages(files);
+      if (!processed.length) return;
       setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
       toast.success(`ลากวางรูป ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
     } else if (canEditCore) {
       if (focusedSide === 'right') {
         if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป (ลบรูปเดิมก่อน)', { position: 'bottom-right' }); return; }
         const processed = await processImages(files);
+        if (!processed.length) return;
         setReviewerImages(prev => [...prev, ...processed]);
         toast.success(`ลากวางรูปตรวจประเมิน ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
       } else {
         if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
         const processed = await processImages(files);
+        if (!processed.length) return;
         setRefImages(prev => [...prev, ...processed]);
         toast.success(`ลากวางรูปอ้างอิง ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
       }
@@ -519,17 +480,20 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
       if (String(user?.ID) === selectedAssigneeId && myResponse) {
         if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
         const processed = await processImages(files);
+        if (!processed.length) return;
         setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
         toast.success(`เพิ่มรูป ${files.length} รูป`, { position: 'bottom-right' });
       } else if (canEditCore) {
         if (focusedSide === 'right') {
           if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
           const processed = await processImages(files);
+          if (!processed.length) return;
           setReviewerImages(prev => [...prev, ...processed]);
           toast.success(`เพิ่มรูปตรวจประเมิน ${files.length} รูป`, { position: 'bottom-right' });
         } else {
           if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
           const processed = await processImages(files);
+          if (!processed.length) return;
           setRefImages(prev => [...prev, ...processed]);
           toast.success(`เพิ่มรูปอ้างอิง ${files.length} รูป`, { position: 'bottom-right' });
         }
@@ -792,8 +756,8 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                    </h3>
                    {canEditCore && (
                      <label className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer transition-colors border border-blue-100 uppercase tracking-wider">
-                       เพิ่มรูปภาพ ({refImages.length}/6)
-                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleRefImageAdd} disabled={refImages.length >= 6} />
+                       {isProcessingImages ? 'กำลังบีบอัดรูป...' : `เพิ่มรูปภาพ (${refImages.length}/6)`}
+                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleRefImageAdd} disabled={refImages.length >= 6 || isProcessingImages} />
                      </label>
                    )}
                 </div>
@@ -809,6 +773,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                       {refImages.map((img, i) => (
                         <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden group border border-slate-200 shadow-sm bg-slate-50">
                            <img src={img} className="w-full h-full object-cover" />
+                           {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                               <button onClick={() => setPreviewImage(img)} className="p-1.5 bg-white rounded-lg text-slate-800"><ExternalLink size={14}/></button>
                               {canEditCore && (
@@ -1004,13 +969,14 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                               {myResponse.ResultImages.map((img, i) => (
                                 <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
                                   <img src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
+                                  {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1 py-0.5 text-[8px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
                                   <button onClick={() => setMyResponse({...myResponse, ResultImages: myResponse.ResultImages.filter((_, idx) => idx !== i)})} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
                                 </div>
                               ))}
                               {myResponse.ResultImages.length < 6 && (
                                 <label className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-pointer transition-all">
                                   <Plus size={24} />
-                                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleResultImageAdd} />
+                                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleResultImageAdd} disabled={isProcessingImages} />
                                 </label>
                               )}
                            </div>
@@ -1179,6 +1145,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                     {reviewerImages.map((img, i) => (
                                       <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
                                         <img loading="lazy" src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
+                                        {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1 py-0.5 text-[8px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
                                         <button onClick={() => setReviewerImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
                                           <X size={10}/>
                                         </button>
@@ -1199,14 +1166,17 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
                                           multiple 
                                           accept="image/*" 
                                           className="hidden" 
+                                          disabled={isProcessingImages}
                                           onChange={async (e) => {
-                                            const files = Array.from(e.target.files);
+                                            const files = getImageFiles(e.target.files);
+                                            e.target.value = '';
                                             if (!files.length) return;
                                             if (reviewerImages.length + files.length > 6) {
                                               toast.error('แนบรูปได้สูงสุด 6 รูปเท่านั้น');
                                               return;
                                             }
                                             const processed = await processImages(files);
+                                            if (!processed.length) return;
                                             setReviewerImages(prev => [...prev, ...processed]);
                                           }} 
                                         />
