@@ -5,7 +5,7 @@ import { Upload, Camera, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { LoadingModal } from '../components/LoadingModal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { compressImage } from '../utils/compressImage';
+import { compressImage, isImageFile } from '../utils/compressImage';
 
 export const MyProfile = () => {
   const { user, updateUserState, getPositionName } = useAuth();
@@ -36,19 +36,22 @@ export const MyProfile = () => {
 
   const handleImageChange = async (e) => {
     const file = e.target.files[0];
+    // Reset the input so picking the same file again still fires onChange.
+    // The File reference above stays readable after the reset.
+    e.target.value = '';
     if (file) {
-      if (!file.type.startsWith('image/')) {
+      if (!isImageFile(file)) {
         toast.error('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
         return;
       }
-      
+
       const loadingToast = toast.loading('กำลังประมวลผลรูปภาพ...');
       try {
         const compressedBase64 = await compressProfileImage(file);
         setFormData({ ...formData, ProfileImage: compressedBase64 });
-        toast.dismiss(loadingToast);
-      } catch {
-        toast.error('เกิดข้อผิดพลาดในการจัดการรูปภาพ');
+      } catch (error) {
+        toast.error(error.message || 'เกิดข้อผิดพลาดในการจัดการรูปภาพ');
+      } finally {
         toast.dismiss(loadingToast);
       }
     }

@@ -440,7 +440,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
   };
   const handleDrop = async (e) => {
     e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    const files = getImageFiles(e.dataTransfer.files);
     if (!files.length) return;
     
     if (String(user?.ID) === selectedAssigneeId && myResponse) {

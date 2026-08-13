@@ -47,8 +47,20 @@ export function formatImageSize(bytes) {
   return bytes < 1024 ? `${bytes} B` : `${Math.ceil(bytes / 1024)} KB`;
 }
 
+const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
+
+/**
+ * Windows reports an empty MIME type when a file extension is missing from the
+ * registry, so fall back to the extension before rejecting a genuine image.
+ */
+export function isImageFile(file) {
+  if (!file) return false;
+  if (file.type) return file.type.startsWith('image/');
+  return IMAGE_EXTENSIONS.test(file.name || '');
+}
+
 export function getImageFiles(fileList) {
-  return Array.from(fileList || []).filter((file) => file?.type?.startsWith('image/'));
+  return Array.from(fileList || []).filter(isImageFile);
 }
 
 /**
@@ -61,7 +73,7 @@ export async function compressImageDetails(file, {
   targetBase64Chars = TARGET_BASE64_CHARS,
   maxBase64Chars = MAX_BASE64_CHARS,
 } = {}) {
-  if (!(file instanceof File) || !file.type?.startsWith('image/')) {
+  if (!(file instanceof File) || !isImageFile(file)) {
     throw new Error('ไฟล์ที่เลือกไม่ใช่รูปภาพ');
   }
 

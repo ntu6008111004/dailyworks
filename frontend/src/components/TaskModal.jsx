@@ -94,12 +94,14 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
   };
 
   const handleImageChange = async (e) => {
-    const files = e.target.files;
+    // Copy the FileList before clearing the input: input.value = '' empties the
+    // live FileList, so reading it afterwards would yield zero files.
+    const files = Array.from(e.target.files);
     e.target.value = '';
     await processFiles(files);
   };
 
-  const handlePaste = (e) => {
+  const handlePaste = async (e) => {
     const items = e.clipboardData.items;
     const files = [];
     for (let i = 0; i < items.length; i++) {
@@ -109,8 +111,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
       }
     }
     if (files.length > 0) {
-      processFiles(files);
-      toast.success(`วางรูปภาพ ${files.length} รูปเรียบร้อย`);
+      await processFiles(files);
     }
   };
 
@@ -126,15 +127,14 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
     setIsDragging(false);
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    
-    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
+
+    const files = getImageFiles(e.dataTransfer.files);
     if (files.length > 0) {
-      processFiles(files);
-      toast.success(`ลากวางรูปภาพ ${files.length} รูปเรียบร้อย`);
+      await processFiles(files);
     } else {
       toast.error('กรุณาวางไฟล์รูปภาพเท่านั้น');
     }
