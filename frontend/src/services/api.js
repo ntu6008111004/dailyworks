@@ -645,7 +645,6 @@ export const apiService = {
             if (briefingError) throw briefingError;
             if (!currentBriefing) throw new Error('ไม่พบข้อมูลงานบรีฟ');
             const currentAssignees = parseJson(currentBriefing.Assignees, []);
-            const isCreator = String(currentBriefing.CreatorID) === String(this.userId);
             const isRecipient = Array.isArray(currentAssignees)
               && currentAssignees.some((id) => String(id) === String(this.userId));
             if (isRecipient) {
@@ -667,11 +666,11 @@ export const apiService = {
                 throw new Error('งานที่เสร็จสิ้นแล้วเป็นข้อมูลเดิม จึงไม่เปลี่ยนผ่าน workflow ใหม่');
               }
             }
-            // คะแนนบรีฟเป็นของผู้สร้างบรีฟเท่านั้น แม้ผู้ใช้รายอื่นจะมีสิทธิ์
-            // แก้ไขรายละเอียด/สถานะของบรีฟได้ตามบทบาทของตน และคะแนนถูกล็อก
-            // เฉพาะหลังหัวหน้าแผนกอนุมัติเป็นเสร็จสิ้นแล้วเท่านั้น
+            // คะแนนแก้ได้โดยผู้ที่มีสิทธิ์แก้บรีฟ (ผู้บรีฟ หัวหน้าแผนก แอดมิน —
+            // หน้าจอกันผู้รับงานไว้แล้ว) และถูกล็อกถาวรหลังหัวหน้าแผนกอนุมัติ
+            // เป็นเสร็จสิ้น
             if (Object.prototype.hasOwnProperty.call(updateFields, 'Points')) {
-              if (!isCreator || currentBriefing.Status === 'เสร็จสิ้น') {
+              if (currentBriefing.Status === 'เสร็จสิ้น') {
                 delete updateFields.Points;
               }
             }
