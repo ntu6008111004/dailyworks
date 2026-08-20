@@ -367,6 +367,7 @@ export const Briefing = () => {
     'รอตรวจ': 'bg-pink-100 text-pink-700 border border-pink-200 font-bold',
     'ส่งตรวจ': 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200 font-bold',
     'สั่งแก้ไข': 'bg-orange-100 text-orange-700 border border-orange-200 font-bold',
+    'สั่งเพิ่มงาน': 'bg-sky-100 text-sky-700 border border-sky-200 font-bold',
     'รอแก้ไข': 'bg-yellow-100 text-yellow-800 border border-yellow-200 font-bold',
     'เสร็จสิ้น': 'bg-green-100 text-green-800 border border-green-200 font-bold',
     'ยกเลิกงาน': 'bg-zinc-100 text-zinc-600 border border-zinc-200 font-bold',

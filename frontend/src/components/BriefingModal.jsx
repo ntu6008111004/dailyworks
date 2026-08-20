@@ -28,6 +28,7 @@ const STATUS_STYLES = {
   'รอตรวจ': 'bg-amber-50 text-amber-700 border-amber-200',
   'ส่งตรวจ': 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
   'สั่งแก้ไข': 'bg-orange-50 text-orange-700 border-orange-200',
+  'สั่งเพิ่มงาน': 'bg-sky-50 text-sky-700 border-sky-200',
   'รอแก้ไข': 'bg-orange-50 text-orange-700 border-orange-200',
   'ยกเลิกงาน': 'bg-zinc-100 text-zinc-700 border-zinc-200',
   'เสร็จสิ้น': 'bg-emerald-50 text-emerald-700 border-emerald-200',

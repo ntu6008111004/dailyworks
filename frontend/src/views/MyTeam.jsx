@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { formatBriefingPoints, getBriefingAwardedPoints } from '../utils/briefingScore';
-import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, RotateCcw } from 'lucide-react';
+import { POINT_LEDGER_LABELS, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../utils/briefingPointLedger';
+import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, MinusCircle, ReceiptText, RotateCcw, X } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
 
@@ -11,6 +12,8 @@ export const MyTeam = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [allBriefings, setAllBriefings] = useState([]);
   const [allResponses, setAllResponses] = useState([]);
+  const [pointLedger, setPointLedger] = useState([]);
+  const [selectedLedgerMember, setSelectedLedgerMember] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
   
@@ -30,15 +33,17 @@ export const MyTeam = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [usersData, briefingsData, responsesData] = await Promise.all([
+      const [usersData, briefingsData, responsesData, ledgerData] = await Promise.all([
         apiService.getUsers({ includeImage: true }),
         apiService.getBriefings(),
-        apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status, UpdatedAt')
+        apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status, SubmittedAt, UpdatedAt'),
+        apiService.getBriefingPointLedger(),
       ]);
       
       setAllUsers(usersData || []);
       setAllBriefings(briefingsData || []);
       setAllResponses(responsesData || []);
+      setPointLedger(ledgerData || []);
       
       // Default filter for non-admins to their own department
       if (!isAdmin) {
@@ -78,6 +83,14 @@ export const MyTeam = () => {
       let briefedCompletedCount = 0;
       let briefedInProgressCount = 0;
       let briefedNotStartedCount = 0;
+
+      const memberLedger = pointLedger.filter((entry) => {
+        if (String(entry.UserID) !== String(member.ID)) return false;
+        const entryDate = toBangkokDateKey(entry.CreatedAt);
+        if (startDate && entryDate < startDate) return false;
+        if (endDate && entryDate > endDate) return false;
+        return true;
+      });
       
       allBriefings.forEach(b => {
         const isCreator = String(b.CreatorID) === String(member.ID);
@@ -125,7 +138,7 @@ export const MyTeam = () => {
         if (isUserAssignee) {
           if (b.Status === 'เสร็จสิ้น') {
             completedCount++;
-          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
             inProgressCount++;
           } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
             notStartedCount++;
@@ -133,7 +146,7 @@ export const MyTeam = () => {
         } else if (isUserCreator) {
           if (b.Status === 'เสร็จสิ้น') {
             briefedCompletedCount++;
-          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
             briefedInProgressCount++;
           } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
             briefedNotStartedCount++;
@@ -141,10 +154,14 @@ export const MyTeam = () => {
         }
       });
       
+      const deductionSummary = summarizePointLedger(memberLedger);
       return {
         ...member,
         totalPoints,
+        netPoints: getNetTeamPoints(totalPoints, memberLedger),
         specialPoints,
+        deductionSummary,
+        ledgerEntries: memberLedger,
         completedCount,
         inProgressCount,
         notStartedCount,
@@ -155,7 +172,7 @@ export const MyTeam = () => {
     });
     
     // Sort: total points descending (leaderboard style)
-    members.sort((a, b) => b.totalPoints - a.totalPoints);
+    members.sort((a, b) => b.netPoints - a.netPoints);
 
     // 4. Calculate total team statistics by summing individual unique briefings related to the filtered users
     let teamCompleted = 0;
@@ -182,7 +199,7 @@ export const MyTeam = () => {
 
       if (b.Status === 'เสร็จสิ้น') {
         teamCompleted++;
-      } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+      } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
         teamInProgress++;
       } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
         teamNotStarted++;
@@ -192,6 +209,8 @@ export const MyTeam = () => {
     const teamStats = {
       totalMembers: members.length,
       totalPointsAcrossTeam: members.reduce((sum, m) => sum + m.totalPoints, 0),
+      totalDeductionsAcrossTeam: members.reduce((sum, m) => sum + m.deductionSummary.netDeduction, 0),
+      totalNetPointsAcrossTeam: members.reduce((sum, m) => sum + m.netPoints, 0),
       totalSpecialPointsAcrossTeam: members.reduce((sum, m) => sum + m.specialPoints, 0),
       totalCompletedAcrossTeam: teamCompleted,
       totalInProgressAcrossTeam: teamInProgress,
@@ -199,7 +218,7 @@ export const MyTeam = () => {
     };
 
     return { teamMembers: members, stats: teamStats };
-  }, [allUsers, allBriefings, allResponses, filterDepartment, isAdmin, userDept, startDate, endDate]);
+  }, [allUsers, allBriefings, allResponses, pointLedger, filterDepartment, isAdmin, userDept, startDate, endDate]);
 
   const handleResetFilters = () => {
     setStartDate('');
@@ -272,7 +291,7 @@ export const MyTeam = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-4">
         <StatCard 
           icon={<Users size={20} />} 
           label="สมาชิกทั้งหมด" 
@@ -286,6 +305,20 @@ export const MyTeam = () => {
           value={formatBriefingPoints(stats.totalPointsAcrossTeam)}
           subtext="คำนวณตามตัวกรอง"
           color="purple" 
+        />
+        <StatCard
+          icon={<MinusCircle size={20} />}
+          label="คะแนนถูกหัก"
+          value={`-${formatBriefingPoints(stats.totalDeductionsAcrossTeam)}`}
+          subtext="สุทธิในช่วงที่เลือก"
+          color="rose"
+        />
+        <StatCard
+          icon={<ReceiptText size={20} />}
+          label="คะแนนหลังหัก"
+          value={formatBriefingPoints(stats.totalNetPointsAcrossTeam)}
+          subtext="ต่ำสุด 0 ต่อคน"
+          color="sky"
         />
         <StatCard
           icon={<Award size={20} />}
@@ -325,6 +358,8 @@ export const MyTeam = () => {
               <tr>
                 <th className="px-6 py-4 font-semibold whitespace-nowrap">พนักงาน</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนรวมสะสม</th>
+                <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนถูกหัก</th>
+                <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนหลังหัก</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนพิเศษ</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">บรีฟเสร็จสิ้น (งาน)</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">บรีฟดำเนินการ (งาน)</th>
@@ -334,7 +369,7 @@ export const MyTeam = () => {
             <tbody className="divide-y divide-slate-100">
               {teamMembers.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan="8" className="px-6 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users size={32} className="text-slate-300" />
                       <p>ไม่พบสมาชิกในทีม</p>
@@ -380,6 +415,20 @@ export const MyTeam = () => {
                     </td>
 
                     <td className="px-6 py-4 text-center">
+                      <button onClick={() => setSelectedLedgerMember(member)} className="inline-flex min-w-20 flex-col items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 px-3 py-2 transition hover:bg-rose-100 hover:shadow-sm">
+                        <span className="text-xl font-black text-rose-700">-{formatBriefingPoints(member.deductionSummary.netDeduction)}</span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-rose-400">ดูรายละเอียด</span>
+                      </button>
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex min-w-20 flex-col items-center justify-center rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2">
+                        <span className="text-xl font-black text-sky-700">{formatBriefingPoints(member.netPoints)}</span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-sky-400">สุทธิ</span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
                       <div className="inline-flex flex-col items-center justify-center min-w-20 h-16 px-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 group-hover:from-amber-100 group-hover:to-orange-100 group-hover:shadow-sm transition-all">
                         <span className="text-2xl font-black text-amber-700">+{formatBriefingPoints(member.specialPoints)}</span>
                         <span className="text-[9px] uppercase tracking-wider text-amber-500 font-black">พิเศษ</span>
@@ -419,9 +468,27 @@ export const MyTeam = () => {
           </table>
         </div>
       </div>
+      {selectedLedgerMember && <LedgerDetailModal member={selectedLedgerMember} onClose={() => setSelectedLedgerMember(null)} />}
     </div>
   );
 };
+
+const LedgerDetailModal = ({ member, onClose }) => (
+  <div className="fixed inset-0 z-[350] flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm sm:p-6">
+    <div className="flex max-h-[88dvh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+      <header className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white px-5 py-4">
+        <div><p className="text-xs font-bold text-rose-600">รายละเอียดคะแนนที่ถูกหัก</p><h3 className="text-lg font-black text-slate-900">{member.Name}</h3><p className="text-xs text-slate-500">หัก {formatBriefingPoints(member.deductionSummary.deducted)} · คืน {formatBriefingPoints(member.deductionSummary.refunded)} · สุทธิ {formatBriefingPoints(member.deductionSummary.netDeduction)}</p></div>
+        <button onClick={onClose} aria-label="ปิด" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100"><X size={20} /></button>
+      </header>
+      <div className="overflow-y-auto p-4 sm:p-5">
+        {member.ledgerEntries.length ? <div className="space-y-3">{member.ledgerEntries.map((entry) => {
+          const isRefund = entry.EntryType === 'LATE_REFUND';
+          return <article key={entry.ID} className={`rounded-2xl border p-3 ${isRefund ? 'border-emerald-100 bg-emerald-50/60' : 'border-rose-100 bg-rose-50/50'}`}><div className="flex flex-wrap items-start justify-between gap-2"><div><p className={`text-sm font-black ${isRefund ? 'text-emerald-700' : 'text-rose-700'}`}>{POINT_LEDGER_LABELS[entry.EntryType] || entry.EntryType} {isRefund ? '+' : '-'}{formatBriefingPoints(entry.Points)} คะแนน</p><p className="mt-0.5 text-xs font-bold text-slate-700">{entry.RunningID || entry.BriefingID} · {entry.Title || 'งานบรีฟ'}</p></div><time className="text-[10px] text-slate-400">{new Date(entry.CreatedAt).toLocaleString('th-TH')}</time></div>{entry.LateDays > 0 && <p className="mt-2 text-xs text-slate-600">ล่าช้า {entry.LateDays} วัน</p>}{entry.Comment && <p className="mt-2 whitespace-pre-wrap text-xs text-slate-600">{entry.Comment}</p>}<p className="mt-2 text-[10px] text-slate-400">ผู้ดำเนินการ: {entry.ReviewerName || 'ระบบอัตโนมัติ'}</p></article>;
+        })}</div> : <div className="py-12 text-center text-sm text-slate-400">ไม่มีรายการหักคะแนนในช่วงวันที่เลือก</div>}
+      </div>
+    </div>
+  </div>
+);
 
 const RenderBriefCount = ({ assigneeCount, creatorCount, type }) => {
   const isZero = assigneeCount === 0 && creatorCount === 0;
@@ -476,6 +543,8 @@ const StatCard = ({ icon, label, value, subtext, color }) => {
     purple: "bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200",
     emerald: "bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200",
     amber: "bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200",
+    rose: "bg-gradient-to-br from-rose-50 to-rose-100/50 border-rose-200",
+    sky: "bg-gradient-to-br from-sky-50 to-sky-100/50 border-sky-200",
     slate: "bg-gradient-to-br from-slate-50 to-slate-100/50 border-slate-200",
   };
 
@@ -484,6 +553,8 @@ const StatCard = ({ icon, label, value, subtext, color }) => {
     purple: "text-purple-700",
     emerald: "text-emerald-700",
     amber: "text-amber-700",
+    rose: "text-rose-700",
+    sky: "text-sky-700",
     slate: "text-slate-700",
   };
 
@@ -492,6 +563,8 @@ const StatCard = ({ icon, label, value, subtext, color }) => {
     purple: "bg-purple-600 text-white shadow-purple-200",
     emerald: "bg-emerald-500 text-white shadow-emerald-200",
     amber: "bg-amber-500 text-white shadow-amber-200",
+    rose: "bg-rose-600 text-white shadow-rose-200",
+    sky: "bg-sky-600 text-white shadow-sky-200",
     slate: "bg-slate-600 text-white shadow-slate-200",
   };
 

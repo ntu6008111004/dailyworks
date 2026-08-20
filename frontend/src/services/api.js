@@ -9,7 +9,7 @@ const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const BRIEFING_SCHEMA_BACKOFF_KEY = 'briefing_bonus_schema_retry_after_v2';
 const BRIEFING_LEGACY_FIELDS = 'ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points';
-const BRIEFING_REVIEW_BASE_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, BonusPoints, FinalPoints`;
+const BRIEFING_REVIEW_BASE_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, SevereErrorCount, LatePenaltyEnabled, TotalExtendedDays, BonusPoints, FinalPoints`;
 const BRIEFING_REVIEW_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, BonusLevel`;
 const BRIEFING_SCORE_FIELDS = `${BRIEFING_REVIEW_FIELDS}, ScoreAdjustment`;
 const BRIEFING_SCORE_COMPAT_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, ScoreAdjustment`;
@@ -767,64 +767,74 @@ export const apiService = {
 
           case 'saveBriefingResponse': {
             const responseUserId = this.userId || data.UserID;
-            const { data: briefingForResponse, error: briefingForResponseError } = await supabase
+            if (!responseUserId) {
+              throw new Error('เฉพาะผู้รับมอบหมายเท่านั้นที่บันทึกการส่งงานของตนเองได้');
+            }
+            const { data: submittedBriefing, error: submitError } = await supabase.rpc('submit_briefing_response', {
+              p_briefing_id: data.BriefingID,
+              p_user_id: responseUserId,
+              p_url1: data.URL1 || '',
+              p_url2: data.URL2 || '',
+              p_note: data.Note || '',
+              p_result_images: Array.isArray(data.ResultImages) ? data.ResultImages : [],
+              p_review_images: Array.isArray(data.ReviewImages) ? data.ReviewImages : [],
+            });
+            if (!submitError) {
+              resultData = { message: 'Response saved', briefing: submittedBriefing };
+              break;
+            }
+
+            // Keep submissions available while the frontend deployment and
+            // database migration roll out at different times. Once the RPC is
+            // present this branch is never used.
+            if (!/submit_briefing_response|schema cache|PGRST202/i.test(submitError.message || '')) {
+              throw submitError;
+            }
+            const { data: legacyBriefing, error: legacyBriefingError } = await supabase
               .from('Briefings')
               .select('Assignees, Status')
               .eq('ID', data.BriefingID)
               .maybeSingle();
-            if (briefingForResponseError) throw briefingForResponseError;
-            if (!briefingForResponse) throw new Error('ไม่พบข้อมูลงานบรีฟ');
-            const responseAssignees = parseJson(briefingForResponse.Assignees, []);
-            if (!responseUserId || !Array.isArray(responseAssignees) || !responseAssignees.some((id) => String(id) === String(responseUserId))) {
+            if (legacyBriefingError) throw legacyBriefingError;
+            const legacyAssignees = parseJson(legacyBriefing?.Assignees, []);
+            if (!legacyBriefing || !legacyAssignees.some((id) => String(id) === String(responseUserId))) {
               throw new Error('เฉพาะผู้รับมอบหมายเท่านั้นที่บันทึกการส่งงานของตนเองได้');
             }
-            const responseData = {
+            const legacyResponse = {
               BriefingID: data.BriefingID,
               UserID: responseUserId,
               URL1: data.URL1 || '',
               URL2: data.URL2 || '',
-              // Recipient status is system-owned. Ignore stale clients that
-              // still submit a Status or NewOverallStatus field.
-              Status: briefingForResponse.Status || 'รอดำเนินการ',
+              Status: 'รอตรวจ',
               Note: data.Note || '',
               ResultImages: Array.isArray(data.ResultImages) ? data.ResultImages : [],
               ReviewImages: Array.isArray(data.ReviewImages) ? data.ReviewImages : [],
               UpdatedAt: new Date().toISOString(),
-              ...Object.keys(data).reduce((acc, k) => {
-                if (k.startsWith('ResultImage') || k.startsWith('ReviewImage')) {
-                  acc[k] = data[k];
-                }
-                return acc;
-              }, {})
+              ...Object.keys(data).reduce((columns, key) => {
+                if (key.startsWith('ResultImage') || key.startsWith('ReviewImage')) columns[key] = data[key];
+                return columns;
+              }, {}),
             };
-
-            const { data: existing, error: findErr } = await supabase
+            const { data: existingResponse, error: existingResponseError } = await supabase
               .from('BriefingResponses')
               .select('ID')
               .eq('BriefingID', data.BriefingID)
-              .eq('UserID', responseData.UserID)
+              .eq('UserID', responseUserId)
               .maybeSingle();
-            
-            if (findErr) throw findErr;
-
-            if (existing) {
-              const { error: updateErr } = await supabase
-                .from('BriefingResponses')
-                .update(responseData)
-                .eq('ID', existing.ID);
-              if (updateErr) throw updateErr;
-            } else {
-              const newId = crypto.randomUUID();
-              const { error: insertErr } = await supabase
-                .from('BriefingResponses')
-                .insert([{
-                  ID: newId,
-                  ...responseData
-                }]);
-              if (insertErr) throw insertErr;
-            }
-
-            resultData = { message: 'Response saved' };
+            if (existingResponseError) throw existingResponseError;
+            const responseWrite = existingResponse
+              ? supabase.from('BriefingResponses').update(legacyResponse).eq('ID', existingResponse.ID)
+              : supabase.from('BriefingResponses').insert([{ ID: crypto.randomUUID(), ...legacyResponse }]);
+            const { error: responseWriteError } = await responseWrite;
+            if (responseWriteError) throw responseWriteError;
+            const { data: fallbackBriefing, error: fallbackBriefingError } = await supabase
+              .from('Briefings')
+              .update({ Status: 'รอตรวจ', LastUpdatedBy: responseUserId, UpdatedAt: new Date().toISOString() })
+              .eq('ID', data.BriefingID)
+              .select()
+              .single();
+            if (fallbackBriefingError) throw fallbackBriefingError;
+            resultData = { message: 'Response saved', briefing: fallbackBriefing };
             break;
           }
 
@@ -1063,10 +1073,12 @@ export const apiService = {
       .eq('Department', department || '')
       .maybeSingle();
     if (error) throw error;
-    return data || {
+    return {
       Department: department || '',
       CorrectionDeduction: 1,
-      RejectedDeduction: 1,
+      RejectedDeduction: 5,
+      SevereDeduction: 50,
+      ...(data || {}),
     };
   },
 
@@ -1075,6 +1087,7 @@ export const apiService = {
       Department: data.Department || '',
       CorrectionDeduction: Math.max(0, Number(data.CorrectionDeduction) || 0),
       RejectedDeduction: Math.max(0, Number(data.RejectedDeduction) || 0),
+      SevereDeduction: Math.max(0, Number(data.SevereDeduction) || 0),
       UpdatedBy: this.userId || null,
       UpdatedAt: new Date().toISOString(),
     };
@@ -1083,6 +1096,7 @@ export const apiService = {
       p_updated_by: payload.UpdatedBy,
       p_correction_deduction: payload.CorrectionDeduction,
       p_rejected_deduction: payload.RejectedDeduction,
+      p_severe_deduction: payload.SevereDeduction,
     });
     if (error) throw error;
     return saved;
@@ -1098,22 +1112,42 @@ export const apiService = {
     return data || [];
   },
 
-  async reviewBriefing({ briefingId, action, comment = '', bonusLevel = null, targetPoints = null }) {
+  async reviewBriefing({
+    briefingId,
+    action,
+    comment = '',
+    bonusLevel = null,
+    targetPoints = null,
+    targetUserIds = null,
+    extraPoints = null,
+    extensionDays = null,
+  }) {
     const payload = {
       p_briefing_id: briefingId,
       p_reviewer_id: this.userId,
       p_action: action,
       p_comment: comment,
       p_bonus_level: bonusLevel,
+      p_target_points: targetPoints,
+      p_target_user_ids: targetUserIds,
+      p_extra_points: extraPoints,
+      p_extension_days: extensionDays,
     };
-    // Keep existing review actions compatible until the incremental score
-    // migration has been applied. Only the new adjustment action needs its
-    // sixth database argument.
-    if (action === 'score_adjustment') payload.p_target_points = targetPoints;
     const { data, error } = await supabase.rpc('review_briefing', payload);
     if (error) throw error;
     this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return data;
+  },
+
+  async getBriefingPointLedger({ startDate = null, endDate = null } = {}) {
+    const { data, error } = await supabase.rpc('get_briefing_point_ledger', {
+      p_viewer_id: this.userId,
+      p_start_date: startDate || null,
+      p_end_date: endDate || null,
+    });
+    if (error && /get_briefing_point_ledger|schema cache|PGRST202/i.test(error.message || '')) return [];
+    if (error) throw error;
+    return data || [];
   },
 
   updateUserPermissions(userId, permissions) {

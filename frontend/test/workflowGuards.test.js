@@ -8,6 +8,7 @@ import {
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
 import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getScoreAdjustmentPreview } from '../src/utils/briefingScore.js';
+import { getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
 
@@ -88,4 +89,29 @@ test('reference links open only safe external web URLs', () => {
   assert.equal(normalizeExternalLink('ftp://example.com/file'), '');
   assert.equal(normalizeExternalLink('not a valid link'), '');
   assert.equal(normalizeExternalLink(''), '');
+});
+
+test('lateness penalties use capped tiers and monthly deductions never make net points negative', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 6, 7, 99].map(getLatePenaltyPoints), [0, 1, 4, 4, 8, 8, 8, 8]);
+  const ledger = [
+    { EntryType: 'LATE_PENALTY', Points: 8 },
+    { EntryType: 'LATE_REFUND', Points: 4 },
+    { EntryType: 'ERROR_PENALTY', Points: 5 },
+    { EntryType: 'SEVERE_ERROR_PENALTY', Points: 50 },
+  ];
+  assert.deepEqual(summarizePointLedger(ledger), {
+    latePenalty: 8,
+    errorPenalty: 5,
+    severePenalty: 50,
+    refunded: 4,
+    deducted: 63,
+    netDeduction: 59,
+  });
+  assert.equal(getNetTeamPoints(100, ledger), 41);
+  assert.equal(getNetTeamPoints(10, ledger), 0);
+});
+
+test('monthly ledger dates are grouped by Bangkok date instead of UTC date', () => {
+  assert.equal(toBangkokDateKey('2026-08-20T18:30:00.000Z'), '2026-08-21');
+  assert.equal(toBangkokDateKey('invalid-date'), '');
 });
