@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Award, CalendarPlus, CheckCircle2, ChevronRight, ClipboardCheck,
-  ListPlus, Loader2, MessageSquareWarning, RefreshCw, RotateCcw, Save, Search,
+  AlertTriangle, Award, CalendarDays, CalendarPlus, CheckCircle2, ChevronRight, ClipboardCheck,
+  LayoutGrid, List, ListPlus, Loader2, MessageSquareWarning, RefreshCw, RotateCcw, Save, Search,
   Settings2, ShieldAlert, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -9,7 +9,8 @@ import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { CustomSelect } from '../components/CustomSelect';
 import { getBriefingImages } from '../utils/briefingImages';
-import { getBriefingReviewParticipants } from '../utils/briefingPointLedger';
+import { getBriefingReviewParticipants, toBangkokDateKey } from '../utils/briefingPointLedger';
+import { compareBriefingsForReview } from '../utils/briefingOrder';
 import { requiresReviewComment } from '../utils/briefingReviewNotes';
 import {
   BONUS_LEVEL_OPTIONS,
@@ -19,9 +20,17 @@ import {
   getScoreAdjustmentPreview,
 } from '../utils/briefingScore';
 
-export { ReviewActions };
+export { ReviewActions, ReviewTable };
 
 const REVIEW_STATUSES = ['ส่งตรวจ', 'สั่งแก้ไข', 'รอตรวจ', 'สั่งเพิ่มงาน'];
+const PRIORITY_META = {
+  High: { label: 'สูง', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+  Medium: { label: 'กลาง', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  Low: { label: 'ต่ำ', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
+const isReviewOverdue = (briefing) => Boolean(briefing?.DueDate)
+  && briefing.Status !== 'เสร็จสิ้น'
+  && String(briefing.DueDate) < toBangkokDateKey(Date.now());
 const STATUS_STYLE = {
   ส่งตรวจ: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
   สั่งแก้ไข: 'bg-orange-50 text-orange-700 border-orange-200',
@@ -60,6 +69,8 @@ export const BriefingReview = () => {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [filterStatus, setFilterStatus] = useState('ส่งตรวจ');
+  const [viewMode, setViewMode] = useState(() => { try { return localStorage.getItem('briefing_review_view_mode') || 'card'; } catch { return 'card'; } });
+  const switchView = (mode) => { setViewMode(mode); try { localStorage.setItem('briefing_review_view_mode', mode); } catch { /* ignore */ } };
   const [department, setDepartment] = useState(isAdmin ? 'All' : user?.Department || '');
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -115,8 +126,7 @@ export const BriefingReview = () => {
       if (startDate && date < startDate) return false;
       if (endDate && date > endDate) return false;
       return true;
-    }).sort((left, right) => new Date(right.ReviewSubmittedAt || right.UpdatedAt || right.CreatedAt)
-      - new Date(left.ReviewSubmittedAt || left.UpdatedAt || left.CreatedAt));
+    }).sort(compareBriefingsForReview);
   }, [briefings, users, isAdmin, user?.Department, department, filterStatus, search, startDate, endDate]);
 
   const stats = useMemo(() => ({
@@ -177,7 +187,7 @@ export const BriefingReview = () => {
             <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
             <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />
           </div>
-          {(search || filterStatus !== 'ส่งตรวจ' || startDate || endDate || (isAdmin && department !== 'All')) && <button onClick={() => { setSearch(''); setFilterStatus('ส่งตรวจ'); setStartDate(''); setEndDate(''); if (isAdmin) setDepartment('All'); }} className="inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"><RotateCcw size={14} />ล้าง</button>}
+          {(search || filterStatus !== 'ส่งตรวจ' || startDate || endDate || (isAdmin && department !== 'All')) && <button onClick={() => { setSearch(''); setFilterStatus('ส่งตรวจ'); setStartDate(''); setEndDate(''); if (isAdmin) setDepartment('All'); }} className="inline-flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100"><RotateCcw size={14} />ล้าง</button>}<div className="flex shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-0.5"><button type="button" onClick={() => switchView('card')} aria-label="มุมมองการ์ด" className={`rounded-lg px-2.5 py-1.5 ${viewMode === 'card' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><LayoutGrid size={15} /></button><button type="button" onClick={() => switchView('table')} aria-label="มุมมองตาราง" className={`rounded-lg px-2.5 py-1.5 ${viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><List size={15} /></button></div>
         </div>
       </section>
 
@@ -191,7 +201,7 @@ export const BriefingReview = () => {
         </div>
       </section>
 
-      {loading ? <div className="flex min-h-64 items-center justify-center text-slate-500"><Loader2 className="mr-2 animate-spin" />กำลังโหลดคิวตรวจงาน…</div> : visibleBriefings.length ? <div className="grid gap-4 xl:grid-cols-2">{visibleBriefings.map((item) => <ReviewCard key={item.ID} briefing={item} users={users} onClick={() => setSelected(item)} />)}</div> : <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-center text-slate-400"><ClipboardCheck size={34} className="mb-3" /><h2 className="font-black text-slate-600">ไม่มีงานในคิวที่เลือก</h2><p className="mt-1 text-sm">เมื่องานถูกส่งตรวจ จะปรากฏในหน้านี้ทันที</p></div>}
+      {loading ? <div className="flex min-h-64 items-center justify-center text-slate-500"><Loader2 className="mr-2 animate-spin" />กำลังโหลดคิวตรวจงาน…</div> : visibleBriefings.length ? (viewMode === 'table' ? <ReviewTable briefings={visibleBriefings} users={users} onSelect={setSelected} /> : <div className="grid gap-4 xl:grid-cols-2">{visibleBriefings.map((item) => <ReviewCard key={item.ID} briefing={item} users={users} onClick={() => setSelected(item)} />)}</div>) : <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-center text-slate-400"><ClipboardCheck size={34} className="mb-3" /><h2 className="font-black text-slate-600">ไม่มีงานในคิวที่เลือก</h2><p className="mt-1 text-sm">เมื่องานถูกส่งตรวจ จะปรากฏในหน้านี้ทันที</p></div>}
       {selected && <ReviewDialog briefing={selected} users={users} onClose={() => setSelected(null)} onChanged={async () => { setSelected(null); await load(true); }} />}
     </div>
   );
@@ -209,11 +219,23 @@ const QueueStat = ({ label, value, color, icon, onClick, active }) => {
   return <button onClick={onClick} className={`flex items-center justify-between rounded-2xl border p-4 text-left shadow-sm transition ${active ? style.active : 'border-slate-200 bg-white hover:bg-slate-50'}`}><span><span className="block text-xs font-bold text-slate-500">{label}</span><span className="mt-1 block text-3xl font-black text-slate-800">{value}</span></span><span className={`rounded-xl p-2 ${style.icon}`}>{icon}</span></button>;
 };
 
+const PriorityPill = ({ priority }) => {
+  const meta = PRIORITY_META[priority] || PRIORITY_META.Medium;
+  return <span className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.className}`}>{meta.label}</span>;
+};
+
+const DueBadge = ({ briefing }) => {
+  const overdue = isReviewOverdue(briefing);
+  return <span className={`inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold ${overdue ? 'text-rose-600' : 'text-slate-500'}`}><CalendarDays size={13} />{briefing.DueDate || 'ไม่ระบุ'}{overdue && <span className="rounded bg-rose-50 px-1 py-0.5 text-[9px] font-black">เลยกำหนด</span>}</span>;
+};
+
+const ReviewTable = ({ briefings, users, onSelect }) => <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm"><table className="w-full min-w-[860px] text-left text-sm"><thead><tr className="border-b border-slate-100 bg-slate-50 text-[11px] font-black uppercase tracking-wide text-slate-500"><th className="px-4 py-3">#</th><th className="px-4 py-3">งาน</th><th className="px-4 py-3">ผู้มอบหมาย</th><th className="px-4 py-3">ผู้รับ</th><th className="px-4 py-3">ความสำคัญ</th><th className="px-4 py-3">กำหนดส่ง</th><th className="px-4 py-3">สถานะ</th><th className="px-4 py-3 text-right">คงเหลือ</th></tr></thead><tbody>{briefings.map((briefing, index) => { const creator = users.find((item) => String(item.ID) === String(briefing.CreatorID)); const assignees = (briefing.Assignees || []).map((id) => users.find((item) => String(item.ID) === String(id))).filter(Boolean); const remaining = Math.max(0, Number(briefing.Points || 0) - Number(briefing.DeductedPoints || 0)); return <tr key={briefing.ID} onClick={() => onSelect(briefing)} className="cursor-pointer border-b border-slate-50 transition last:border-0 hover:bg-blue-50/40"><td className="px-4 py-3 text-xs font-bold text-slate-400">{index + 1}</td><td className="max-w-64 px-4 py-3"><p className="text-[10px] font-black text-slate-400">{briefing.RunningID}</p><p className="truncate text-sm font-black text-slate-800">{briefing.Title || briefing.Detail}</p></td><td className="px-4 py-3"><div className="flex items-center gap-2"><Avatar person={creator} className="h-6 w-6" /><span className="max-w-28 truncate text-xs font-bold text-slate-700">{creator?.Name || creator?.Username || '-'}</span></div></td><td className="px-4 py-3"><div className="flex -space-x-2">{assignees.slice(0, 3).map((person) => <Avatar key={person.ID} person={person} className="h-6 w-6 border-2 border-white" />)}{assignees.length > 3 && <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[9px] font-black text-slate-600">+{assignees.length - 3}</span>}</div></td><td className="px-4 py-3"><PriorityPill priority={briefing.Priority} /></td><td className="px-4 py-3"><DueBadge briefing={briefing} /></td><td className="px-4 py-3"><Pill status={briefing.Status} /></td><td className="px-4 py-3 text-right text-sm font-black text-indigo-700">{formatBriefingPoints(remaining)}</td></tr>; })}</tbody></table></div>;
+
 const ReviewCard = ({ briefing, users, onClick }) => {
   const creator = users.find((item) => String(item.ID) === String(briefing.CreatorID));
   const assignees = (briefing.Assignees || []).map((id) => users.find((item) => String(item.ID) === String(id))).filter(Boolean);
   const remaining = Math.max(0, Number(briefing.Points || 0) - Number(briefing.DeductedPoints || 0));
-  return <button onClick={onClick} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md sm:p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600">{briefing.RunningID}</span><Pill status={briefing.Status} /></div><h2 className="line-clamp-2 text-base font-black text-slate-900 group-hover:text-blue-700">{briefing.Title || briefing.Detail}</h2><p className="mt-1 line-clamp-2 text-sm text-slate-500">{briefing.Detail}</p></div><ChevronRight className="mt-5 shrink-0 text-slate-300 group-hover:text-blue-500" /></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><Metric label="คะแนนตั้งต้น" value={formatBriefingPoints(briefing.Points || 0)} /><Metric label="คงเหลือ" value={formatBriefingPoints(remaining)} /><Metric label="สั่งแก้" value={`${briefing.CorrectionCount || 0} ครั้ง`} /><Metric label="ผิด/ร้ายแรง" value={`${(briefing.RejectedCount || 0) + (briefing.SevereErrorCount || 0)} ครั้ง`} /></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3"><div className="flex min-w-0 items-center gap-2"><Avatar person={creator} className="h-7 w-7" /><div className="min-w-0"><p className="truncate text-xs font-black text-slate-700">ผู้มอบหมาย: {creator?.Name || creator?.Username || '-'}</p><p className="text-[10px] text-slate-400">{creator?.Department || 'ไม่ระบุแผนก'}</p></div></div><div className="flex -space-x-2">{assignees.slice(0, 4).map((person) => <Avatar key={person.ID} person={person} className="h-7 w-7 border-2 border-white" />)}{assignees.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-black text-slate-600">+{assignees.length - 4}</span>}</div></div></button>;
+  return <button onClick={onClick} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md sm:p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600">{briefing.RunningID}</span><Pill status={briefing.Status} /><PriorityPill priority={briefing.Priority} /><DueBadge briefing={briefing} /></div><h2 className="line-clamp-2 text-base font-black text-slate-900 group-hover:text-blue-700">{briefing.Title || briefing.Detail}</h2><p className="mt-1 line-clamp-2 text-sm text-slate-500">{briefing.Detail}</p></div><ChevronRight className="mt-5 shrink-0 text-slate-300 group-hover:text-blue-500" /></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><Metric label="คะแนนตั้งต้น" value={formatBriefingPoints(briefing.Points || 0)} /><Metric label="คงเหลือ" value={formatBriefingPoints(remaining)} /><Metric label="สั่งแก้" value={`${briefing.CorrectionCount || 0} ครั้ง`} /><Metric label="ผิด/ร้ายแรง" value={`${(briefing.RejectedCount || 0) + (briefing.SevereErrorCount || 0)} ครั้ง`} /></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3"><div className="flex min-w-0 items-center gap-2"><Avatar person={creator} className="h-7 w-7" /><div className="min-w-0"><p className="truncate text-xs font-black text-slate-700">ผู้มอบหมาย: {creator?.Name || creator?.Username || '-'}</p><p className="text-[10px] text-slate-400">{creator?.Department || 'ไม่ระบุแผนก'}</p></div></div><div className="flex -space-x-2">{assignees.slice(0, 4).map((person) => <Avatar key={person.ID} person={person} className="h-7 w-7 border-2 border-white" />)}{assignees.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-black text-slate-600">+{assignees.length - 4}</span>}</div></div></button>;
 };
 
 const ReviewDialog = ({ briefing, users, onClose, onChanged }) => {

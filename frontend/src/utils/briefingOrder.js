@@ -39,3 +39,25 @@ export function compareBriefingsByDueDate(a, b) {
 export function sortBriefingsByDueDate(briefings = []) {
   return [...(Array.isArray(briefings) ? briefings : [])].sort(compareBriefingsByDueDate);
 }
+
+// The review queue triages by urgency: a briefing without a priority sits with
+// the Medium ones instead of jumping to either end.
+const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+
+function priorityRank(briefing) {
+  const rank = PRIORITY_RANK[String(briefing?.Priority || '')];
+  return rank === undefined ? PRIORITY_RANK.Medium : rank;
+}
+
+/** Most important first, then the soonest deadline, newest first as tiebreak. */
+export function compareBriefingsForReview(a, b) {
+  const priority = priorityRank(a) - priorityRank(b);
+  if (priority !== 0) return priority;
+  const difference = dueTime(a) - dueTime(b);
+  if (difference !== 0) return difference;
+  return createdTime(b) - createdTime(a);
+}
+
+export function sortBriefingsForReview(briefings = []) {
+  return [...(Array.isArray(briefings) ? briefings : [])].sort(compareBriefingsForReview);
+}

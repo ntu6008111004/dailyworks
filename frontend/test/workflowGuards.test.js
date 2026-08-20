@@ -14,7 +14,7 @@ import { updateGateDecision } from '../src/utils/updateGate.js';
 import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
 import { briefingSelectAt, BRIEFING_SELECT_LADDER, BRIEFING_SELECT_RETRY_MS, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
 import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
-import { compareBriefingsByDueDate, isBriefingFinished, sortBriefingsByDueDate } from '../src/utils/briefingOrder.js';
+import { compareBriefingsByDueDate, compareBriefingsForReview, isBriefingFinished, sortBriefingsByDueDate, sortBriefingsForReview } from '../src/utils/briefingOrder.js';
 import { computeMemberScore, filterMemberLedger, isBriefingInMemberRange } from '../src/utils/briefingMemberScore.js';
 
 test('recipient cannot alter the assigning brief, including a JSON-assignee record', () => {
@@ -368,4 +368,17 @@ test('the briefing score is locked only after the head approves the work', () =>
   ['ส่งตรวจ', 'ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'ยกเลิกงาน', '', undefined].forEach((status) => {
     assert.equal(isBriefingScoreLocked(status), false, String(status));
   });
+});
+
+test('the review queue triages by priority first, then the nearest deadline', () => {
+  const ordered = sortBriefingsForReview([
+    { ID: 'low-soon', Priority: 'Low', DueDate: '2026-08-21', CreatedAt: '2026-08-01T00:00:00.000Z' },
+    { ID: 'high-late', Priority: 'High', DueDate: '2026-09-10', CreatedAt: '2026-08-02T00:00:00.000Z' },
+    { ID: 'high-soon', Priority: 'High', DueDate: '2026-08-22', CreatedAt: '2026-08-03T00:00:00.000Z' },
+    { ID: 'no-priority', DueDate: '2026-08-20', CreatedAt: '2026-08-04T00:00:00.000Z' },
+    { ID: 'medium-soon', Priority: 'Medium', DueDate: '2026-08-25', CreatedAt: '2026-08-05T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(ordered.map((item) => item.ID), ['high-soon', 'high-late', 'no-priority', 'medium-soon', 'low-soon']);
+  assert.equal(compareBriefingsForReview({ Priority: 'High', DueDate: '2026-08-21' }, { Priority: 'High', DueDate: '2026-08-21' }), 0);
+  assert.deepEqual(sortBriefingsForReview(null), []);
 });
