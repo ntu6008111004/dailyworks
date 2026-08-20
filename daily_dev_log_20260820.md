@@ -162,3 +162,30 @@
   - Frontend test ผ่าน 25/25 รายการ, function coverage รวม 100.00%
   - Backend unit test ผ่าน 33/33 รายการ, function coverage รวม 94.64%
   - ESLint ผ่านทุกไฟล์ที่อยู่ใน Git และ production build ผ่าน
+
+## รัน Migration ทั้งหมดของวันนี้กับฐานข้อมูล Production
+
+- ประเภท: Database Migration (Production)
+- สิ่งที่พบ: ฐานข้อมูลอยู่ในสถานะรันข้ามลำดับ — `monthly_penalties` ถูกรันไปก่อน แต่ `score_adjustment` กับ `bonus_levels` ยังไม่ถูกรัน ทำให้ `review_briefing()` อ้างคอลัมน์ `BonusLevel`/`ScoreAdjustment` ที่ยังไม่มีจริงและตอบ 400 ทุกครั้ง ตรงกับอาการหน้าตรวจงาน
+- สิ่งที่ทำ (ผ่าน pg-meta `/pg/query` ด้วย service role key):
+  - ขั้น A: เติมเฉพาะคอลัมน์จาก `20260820_briefing_score_adjustment.sql` (`ScoreAdjustment` + 3 คอลัมน์ history) โดยข้าม constraint/function เก่าที่ถูกแทนด้วยเวอร์ชัน monthly แล้ว และ constraint เก่าจะ fail เพราะข้อมูลมี `EXTRA_WORK` แล้ว
+  - ขั้น B: รัน `20260820_briefing_bonus_levels.sql` ทั้งไฟล์ (เพิ่ม `BonusLevel`, แปลงคะแนนเป็น NUMERIC(12,2), ลบ overload เก่า)
+  - ขั้น C: รัน `20260820_briefing_monthly_penalties.sql` เวอร์ชันล่าสุดทั้งไฟล์ เพื่อ recompile ทุกฟังก์ชันกับ schema ที่ครบ พร้อมได้ fix หักคะแนนผู้บรีฟของวันนี้
+  - สั่ง `NOTIFY pgrst, 'reload schema'` ให้ PostgREST เห็น schema ใหม่ทันที
+- ผลลัพธ์:
+  - Select เต็มรูปแบบ (รวม `BonusLevel`, `ScoreAdjustment`) ด้วย anon key ตอบ 200 — บัค 400 ในหน้าบรีฟหายแล้ว
+  - `review_briefing` เหลือ signature เดียว (9 พารามิเตอร์) และทำงานถึง guard ภายในได้ปกติ
+  - ข้อมูลเดิมไม่ถูกแตะ: `LatePenaltyEnabled` เปิดอยู่ 2 งานเท่าเดิม, สมุดคะแนน 1 แถวเท่าเดิม, ตาราง settings ว่างเท่าเดิม
+
+## คะแนนปรับหลังปิดงานหายจากภาพรวมทีม บังคับคะแนนตั้งต้น และตรึงเดือนปัจจุบัน
+
+- ประเภท: Bug Fix + Feature
+- สาเหตุที่พบ: หน้าตรวจงานอ่านบรีฟด้วย `select('*')` จึงเห็น `ScoreAdjustment` เสมอ แต่หน้าภาพรวมทีมใช้รายการจาก select ladder ซึ่งจำระดับแบบแคบไว้ทั้ง session หลังเคยเจอ 400 ช่วงก่อนซ่อมฐานข้อมูล แถวที่ได้จึงไม่มี `ScoreAdjustment`/`BonusLevel` ทำให้คะแนนที่ปรับ +8 ไม่ถูกนับ
+- สิ่งที่ทำ:
+  - ให้ระดับ select ที่จำไว้มีอายุ 10 นาที (`BRIEFING_SELECT_RETRY_MS`) แล้วกลับไปลอง select เต็มใหม่อัตโนมัติ ค่าที่เก็บรูปแบบเดิมถูกละทิ้งอย่างปลอดภัย
+  - เพิ่ม `getBriefingPointsError()` และบังคับในหน้าบรีฟ: ผู้บรีฟต้องระบุคะแนนตั้งต้นมากกว่า 0 ก่อนบันทึก พร้อมป้าย * และคำอธิบายที่ช่องกรอก
+  - เพิ่ม `getBangkokMonthRange()` และตั้งตัวกรองวันที่ของหน้าบรีฟและหน้าภาพรวมทีมเป็นเดือนปัจจุบัน (เวลาไทย) ปุ่มล้างตัวกรองก็กลับมาที่เดือนปัจจุบันแทนการล้างว่าง
+- ผลลัพธ์:
+  - Frontend test ผ่าน 27/27 รายการ, function coverage รวม 100.00%
+  - Backend unit test ผ่าน 33/33 รายการ, function coverage รวม 94.64%
+  - ESLint ผ่านทุกไฟล์ใน Git และ production build ผ่าน

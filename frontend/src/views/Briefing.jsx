@@ -15,6 +15,10 @@ import { BriefingTimeline } from '../components/BriefingTimeline';
 import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermissions';
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
 import { compareBriefingsByDueDate } from '../utils/briefingOrder';
+import { getBangkokMonthRange } from '../utils/briefingPointLedger';
+
+// Daily work always opens on the month being scored.
+const CURRENT_MONTH = getBangkokMonthRange();
 
 export const Briefing = () => {
   const { user } = useAuth();
@@ -50,8 +54,8 @@ export const Briefing = () => {
   const [filterUser, setFilterUser] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(CURRENT_MONTH.start);
+  const [endDate, setEndDate] = useState(CURRENT_MONTH.end);
   const [currentPage, setCurrentPage] = useState(1);
   const [openStatusId, setOpenStatusId] = useState(null);
 
@@ -118,9 +122,9 @@ export const Briefing = () => {
     setFilterUser('All');
     setSearchTerm('');
     setSearchQuery('');
-    setStartDate('');
-    setEndDate('');
-    toast.success('ล้างตัวกรองทั้งหมดแล้ว', { position: 'bottom-right' });
+    setStartDate(CURRENT_MONTH.start);
+    setEndDate(CURRENT_MONTH.end);
+    toast.success('ล้างตัวกรองแล้ว กลับเป็นเดือนปัจจุบัน', { position: 'bottom-right' });
   };
   // Debounce search input
   useEffect(() => {

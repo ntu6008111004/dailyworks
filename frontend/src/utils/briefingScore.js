@@ -30,6 +30,19 @@ export function formatBriefingPoints(value) {
   return scoreNumber(value).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 }
 
+/**
+ * A briefing must carry a real score from the start. A 0-point briefing pays
+ * nobody at approval and forces a score adjustment afterwards, so the person
+ * briefing the work is required to enter a positive score before saving.
+ */
+export function getBriefingPointsError(value) {
+  const points = Number(value);
+  if (!Number.isFinite(points) || points <= 0) {
+    return 'กรุณาระบุคะแนนงานมากกว่า 0 เพื่อให้ระบบคำนวณคะแนนผู้บรีฟและผู้รับงานได้';
+  }
+  return '';
+}
+
 export function getBaseFinalPoints(briefing = {}) {
   const originalPoints = Math.max(0, scoreNumber(briefing.Points));
   const deductedPoints = Math.max(0, scoreNumber(briefing.DeductedPoints));

@@ -20,6 +20,20 @@ export function toBangkokDateKey(value) {
   return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
+/**
+ * First and last day of the current month in Bangkok time, as YYYY-MM-DD.
+ * The briefing and team views pin their date filters to this range so daily
+ * work always opens on the month being scored.
+ */
+export function getBangkokMonthRange(value = Date.now()) {
+  const todayKey = toBangkokDateKey(value);
+  if (!todayKey) return { start: '', end: '' };
+  const [year, month] = todayKey.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  return { start: `${prefix}-01`, end: `${prefix}-${String(lastDay).padStart(2, '0')}` };
+}
+
 export function getBriefingReviewParticipants(briefing, users = []) {
   const creatorId = String(briefing?.CreatorID || '');
   let assigneeIds = briefing?.Assignees || [];

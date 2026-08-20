@@ -7,12 +7,12 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
-import { getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
+import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
+import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
 import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
-import { briefingSelectAt, BRIEFING_SELECT_LADDER, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
+import { briefingSelectAt, BRIEFING_SELECT_LADDER, BRIEFING_SELECT_RETRY_MS, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
 import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
 import { compareBriefingsByDueDate, sortBriefingsByDueDate } from '../src/utils/briefingOrder.js';
 
@@ -191,6 +191,12 @@ test('the briefing select degrades newest column first and remembers the working
   rememberBriefingSelectIndex(0, storage);
   assert.equal(readBriefingSelectIndex(storage), 1, 'level 0 is the default, never worth storing');
 
+  // A narrowed level expires: after the retry window the full select is probed
+  // again, so a finished migration stops hiding new columns from the lists.
+  rememberBriefingSelectIndex(2, storage, 1_000);
+  assert.equal(readBriefingSelectIndex(storage, 2_000), 2);
+  assert.equal(readBriefingSelectIndex(storage, 1_000 + BRIEFING_SELECT_RETRY_MS + 1), 0);
+
   const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
   assert.equal(readBriefingSelectIndex(blocked), 0);
   rememberBriefingSelectIndex(2, blocked);
@@ -264,4 +270,23 @@ test('a briefing score is paid per person, not divided between briefer and recip
   assert.equal(isBriefingEarnedByMember(approved, { isCreator: false, isAssignee: false }), false);
   assert.equal(isBriefingEarnedByMember(approved), false);
   assert.equal(getMemberBriefingAward(approved, { isCreator: false, isAssignee: false }), 0);
+});
+
+test('the briefing and team views pin their date filter to the Bangkok month', () => {
+  // 18:30 UTC is already the 21st in Bangkok, so the range is that month.
+  assert.deepEqual(getBangkokMonthRange('2026-08-20T18:30:00.000Z'), { start: '2026-08-01', end: '2026-08-31' });
+  assert.deepEqual(getBangkokMonthRange('2024-02-05T00:00:00.000Z'), { start: '2024-02-01', end: '2024-02-29' });
+  assert.deepEqual(getBangkokMonthRange('2026-12-31T17:30:00.000Z'), { start: '2027-01-01', end: '2027-01-31' });
+  assert.deepEqual(getBangkokMonthRange('invalid'), { start: '', end: '' });
+});
+
+test('a briefing cannot be saved by its creator without a positive score', () => {
+  assert.notEqual(getBriefingPointsError(0), '');
+  assert.notEqual(getBriefingPointsError(''), '');
+  assert.notEqual(getBriefingPointsError(-3), '');
+  assert.notEqual(getBriefingPointsError('abc'), '');
+  assert.notEqual(getBriefingPointsError(null), '');
+  assert.equal(getBriefingPointsError(0.5), '');
+  assert.equal(getBriefingPointsError(5), '');
+  assert.equal(getBriefingPointsError('8'), '');
 });

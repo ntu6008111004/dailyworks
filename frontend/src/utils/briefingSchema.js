@@ -33,20 +33,30 @@ export function nextBriefingSelectIndex(index) {
   return next < BRIEFING_SELECT_LADDER.length ? next : -1;
 }
 
-export function readBriefingSelectIndex(storage) {
+// A narrower level is only a snapshot of the database at one moment: once the
+// pending migration lands, the full select works again. Remembering the level
+// forever would keep hiding the new columns (ScoreAdjustment, BonusLevel) from
+// every list for the rest of the session, so the memory expires and level 0 is
+// probed again.
+export const BRIEFING_SELECT_RETRY_MS = 10 * 60 * 1000;
+
+export function readBriefingSelectIndex(storage, now = Date.now()) {
   try {
-    const stored = Number(storage?.getItem(BRIEFING_SELECT_STORAGE_KEY));
-    if (Number.isInteger(stored) && stored > 0 && stored < BRIEFING_SELECT_LADDER.length) return stored;
+    const stored = JSON.parse(storage?.getItem(BRIEFING_SELECT_STORAGE_KEY) || 'null');
+    if (stored && Number.isInteger(stored.i) && stored.i > 0 && stored.i < BRIEFING_SELECT_LADDER.length
+      && Number.isFinite(stored.until) && now < stored.until) {
+      return stored.i;
+    }
   } catch {
     // A blocked sessionStorage only costs one probe per page load.
   }
   return 0;
 }
 
-export function rememberBriefingSelectIndex(index, storage) {
+export function rememberBriefingSelectIndex(index, storage, now = Date.now()) {
   if (!Number.isInteger(index) || index <= 0) return;
   try {
-    storage?.setItem(BRIEFING_SELECT_STORAGE_KEY, String(index));
+    storage?.setItem(BRIEFING_SELECT_STORAGE_KEY, JSON.stringify({ i: index, until: now + BRIEFING_SELECT_RETRY_MS }));
   } catch {
     // A blocked sessionStorage only costs one probe per page load.
   }

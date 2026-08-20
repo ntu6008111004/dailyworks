@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { formatBriefingPoints, getMemberBriefingAward, isBriefingEarnedByMember } from '../utils/briefingScore';
-import { POINT_LEDGER_LABELS, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../utils/briefingPointLedger';
+import { POINT_LEDGER_LABELS, getBangkokMonthRange, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../utils/briefingPointLedger';
+
+// Daily work always opens on the month being scored.
+const CURRENT_MONTH = getBangkokMonthRange();
 import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, MinusCircle, ReceiptText, RotateCcw, X } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
@@ -18,8 +21,8 @@ export const MyTeam = () => {
   const [filterDepartment, setFilterDepartment] = useState('All');
   
   // Date range filters (YYYY-MM-DD)
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(CURRENT_MONTH.start);
+  const [endDate, setEndDate] = useState(CURRENT_MONTH.end);
 
   const userRole = user?.Role || user?.role || 'Staff';
   const userDept = user?.Department || user?.department || '';
@@ -221,8 +224,8 @@ export const MyTeam = () => {
   }, [allUsers, allBriefings, allResponses, pointLedger, filterDepartment, isAdmin, userDept, startDate, endDate]);
 
   const handleResetFilters = () => {
-    setStartDate('');
-    setEndDate('');
+    setStartDate(CURRENT_MONTH.start);
+    setEndDate(CURRENT_MONTH.end);
     if (isAdmin) {
       setFilterDepartment('All');
     }

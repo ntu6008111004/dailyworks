@@ -16,17 +16,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-let briefingSelectIndex = null;
-
+// Read the stored level fresh on every list request: it carries its own expiry,
+// so a level narrowed before a migration landed recovers by itself.
 function currentBriefingSelectIndex() {
-  if (briefingSelectIndex === null) {
-    briefingSelectIndex = readBriefingSelectIndex(typeof sessionStorage === 'undefined' ? null : sessionStorage);
-  }
-  return briefingSelectIndex;
+  return readBriefingSelectIndex(typeof sessionStorage === 'undefined' ? null : sessionStorage);
 }
 
 function noteBriefingSelectIndex(index) {
-  briefingSelectIndex = index;
   rememberBriefingSelectIndex(index, typeof sessionStorage === 'undefined' ? null : sessionStorage);
 }
 
