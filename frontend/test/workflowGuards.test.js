@@ -7,7 +7,7 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
+import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
 import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
@@ -349,4 +349,16 @@ test('the dashboard and team overview share one member score rulebook', () => {
   assert.equal(isBriefingInMemberRange({ Status: 'เสร็จสิ้น', CompletedAt: '2026-07-20T04:00:00.000Z' }, '2026-08-01', '2026-08-31'), false);
   assert.equal(isBriefingInMemberRange({ Status: 'ดำเนินการ' }, '2026-08-01', '2026-08-31'), true, 'undated work stays visible');
   assert.equal(filterMemberLedger(null, 'worker', '', '').length, 0);
+});
+
+test('the briefing score dropdown offers 1/4/8 and keeps a legacy value editable', () => {
+  assert.deepEqual(BRIEFING_POINT_CHOICES, [1, 4, 8]);
+  assert.deepEqual(getBriefingPointOptions(0).map((option) => option.value), ['1', '4', '8']);
+  assert.deepEqual(getBriefingPointOptions(4).map((option) => option.value), ['1', '4', '8'], 'a rate-card value adds no duplicate');
+  // A legacy or extra-work total outside the rate card stays selectable, so
+  // editing an old briefing never silently rewrites its score.
+  assert.deepEqual(getBriefingPointOptions(7).map((option) => option.value), ['7', '1', '4', '8']);
+  assert.match(getBriefingPointOptions(7)[0].label, /ค่าเดิม/);
+  assert.deepEqual(getBriefingPointOptions(2.5).map((option) => option.value), ['2.5', '1', '4', '8']);
+  assert.deepEqual(getBriefingPointOptions('abc').map((option) => option.value), ['1', '4', '8']);
 });

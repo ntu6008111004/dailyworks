@@ -30,6 +30,22 @@ export function formatBriefingPoints(value) {
   return scoreNumber(value).toLocaleString('th-TH', { maximumFractionDigits: 2 });
 }
 
+// New briefings pick their score from a fixed rate card instead of free entry.
+// The review side never depends on this list — deductions, bonus multipliers
+// and extra work all operate on whatever number the briefing carries — so a
+// legacy value or an extra-work total outside the list keeps working and is
+// offered back as a "current value" option when the briefing is edited.
+export const BRIEFING_POINT_CHOICES = [1, 4, 8];
+
+export function getBriefingPointOptions(currentPoints) {
+  const options = BRIEFING_POINT_CHOICES.map((value) => ({ value: String(value), label: `${value} คะแนน` }));
+  const current = scoreNumber(currentPoints);
+  if (current > 0 && !BRIEFING_POINT_CHOICES.includes(current)) {
+    options.unshift({ value: String(current), label: `${formatBriefingPoints(current)} คะแนน (ค่าเดิม)` });
+  }
+  return options;
+}
+
 /**
  * A briefing must carry a real score from the start. A 0-point briefing pays
  * nobody at approval and forces a score adjustment afterwards, so the person
