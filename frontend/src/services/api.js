@@ -7,10 +7,12 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-const BRIEFING_SCHEMA_BACKOFF_KEY = 'briefing_score_schema_retry_after';
+const BRIEFING_SCHEMA_BACKOFF_KEY = 'briefing_bonus_schema_retry_after_v2';
 const BRIEFING_LEGACY_FIELDS = 'ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points';
-const BRIEFING_REVIEW_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, BonusPoints, FinalPoints`;
+const BRIEFING_REVIEW_BASE_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, BonusPoints, FinalPoints`;
+const BRIEFING_REVIEW_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, BonusLevel`;
 const BRIEFING_SCORE_FIELDS = `${BRIEFING_REVIEW_FIELDS}, ScoreAdjustment`;
+const BRIEFING_SCORE_COMPAT_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, ScoreAdjustment`;
 let briefingScoreSchemaRetryAfter = 0;
 
 function isMissingSchemaField(error) {
@@ -564,7 +566,7 @@ export const apiService = {
 
           case 'getBriefings': {
             const shouldProbeScoreSchema = Date.now() >= getBriefingScoreSchemaRetryAfter();
-            const summaryFields = shouldProbeScoreSchema ? BRIEFING_SCORE_FIELDS : BRIEFING_REVIEW_FIELDS;
+            const summaryFields = shouldProbeScoreSchema ? BRIEFING_SCORE_FIELDS : BRIEFING_REVIEW_BASE_FIELDS;
             let { data: briefings, error } = await supabase
               .from('Briefings')
               .select(summaryFields)
@@ -577,7 +579,16 @@ export const apiService = {
               deferBriefingScoreSchemaProbe();
               ({ data: briefings, error } = await supabase
                 .from('Briefings')
-                .select(BRIEFING_REVIEW_FIELDS)
+                .select(BRIEFING_SCORE_COMPAT_FIELDS)
+                .order('CreatedAt', { ascending: false }));
+            }
+
+            // ScoreAdjustment may also be absent on an older database. Keep
+            // the complete review workflow readable without the new level.
+            if (error && isMissingSchemaField(error)) {
+              ({ data: briefings, error } = await supabase
+                .from('Briefings')
+                .select(BRIEFING_REVIEW_BASE_FIELDS)
                 .order('CreatedAt', { ascending: false }));
             }
 
@@ -684,7 +695,7 @@ export const apiService = {
             }
             // Review-derived values are owned by the review transaction. Never
             // accept them from a normal briefing edit, including a stale tab.
-            ['DeductedPoints', 'CorrectionCount', 'RejectedCount', 'BonusPoints', 'FinalPoints', 'ScoreAdjustment', 'ReviewedAt', 'ReviewedBy'].forEach((field) => {
+            ['DeductedPoints', 'CorrectionCount', 'RejectedCount', 'BonusPoints', 'BonusLevel', 'FinalPoints', 'ScoreAdjustment', 'ReviewedAt', 'ReviewedBy'].forEach((field) => {
               delete updateFields[field];
             });
             if (updateFields.Status) {
@@ -1087,13 +1098,13 @@ export const apiService = {
     return data || [];
   },
 
-  async reviewBriefing({ briefingId, action, comment = '', bonusPoints = null, targetPoints = null }) {
+  async reviewBriefing({ briefingId, action, comment = '', bonusLevel = null, targetPoints = null }) {
     const payload = {
       p_briefing_id: briefingId,
       p_reviewer_id: this.userId,
       p_action: action,
       p_comment: comment,
-      p_bonus_points: bonusPoints,
+      p_bonus_level: bonusLevel,
     };
     // Keep existing review actions compatible until the incremental score
     // migration has been applied. Only the new adjustment action needs its

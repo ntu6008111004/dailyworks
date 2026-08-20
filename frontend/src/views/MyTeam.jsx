@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
-import { getBriefingAwardedPoints } from '../utils/briefingScore';
+import { formatBriefingPoints, getBriefingAwardedPoints } from '../utils/briefingScore';
 import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, RotateCcw } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
@@ -113,7 +113,7 @@ export const MyTeam = () => {
           // Legacy completed briefings have no FinalPoints/BonusPoints, so they
           // keep their original total. New reviewed work receives only its
           // non-negative final score plus the approved special score.
-          const bonusPoints = Math.max(0, parseInt(b.BonusPoints) || 0);
+          const bonusPoints = Math.max(0, Number(b.BonusPoints) || 0);
           totalPoints += getBriefingAwardedPoints(b);
           specialPoints += bonusPoints;
         }
@@ -283,14 +283,14 @@ export const MyTeam = () => {
         <StatCard 
           icon={<Award size={20} />} 
           label="คะแนนรวมของทีม" 
-          value={stats.totalPointsAcrossTeam} 
+          value={formatBriefingPoints(stats.totalPointsAcrossTeam)}
           subtext="คำนวณตามตัวกรอง"
           color="purple" 
         />
         <StatCard
           icon={<Award size={20} />}
           label="คะแนนพิเศษ"
-          value={`+${stats.totalSpecialPointsAcrossTeam}`}
+          value={`+${formatBriefingPoints(stats.totalSpecialPointsAcrossTeam)}`}
           subtext="จากหัวหน้าแผนก"
           color="amber"
         />
@@ -373,7 +373,7 @@ export const MyTeam = () => {
                     <td className="px-6 py-4 text-center">
                       <div className="inline-flex flex-col items-center justify-center w-20 h-16 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 group-hover:from-purple-100 group-hover:to-indigo-100 group-hover:shadow-sm transition-all">
                         <span className="text-2xl font-black text-purple-700 flex items-center gap-0.5">
-                          {member.totalPoints}
+                          {formatBriefingPoints(member.totalPoints)}
                         </span>
                         <span className="text-[9px] uppercase tracking-wider text-purple-400 font-black">คะแนน</span>
                       </div>
@@ -381,7 +381,7 @@ export const MyTeam = () => {
 
                     <td className="px-6 py-4 text-center">
                       <div className="inline-flex flex-col items-center justify-center min-w-20 h-16 px-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 group-hover:from-amber-100 group-hover:to-orange-100 group-hover:shadow-sm transition-all">
-                        <span className="text-2xl font-black text-amber-700">+{member.specialPoints}</span>
+                        <span className="text-2xl font-black text-amber-700">+{formatBriefingPoints(member.specialPoints)}</span>
                         <span className="text-[9px] uppercase tracking-wider text-amber-500 font-black">พิเศษ</span>
                       </div>
                     </td>

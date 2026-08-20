@@ -1,29 +1,59 @@
-const wholeNumber = (value) => Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0;
+const SCORE_PRECISION = 100;
+
+const scoreNumber = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number * SCORE_PRECISION) / SCORE_PRECISION : 0;
+};
+
+export const BONUS_LEVEL_OPTIONS = [
+  { value: 'standard', label: 'มาตรฐาน ×1', multiplier: 1, flatBonus: 0 },
+  { value: 'good', label: 'ดี ×1.5', multiplier: 1.5, flatBonus: 0 },
+  { value: 'excellent', label: 'ดีมาก ×2', multiplier: 2, flatBonus: 0 },
+  { value: 'viral', label: 'ไวรัล +30 คะแนน', multiplier: 1, flatBonus: 30 },
+];
+
+export function getBonusLevelDetails(level, basePoints) {
+  const selected = BONUS_LEVEL_OPTIONS.find((option) => option.value === level) || BONUS_LEVEL_OPTIONS[0];
+  const base = Math.max(0, scoreNumber(basePoints));
+  const bonusPoints = selected.flatBonus > 0
+    ? selected.flatBonus
+    : scoreNumber(base * (selected.multiplier - 1));
+  return {
+    ...selected,
+    basePoints: base,
+    bonusPoints,
+    totalPoints: scoreNumber(base + bonusPoints),
+  };
+}
+
+export function formatBriefingPoints(value) {
+  return scoreNumber(value).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+}
 
 export function getBaseFinalPoints(briefing = {}) {
-  const originalPoints = Math.max(0, wholeNumber(briefing.Points));
-  const deductedPoints = Math.max(0, wholeNumber(briefing.DeductedPoints));
+  const originalPoints = Math.max(0, scoreNumber(briefing.Points));
+  const deductedPoints = Math.max(0, scoreNumber(briefing.DeductedPoints));
   const storedFinalPoints = briefing.FinalPoints;
   return storedFinalPoints === null || storedFinalPoints === undefined
-    ? Math.max(0, originalPoints - deductedPoints)
-    : Math.max(0, wholeNumber(storedFinalPoints));
+    ? Math.max(0, scoreNumber(originalPoints - deductedPoints))
+    : Math.max(0, scoreNumber(storedFinalPoints));
 }
 
 export function getBriefingAwardedPoints(briefing = {}) {
   const basePoints = getBaseFinalPoints(briefing);
-  const bonusPoints = Math.max(0, wholeNumber(briefing.BonusPoints));
-  const scoreAdjustment = wholeNumber(briefing.ScoreAdjustment);
-  return Math.max(0, basePoints + bonusPoints + scoreAdjustment);
+  const bonusPoints = Math.max(0, scoreNumber(briefing.BonusPoints));
+  const scoreAdjustment = scoreNumber(briefing.ScoreAdjustment);
+  return Math.max(0, scoreNumber(basePoints + bonusPoints + scoreAdjustment));
 }
 
 export function getScoreAdjustmentPreview(briefing, targetPoints) {
   const currentPoints = getBriefingAwardedPoints(briefing);
-  const target = Math.max(0, wholeNumber(targetPoints));
-  const baseWithBonus = getBaseFinalPoints(briefing) + Math.max(0, wholeNumber(briefing?.BonusPoints));
+  const target = Math.max(0, scoreNumber(targetPoints));
+  const baseWithBonus = scoreNumber(getBaseFinalPoints(briefing) + Math.max(0, scoreNumber(briefing?.BonusPoints)));
   return {
     currentPoints,
     targetPoints: target,
-    delta: target - currentPoints,
-    scoreAdjustment: target - baseWithBonus,
+    delta: scoreNumber(target - currentPoints),
+    scoreAdjustment: scoreNumber(target - baseWithBonus),
   };
 }

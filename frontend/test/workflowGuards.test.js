@@ -7,7 +7,8 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { getBriefingAwardedPoints, getScoreAdjustmentPreview } from '../src/utils/briefingScore.js';
+import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getScoreAdjustmentPreview } from '../src/utils/briefingScore.js';
+import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
 
 test('recipient cannot alter the assigning brief, including a JSON-assignee record', () => {
@@ -59,9 +60,32 @@ test('score adjustment calculates only the difference from the already-awarded a
   assert.equal(getBriefingAwardedPoints({ Points: 6, DeductedPoints: 2, BonusPoints: 2, ScoreAdjustment: -1 }), 5);
 });
 
+test('special score levels use the remaining score and preserve half points', () => {
+  assert.deepEqual(getBonusLevelDetails('standard', 5), {
+    value: 'standard', label: 'มาตรฐาน ×1', multiplier: 1, flatBonus: 0,
+    basePoints: 5, bonusPoints: 0, totalPoints: 5,
+  });
+  assert.equal(getBonusLevelDetails('good', 5).bonusPoints, 2.5);
+  assert.equal(getBonusLevelDetails('good', 5).totalPoints, 7.5);
+  assert.equal(getBonusLevelDetails('excellent', 4).totalPoints, 8);
+  assert.equal(getBonusLevelDetails('viral', 4).bonusPoints, 30);
+  assert.equal(getBonusLevelDetails('viral', 4).totalPoints, 34);
+  assert.equal(getBriefingAwardedPoints({ FinalPoints: 5, BonusPoints: 2.5 }), 7.5);
+  assert.equal(formatBriefingPoints(7.5), '7.5');
+});
+
 test('mandatory update gate remembers an acknowledged release on this device', () => {
   assert.equal(updateGateDecision({ currentVersion: 200, serverVersion: 200 }), 'none');
   assert.equal(updateGateDecision({ currentVersion: 200, serverVersion: 201 }), 'prompt');
   assert.equal(updateGateDecision({ currentVersion: 200, serverVersion: 201, attemptedVersion: 201 }), 'acknowledged');
   assert.equal(updateGateDecision({ currentVersion: 200, serverVersion: 202, attemptedVersion: 201 }), 'prompt');
+});
+
+test('reference links open only safe external web URLs', () => {
+  assert.equal(normalizeExternalLink('https://docs.google.com/document/d/123'), 'https://docs.google.com/document/d/123');
+  assert.equal(normalizeExternalLink('docs.google.com/document/d/123'), 'https://docs.google.com/document/d/123');
+  assert.equal(normalizeExternalLink(' javascript:alert(1) '), '');
+  assert.equal(normalizeExternalLink('ftp://example.com/file'), '');
+  assert.equal(normalizeExternalLink('not a valid link'), '');
+  assert.equal(normalizeExternalLink(''), '');
 });
