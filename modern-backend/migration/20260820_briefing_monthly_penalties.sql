@@ -442,13 +442,13 @@ BEGIN
   END IF;
 
   IF p_action IN ('rejected', 'severe_error') THEN
-    IF COALESCE(cardinality(p_target_user_ids), 0) = 0 THEN RAISE EXCEPTION 'Select at least one responsible recipient'; END IF;
+    IF COALESCE(cardinality(p_target_user_ids), 0) = 0 THEN RAISE EXCEPTION 'Select at least one responsible participant'; END IF;
     FOR v_target_user_id IN SELECT DISTINCT unnest(p_target_user_ids)
     LOOP
-      IF NOT EXISTS (
+      IF v_target_user_id <> v_briefing."CreatorID" AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements_text(COALESCE(v_briefing."Assignees", '[]'::jsonb)) AS assignee("UserID")
         WHERE assignee."UserID" = v_target_user_id
-      ) THEN RAISE EXCEPTION 'A selected user is not assigned to this briefing'; END IF;
+      ) THEN RAISE EXCEPTION 'A selected user is not a participant in this briefing'; END IF;
       INSERT INTO "BriefingPointLedger" (
         "BriefingID", "UserID", "EntryType", "Points", "ReviewerID", "Comment"
       ) VALUES (

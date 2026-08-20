@@ -20,6 +20,21 @@ export function toBangkokDateKey(value) {
   return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
+export function getBriefingReviewParticipants(briefing, users = []) {
+  const creatorId = String(briefing?.CreatorID || '');
+  let assigneeIds = briefing?.Assignees || [];
+  if (!Array.isArray(assigneeIds)) {
+    try { assigneeIds = JSON.parse(assigneeIds || '[]'); } catch { assigneeIds = []; }
+  }
+  const participantIds = [creatorId, ...assigneeIds.map(String)]
+    .filter((id, index, list) => id && list.indexOf(id) === index);
+  return participantIds.map((id) => ({
+    id,
+    person: users.find((user) => String(user.ID) === id),
+    roleLabel: id === creatorId ? 'ผู้บรีฟงาน' : 'ผู้รับงาน',
+  }));
+}
+
 export function getLatePenaltyPoints(lateDays) {
   const days = Math.max(0, Math.trunc(number(lateDays)));
   if (days === 0) return 0;

@@ -8,7 +8,7 @@ import {
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
 import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getScoreAdjustmentPreview } from '../src/utils/briefingScore.js';
-import { getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
+import { getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
 
@@ -114,4 +114,18 @@ test('lateness penalties use capped tiers and monthly deductions never make net 
 test('monthly ledger dates are grouped by Bangkok date instead of UTC date', () => {
   assert.equal(toBangkokDateKey('2026-08-20T18:30:00.000Z'), '2026-08-21');
   assert.equal(toBangkokDateKey('invalid-date'), '');
+});
+
+test('monthly error deductions can target both creator and assignees without duplicates', () => {
+  const users = [
+    { ID: 'creator', Name: 'Creator' },
+    { ID: 'recipient', Name: 'Recipient' },
+  ];
+  assert.deepEqual(
+    getBriefingReviewParticipants({ CreatorID: 'creator', Assignees: '["creator","recipient"]' }, users),
+    [
+      { id: 'creator', person: users[0], roleLabel: 'ผู้บรีฟงาน' },
+      { id: 'recipient', person: users[1], roleLabel: 'ผู้รับงาน' },
+    ],
+  );
 });

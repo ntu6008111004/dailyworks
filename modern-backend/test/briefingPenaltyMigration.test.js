@@ -30,6 +30,7 @@ test('review deductions keep the configurable 1, 5 and 50 defaults', () => {
   assert.match(migration, /v_severe_deduction INTEGER := 50/);
   assert.match(migration, /p_action IN \('rejected', 'severe_error'\)/);
   assert.match(migration, /SELECT DISTINCT unnest\(p_target_user_ids\)/);
+  assert.match(migration, /v_target_user_id <> v_briefing\."CreatorID" AND NOT EXISTS/);
 });
 
 test('task correction is separated from individual monthly penalties', () => {
