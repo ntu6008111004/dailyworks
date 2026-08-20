@@ -668,9 +668,10 @@ export const apiService = {
               }
             }
             // คะแนนบรีฟเป็นของผู้สร้างบรีฟเท่านั้น แม้ผู้ใช้รายอื่นจะมีสิทธิ์
-            // แก้ไขรายละเอียด/สถานะของบรีฟได้ตามบทบาทของตน
+            // แก้ไขรายละเอียด/สถานะของบรีฟได้ตามบทบาทของตน และคะแนนถูกล็อก
+            // เฉพาะหลังหัวหน้าแผนกอนุมัติเป็นเสร็จสิ้นแล้วเท่านั้น
             if (Object.prototype.hasOwnProperty.call(updateFields, 'Points')) {
-              if (!isCreator) {
+              if (!isCreator || currentBriefing.Status === 'เสร็จสิ้น') {
                 delete updateFields.Points;
               }
             }

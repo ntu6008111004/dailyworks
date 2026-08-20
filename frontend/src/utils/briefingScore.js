@@ -37,6 +37,15 @@ export function formatBriefingPoints(value) {
 // offered back as a "current value" option when the briefing is edited.
 export const BRIEFING_POINT_CHOICES = [1, 4, 8];
 
+// The score freezes only when the department head has approved the work
+// (เสร็จสิ้น). Every other status — including ส่งตรวจ while the head is
+// reviewing — may still repick from the rate card.
+const SCORE_LOCKED_STATUSES = new Set(['เสร็จสิ้น']);
+
+export function isBriefingScoreLocked(status) {
+  return SCORE_LOCKED_STATUSES.has(String(status || ''));
+}
+
 export function getBriefingPointOptions(currentPoints) {
   const options = BRIEFING_POINT_CHOICES.map((value) => ({ value: String(value), label: `${value} คะแนน` }));
   const current = scoreNumber(currentPoints);

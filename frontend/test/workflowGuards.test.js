@@ -7,7 +7,7 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
+import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember, isBriefingScoreLocked } from '../src/utils/briefingScore.js';
 import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
@@ -361,4 +361,11 @@ test('the briefing score dropdown offers 1/4/8 and keeps a legacy value editable
   assert.match(getBriefingPointOptions(7)[0].label, /ค่าเดิม/);
   assert.deepEqual(getBriefingPointOptions(2.5).map((option) => option.value), ['2.5', '1', '4', '8']);
   assert.deepEqual(getBriefingPointOptions('abc').map((option) => option.value), ['1', '4', '8']);
+});
+
+test('the briefing score is locked only after the head approves the work', () => {
+  assert.equal(isBriefingScoreLocked('เสร็จสิ้น'), true, 'อนุมัติแล้วคะแนนล็อก');
+  ['ส่งตรวจ', 'ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'ยกเลิกงาน', '', undefined].forEach((status) => {
+    assert.equal(isBriefingScoreLocked(status), false, String(status));
+  });
 });
