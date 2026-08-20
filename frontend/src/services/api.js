@@ -1,4 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import {
+  briefingSelectAt,
+  isMissingSchemaField,
+  nextBriefingSelectIndex,
+  readBriefingSelectIndex,
+  rememberBriefingSelectIndex,
+} from '../utils/briefingSchema';
+import { describeReviewError } from '../utils/briefingReviewErrors';
+import { imageExtensionFor } from '../utils/compressImage';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -7,38 +16,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-const BRIEFING_SCHEMA_BACKOFF_KEY = 'briefing_bonus_schema_retry_after_v2';
-const BRIEFING_LEGACY_FIELDS = 'ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points';
-const BRIEFING_REVIEW_BASE_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, SevereErrorCount, LatePenaltyEnabled, TotalExtendedDays, BonusPoints, FinalPoints`;
-const BRIEFING_REVIEW_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, BonusLevel`;
-const BRIEFING_SCORE_FIELDS = `${BRIEFING_REVIEW_FIELDS}, ScoreAdjustment`;
-const BRIEFING_SCORE_COMPAT_FIELDS = `${BRIEFING_REVIEW_BASE_FIELDS}, ScoreAdjustment`;
-let briefingScoreSchemaRetryAfter = 0;
+let briefingSelectIndex = null;
 
-function isMissingSchemaField(error) {
-  if (!error) return false;
-  const text = [error.message, error.details, error.hint, error.code].filter(Boolean).join(' ');
-  return ['42703', 'PGRST204'].includes(String(error.code || ''))
-    || /column|schema cache|scoreadjustment|reviewsubmittedat|deductedpoints/i.test(text);
+function currentBriefingSelectIndex() {
+  if (briefingSelectIndex === null) {
+    briefingSelectIndex = readBriefingSelectIndex(typeof sessionStorage === 'undefined' ? null : sessionStorage);
+  }
+  return briefingSelectIndex;
 }
 
-function getBriefingScoreSchemaRetryAfter() {
-  if (briefingScoreSchemaRetryAfter) return briefingScoreSchemaRetryAfter;
-  try {
-    briefingScoreSchemaRetryAfter = Number(sessionStorage.getItem(BRIEFING_SCHEMA_BACKOFF_KEY) || 0);
-  } catch {
-    // In-memory backoff still prevents repeated requests in restricted storage.
-  }
-  return briefingScoreSchemaRetryAfter;
-}
-
-function deferBriefingScoreSchemaProbe() {
-  briefingScoreSchemaRetryAfter = Date.now() + 10 * 60 * 1000;
-  try {
-    sessionStorage.setItem(BRIEFING_SCHEMA_BACKOFF_KEY, String(briefingScoreSchemaRetryAfter));
-  } catch {
-    // In-memory backoff still prevents repeated requests in restricted storage.
-  }
+function noteBriefingSelectIndex(index) {
+  briefingSelectIndex = index;
+  rememberBriefingSelectIndex(index, typeof sessionStorage === 'undefined' ? null : sessionStorage);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -565,40 +554,23 @@ export const apiService = {
           }
 
           case 'getBriefings': {
-            const shouldProbeScoreSchema = Date.now() >= getBriefingScoreSchemaRetryAfter();
-            const summaryFields = shouldProbeScoreSchema ? BRIEFING_SCORE_FIELDS : BRIEFING_REVIEW_BASE_FIELDS;
-            let { data: briefings, error } = await supabase
-              .from('Briefings')
-              .select(summaryFields)
-              .order('CreatedAt', { ascending: false });
-
-            // Production can briefly run the UI before the incremental score
-            // migration. Retry without ScoreAdjustment and remember that result
-            // for ten minutes, preventing every poll/view from producing 400s.
-            if (error && shouldProbeScoreSchema && isMissingSchemaField(error)) {
-              deferBriefingScoreSchemaProbe();
+            // Walk down the select ladder one migration at a time and keep the
+            // level that worked, so a database behind the deployed bundle costs
+            // one probe per session instead of a 400 on every list and poll.
+            let selectIndex = currentBriefingSelectIndex();
+            let briefings = null;
+            let error = null;
+            for (;;) {
               ({ data: briefings, error } = await supabase
                 .from('Briefings')
-                .select(BRIEFING_SCORE_COMPAT_FIELDS)
+                .select(briefingSelectAt(selectIndex))
                 .order('CreatedAt', { ascending: false }));
-            }
-
-            // ScoreAdjustment may also be absent on an older database. Keep
-            // the complete review workflow readable without the new level.
-            if (error && isMissingSchemaField(error)) {
-              ({ data: briefings, error } = await supabase
-                .from('Briefings')
-                .select(BRIEFING_REVIEW_BASE_FIELDS)
-                .order('CreatedAt', { ascending: false }));
-            }
-
-            // Keep the legacy briefing list readable if the full review schema
-            // itself has not been migrated yet.
-            if (error && isMissingSchemaField(error)) {
-              ({ data: briefings, error } = await supabase
-                .from('Briefings')
-                .select(BRIEFING_LEGACY_FIELDS)
-                .order('CreatedAt', { ascending: false }));
+              if (!error) break;
+              if (!isMissingSchemaField(error)) break;
+              const narrower = nextBriefingSelectIndex(selectIndex);
+              if (narrower < 0) break;
+              selectIndex = narrower;
+              noteBriefingSelectIndex(selectIndex);
             }
             if (error) throw error;
             resultData = (briefings || []).map(b => ({
@@ -984,12 +956,15 @@ export const apiService = {
 
     const safeFolder = String(folder || 'briefings').replace(/[^a-zA-Z0-9/_-]/g, '-');
     const owner = String(this.userId || 'anonymous').replace(/[^a-zA-Z0-9_-]/g, '-');
-    const objectPath = `${safeFolder}/${owner}/${Date.now()}-${crypto.randomUUID()}.webp`;
+    // A browser without a WebP encoder sends JPEG instead, so the stored object
+    // has to carry the type the blob actually is or Storage serves a broken image.
+    const contentType = String(file.type || '').startsWith('image/') ? file.type : 'image/webp';
+    const objectPath = `${safeFolder}/${owner}/${Date.now()}-${crypto.randomUUID()}.${imageExtensionFor(contentType)}`;
     const { data, error } = await supabase.storage
       .from(IMAGE_STORAGE_BUCKET)
       .upload(objectPath, file, {
         cacheControl: '31536000',
-        contentType: 'image/webp',
+        contentType,
         upsert: false,
       });
     if (error) throw error;
@@ -1134,7 +1109,12 @@ export const apiService = {
       p_extension_days: extensionDays,
     };
     const { data, error } = await supabase.rpc('review_briefing', payload);
-    if (error) throw error;
+    // PostgREST returns every review rule as a bare English 400. Translate it so
+    // the reviewer reads the actual rule instead of "Bad Request" in the console.
+    if (error) {
+      console.warn('[review_briefing] rejected', { code: error.code, message: error.message, details: error.details });
+      throw new Error(describeReviewError(error));
+    }
     this.clearCacheFor('getBriefings', 'getBriefingResponses');
     return data;
   },

@@ -3,6 +3,12 @@ const TARGET_BASE64_CHARS = 400 * 1024;
 const MAX_BASE64_CHARS = 2 * 1024 * 1024;
 const QUALITY_STEPS = [0.82, 0.75, 0.68, 0.6, 0.52, 0.45];
 
+// WebP first for size. iOS Safari before 14 and some Android WebViews silently
+// hand back a PNG from toBlob(…, 'image/webp'), which used to abort the whole
+// upload on a phone; JPEG keeps those devices working.
+const OUTPUT_TYPES = ['image/webp', 'image/jpeg'];
+const EXTENSIONS = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
+
 const fileName = (file) => file?.name || 'รูปภาพนี้';
 
 const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
@@ -12,8 +18,13 @@ const blobToDataUrl = (blob) => new Promise((resolve, reject) => {
   reader.readAsDataURL(blob);
 });
 
-const canvasToBlob = (canvas, quality) => new Promise((resolve) => {
-  canvas.toBlob(resolve, 'image/webp', quality);
+const canvasToBlob = (canvas, type, quality) => new Promise((resolve) => {
+  try {
+    canvas.toBlob(resolve, type, quality);
+  } catch {
+    // An encoder the browser does not implement may throw instead of returning null.
+    resolve(null);
+  }
 });
 
 const loadFallbackImage = (file) => new Promise((resolve, reject) => {
@@ -26,6 +37,18 @@ const loadFallbackImage = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const HEIC_PATTERN = /hei[cf]/i;
+
+/** iPhone photos saved as HEIC/HEIF decode on iOS Safari but not in every browser. */
+export function isHeicFile(file) {
+  return HEIC_PATTERN.test(String(file?.type || '')) || /\.hei[cf]$/i.test(String(file?.name || ''));
+}
+
+/** File extension that matches the encoder actually used, so Storage stays honest. */
+export function imageExtensionFor(mimeType) {
+  return EXTENSIONS[String(mimeType || '').toLowerCase()] || 'jpg';
+}
+
 async function getImageSource(file) {
   if (typeof createImageBitmap === 'function') {
     try {
@@ -35,7 +58,14 @@ async function getImageSource(file) {
       // The fallback keeps uploads usable; supported mobile photos use the path above.
     }
   }
-  return loadFallbackImage(file);
+  try {
+    return await loadFallbackImage(file);
+  } catch (error) {
+    if (isHeicFile(file)) {
+      throw new Error(`${fileName(file)} เป็นไฟล์ HEIC ของ iPhone ที่เบราว์เซอร์นี้เปิดไม่ได้ กรุณาไปที่ ตั้งค่า > กล้อง > รูปแบบ แล้วเลือก "รองรับสูงสุด" ก่อนถ่ายใหม่ หรือบันทึกรูปเป็น JPG ก่อนแนบ`);
+    }
+    throw error;
+  }
 }
 
 export function getBase64CharacterCount(dataUrl) {
@@ -78,9 +108,10 @@ export function snapshotSelectedFiles(input) {
 }
 
 /**
- * Converts an image to a compact WebP blob before it is sent to Storage.
- * `dataUrl` remains in the return value only for backwards compatibility with
- * legacy call sites; new briefing uploads store the Storage URL, never Base64.
+ * Converts an image to a compact WebP blob before it is sent to Storage, or to
+ * JPEG on a browser without a WebP encoder. `dataUrl` remains in the return
+ * value only for backwards compatibility with legacy call sites; new briefing
+ * uploads store the Storage URL, never Base64.
  */
 export async function compressImageDetails(file, {
   maxEdge = MAX_EDGE,
@@ -102,6 +133,21 @@ export async function compressImageDetails(file, {
     throw new Error(`ไม่สามารถเตรียม ${fileName(file)} ได้`);
   }
 
+  // Resolved once per file: the first encoder that answers is reused for every
+  // later quality step instead of re-probing WebP on a device without it.
+  let outputType = null;
+  const encode = async (quality) => {
+    if (outputType) {
+      const blob = await canvasToBlob(canvas, outputType, quality);
+      return blob && blob.type === outputType ? blob : null;
+    }
+    for (const type of OUTPUT_TYPES) {
+      const blob = await canvasToBlob(canvas, type, quality);
+      if (blob && blob.type === type) { outputType = type; return blob; }
+    }
+    return null;
+  };
+
   let smallest = null;
   const edgeSteps = [maxEdge, Math.round(maxEdge * 0.875), Math.round(maxEdge * 0.75), Math.round(maxEdge * 0.625), Math.round(maxEdge * 0.5), 640]
     .filter((edge, index, list) => edge > 0 && list.indexOf(edge) === index);
@@ -118,13 +164,13 @@ export async function compressImageDetails(file, {
       context.drawImage(source, 0, 0, width, height);
 
       for (const quality of QUALITY_STEPS) {
-        const blob = await canvasToBlob(canvas, quality);
-        if (!blob || blob.type !== 'image/webp') {
-          throw new Error('เบราว์เซอร์นี้ไม่รองรับการแปลงรูปเป็น WebP');
+        const blob = await encode(quality);
+        if (!blob) {
+          throw new Error(`เบราว์เซอร์นี้แปลง ${fileName(file)} ไม่สำเร็จ กรุณาบันทึกรูปเป็น JPG แล้วลองใหม่`);
         }
         const dataUrl = await blobToDataUrl(blob);
         const characterCount = getBase64CharacterCount(dataUrl);
-        const candidate = { dataUrl, blob, sizeBytes: blob.size, characterCount };
+        const candidate = { dataUrl, blob, sizeBytes: blob.size, characterCount, mimeType: blob.type };
         if (!smallest || characterCount < smallest.characterCount) smallest = candidate;
         if (characterCount <= targetBase64Chars) return candidate;
       }

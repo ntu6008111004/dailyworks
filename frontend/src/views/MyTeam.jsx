@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
-import { formatBriefingPoints, getBriefingAwardedPoints } from '../utils/briefingScore';
+import { formatBriefingPoints, getMemberBriefingAward, isBriefingEarnedByMember } from '../utils/briefingScore';
 import { POINT_LEDGER_LABELS, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../utils/briefingPointLedger';
 import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, MinusCircle, ReceiptText, RotateCcw, X } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
@@ -108,7 +108,7 @@ export const MyTeam = () => {
         }
         
         // Determine if completed/active from this user's perspective
-        const isCompleted = (isAssignee && memberStatus === 'เสร็จสิ้น') || (isCreator && b.Status === 'เสร็จสิ้น');
+        const isCompleted = isBriefingEarnedByMember(b, { isCreator, isAssignee, memberStatus });
         
         // Check date filter range based on overall status (matches activeBriefings card calculation)
         const dateStr = b.Status === 'เสร็จสิ้น' 
@@ -127,7 +127,7 @@ export const MyTeam = () => {
           // keep their original total. New reviewed work receives only its
           // non-negative final score plus the approved special score.
           const bonusPoints = Math.max(0, Number(b.BonusPoints) || 0);
-          totalPoints += getBriefingAwardedPoints(b);
+          totalPoints += getMemberBriefingAward(b, { isCreator, isAssignee, memberStatus });
           specialPoints += bonusPoints;
         }
 

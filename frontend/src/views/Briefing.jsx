@@ -14,6 +14,7 @@ import { BriefingModal } from '../components/BriefingModal';
 import { BriefingTimeline } from '../components/BriefingTimeline';
 import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermissions';
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
+import { compareBriefingsByDueDate } from '../utils/briefingOrder';
 
 export const Briefing = () => {
   const { user } = useAuth();
@@ -176,7 +177,7 @@ export const Briefing = () => {
       if (endDate && new Date(bDate) > new Date(endDate)) return false;
 
       return true;
-    }).sort((a, b) => new Date(b.CreatedAt) - new Date(a.CreatedAt));
+    }).sort(compareBriefingsByDueDate);
   }, [visibleBriefings, searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
 
   // Reset page when filters change
@@ -633,7 +634,9 @@ export const Briefing = () => {
                   </thead>
                   <tbody className="bg-white">
                     {currentBriefings.map((b, index) => {
-                      const rowNumber = filteredBriefings.length - ((currentPage - 1) * itemsPerPage) - index;
+                      // The list is ordered by deadline, so the number counts
+                      // down the queue instead of counting back from newest.
+                      const rowNumber = ((currentPage - 1) * itemsPerPage) + index + 1;
                       const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
                       const isOverdue = apiService.isBriefingOverdue(b);
                       const pStatus = b.PostStatus || 'ยังไม่โพส';

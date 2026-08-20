@@ -147,3 +147,18 @@
   - หลังรัน `modern-backend/migration/20260820_briefing_score_adjustment.sql` ระบบจะรองรับการปรับคะแนนแบบไม่บวกซ้ำใน production
   - หลังรัน `modern-backend/migration/20260820_briefing_bonus_levels.sql` ต่อจากไฟล์ด้านบน ระบบจะรองรับระดับ มาตรฐาน, ดี, ดีมาก และไวรัลใน production
   - หลังรัน `modern-backend/migration/20260820_briefing_monthly_penalties.sql` ต่อจากไฟล์ด้านบน ระบบจะรองรับสมุดคะแนนรายเดือน ความล่าช้า การคืนคะแนน การขยายเวลา และการบันทึกส่งงานแบบ atomic
+
+## หมายเหตุหัวหน้าแผนก การแนบรูปมือถือ ลำดับตามกำหนดส่ง และการแก้ 400
+
+- ประเภท: Feature + Bug Fix
+- สิ่งที่ทำ:
+  - เพิ่ม `frontend/src/utils/briefingReviewNotes.js` สรุปคำสั่งจากหัวหน้าแผนกจาก `BriefingReviewHistory` และแสดงในหน้าบรีฟ พร้อมทำให้ช่องหมายเหตุเป็นช่องบังคับกรอกทุกคำสั่งที่เป็นการสั่งแก้ไข ความผิดพลาด สั่งงานเพิ่ม และขยายเวลา
+  - เปลี่ยนการบีบอัดรูปให้ถอยไปใช้ JPEG เมื่อเบราว์เซอร์ไม่มีตัวเข้ารหัส WebP และเก็บไฟล์ใน Storage ด้วยนามสกุล/Content-Type ที่ตรงกับผลลัพธ์จริง พร้อมข้อความแนะนำเมื่อไฟล์เป็น HEIC ของ iPhone
+  - เพิ่ม `frontend/src/utils/briefingOrder.js` เรียงรายการบรีฟตามวันกำหนดส่งที่ใกล้ที่สุดก่อน และให้เลขลำดับในตารางนับตามคิว
+  - เพิ่ม `frontend/src/utils/briefingSchema.js` ลดคอลัมน์ที่ select ทีละ migration โดยเริ่มจากคอลัมน์ใหม่สุด และจำระดับที่ใช้ได้ไว้ตลอด session แทนการยิงซ้ำจนได้ 400 ทุกครั้ง
+  - เพิ่ม `frontend/src/utils/briefingReviewErrors.js` แปลข้อผิดพลาดจาก `review_briefing()` เป็นภาษาไทย และระบุชัดเมื่อฐานข้อมูลยังไม่ได้รัน migration
+  - ย้ายกติกาการให้คะแนนรายคนไปไว้ที่ `getMemberBriefingAward()` เพื่อยืนยันว่างาน 5 คะแนนจ่ายให้ผู้บรีฟ 5 และผู้รับงานคนละ 5 โดยไม่หารกัน
+- ผลลัพธ์:
+  - Frontend test ผ่าน 25/25 รายการ, function coverage รวม 100.00%
+  - Backend unit test ผ่าน 33/33 รายการ, function coverage รวม 94.64%
+  - ESLint ผ่านทุกไฟล์ที่อยู่ใน Git และ production build ผ่าน

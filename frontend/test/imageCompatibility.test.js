@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compressImage, compressImageDetails, formatImageSize, getBase64CharacterCount, getImageFiles, isImageFile, snapshotSelectedFiles } from '../src/utils/compressImage.js';
+import { compressImage, compressImageDetails, formatImageSize, getBase64CharacterCount, getImageFiles, imageExtensionFor, isHeicFile, isImageFile, snapshotSelectedFiles } from '../src/utils/compressImage.js';
 import { getBriefingImages, MAX_BRIEFING_IMAGES } from '../src/utils/briefingImages.js';
 
 test('accepts a standard image MIME type and a Windows octet-stream image by extension', () => {
@@ -114,4 +114,82 @@ test('falls back to legacy Base64 briefing and response columns when no new imag
   const legacyResult = getBriefingImages({ ResultImage2: 'data:image/webp;base64,result-2' }, 'ResultImages', 'ResultImage');
   assert.deepEqual(legacyBrief, ['data:image/png;base64,brief-1', 'data:image/jpeg;base64,brief-3']);
   assert.deepEqual(legacyResult, ['data:image/webp;base64,result-2']);
+});
+
+test('a browser without a WebP encoder falls back to JPEG instead of failing the upload', async (t) => {
+  const original = Object.fromEntries(['File', 'FileReader', 'Image', 'createImageBitmap', 'document'].map((key) => [key, globalThis[key]]));
+  t.after(() => Object.entries(original).forEach(([key, value]) => {
+    if (value === undefined) delete globalThis[key];
+    else globalThis[key] = value;
+  }));
+
+  class FakeFile {
+    constructor(name, type) { this.name = name; this.type = type; }
+  }
+  globalThis.File = FakeFile;
+  globalThis.FileReader = class FakeFileReader {
+    readAsDataURL() {
+      this.result = 'data:image/jpeg;base64,dGVzdA==';
+      queueMicrotask(() => this.onload?.());
+    }
+  };
+  globalThis.createImageBitmap = async () => ({ width: 32, height: 16, close() {} });
+
+  // Older iOS Safari answers a WebP request with a PNG blob instead of failing.
+  const canvasWithoutWebp = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage() {}, imageSmoothingEnabled: false, imageSmoothingQuality: 'low' }),
+    toBlob: (callback, type) => callback(new Blob(['test'], { type: type === 'image/webp' ? 'image/png' : type })),
+  };
+  globalThis.document = { createElement: () => canvasWithoutWebp };
+  const iphonePhoto = await compressImageDetails(new FakeFile('IMG_0421.jpg', 'image/jpeg'), { maxEdge: 32, targetBase64Chars: 1000 });
+  assert.equal(iphonePhoto.mimeType, 'image/jpeg');
+  assert.equal(iphonePhoto.blob.type, 'image/jpeg');
+  assert.equal(imageExtensionFor(iphonePhoto.mimeType), 'jpg');
+
+  // A canvas with no usable encoder at all reports a readable Thai reason.
+  globalThis.document = { createElement: () => ({
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage() {}, imageSmoothingEnabled: false, imageSmoothingQuality: 'low' }),
+    toBlob: () => { throw new Error('encoder missing'); },
+  }) };
+  await assert.rejects(
+    compressImageDetails(new FakeFile('IMG_0422.jpg', 'image/jpeg'), { maxEdge: 32, targetBase64Chars: 1000 }),
+    /เบราว์เซอร์นี้แปลง IMG_0422\.jpg ไม่สำเร็จ/
+  );
+});
+
+test('an iPhone HEIC photo that the browser cannot decode explains how to fix it', async (t) => {
+  const original = Object.fromEntries(['File', 'FileReader', 'Image', 'createImageBitmap'].map((key) => [key, globalThis[key]]));
+  t.after(() => Object.entries(original).forEach(([key, value]) => {
+    if (value === undefined) delete globalThis[key];
+    else globalThis[key] = value;
+  }));
+
+  assert.equal(isHeicFile({ name: 'IMG_0430.HEIC', type: '' }), true);
+  assert.equal(isHeicFile({ name: 'photo.jpg', type: 'image/heif' }), true);
+  assert.equal(isHeicFile({ name: 'photo.jpg', type: 'image/jpeg' }), false);
+  assert.equal(imageExtensionFor('image/webp'), 'webp');
+  assert.equal(imageExtensionFor(null), 'jpg');
+
+  class FakeFile {
+    constructor(name, type) { this.name = name; this.type = type; }
+  }
+  globalThis.File = FakeFile;
+  globalThis.createImageBitmap = async () => { throw new Error('unsupported source'); };
+  globalThis.Image = class FakeImage {
+    set src(_) { queueMicrotask(() => this.onerror?.()); }
+  };
+  globalThis.FileReader = class FakeFileReader {
+    readAsDataURL() {
+      this.result = 'data:image/heic;base64,dGVzdA==';
+      queueMicrotask(() => this.onload?.());
+    }
+  };
+  await assert.rejects(
+    compressImageDetails(new FakeFile('IMG_0430.HEIC', 'image/heic')),
+    /IMG_0430\.HEIC เป็นไฟล์ HEIC ของ iPhone/
+  );
 });

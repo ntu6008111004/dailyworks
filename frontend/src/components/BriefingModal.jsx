@@ -15,6 +15,7 @@ import {
   isBriefingCreator,
 } from '../utils/briefingPermissions';
 import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints } from '../utils/briefingScore';
+import { summarizeReviewNotes } from '../utils/briefingReviewNotes';
 import { normalizeExternalLink } from '../utils/externalLinks';
 import { CustomSelect } from './CustomSelect';
 
@@ -56,7 +57,7 @@ const ImageGrid = ({ images, editable, onRemove, onPreview, label, onAdd, isUplo
       <div><p className="text-sm font-black text-slate-800">{label}</p><p className="text-xs text-slate-500">สูงสุด {MAX_IMAGES} รูป · บีบอัดและเก็บใน Storage ไม่เกิน 2 MB/รูป</p></div>
       {editable && images.length < MAX_IMAGES && <label className={`inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
         {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}{isUploading ? 'กำลังอัปโหลด…' : `เพิ่มรูป (${images.length}/${MAX_IMAGES})`}
-        <input className="hidden" type="file" accept="image/*" multiple disabled={isUploading} onChange={onAdd} />
+        <input className="hidden" type="file" accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.webp" multiple disabled={isUploading} onChange={onAdd} />
       </label>}
     </div>
     {images.length ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">{images.map((image, index) => <div key={`${image}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -82,6 +83,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
   const canEditPoints = !briefing || (canEditBrief && isCreator);
   const [fullBriefing, setFullBriefing] = useState(briefing || null);
   const [responses, setResponses] = useState([]);
+  const [reviewNotes, setReviewNotes] = useState([]);
   const [selectedAssigneeId, setSelectedAssigneeId] = useState(() => isAssignee ? String(user?.ID) : String(briefing?.Assignees?.[0] || ''));
   const [loading, setLoading] = useState(Boolean(briefing?.ID));
   const [saving, setSaving] = useState(false);
@@ -103,8 +105,15 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
     if (!briefing?.ID) return;
     setLoading(true);
     try {
-      const [loadedBriefing, loadedResponses] = await Promise.all([apiService.getBriefingById(briefing.ID), apiService.getBriefingResponses(briefing.ID)]);
+      // The review history is extra context, never a reason to fail the modal:
+      // an older database without the table still shows the briefing itself.
+      const [loadedBriefing, loadedResponses, loadedHistory] = await Promise.all([
+        apiService.getBriefingById(briefing.ID),
+        apiService.getBriefingResponses(briefing.ID),
+        apiService.getBriefingReviewHistory(briefing.ID).catch(() => []),
+      ]);
       setFullBriefing(loadedBriefing); setResponses(loadedResponses || []);
+      setReviewNotes(summarizeReviewNotes(loadedHistory, allUsers));
       setFormData({ Title: loadedBriefing.Title || '', Detail: loadedBriefing.Detail || '', CreatorNote: loadedBriefing.CreatorNote || '', Priority: loadedBriefing.Priority || 'Medium', Status: loadedBriefing.Status || 'ดำเนินการ', StartDate: loadedBriefing.StartDate || '', DueDate: loadedBriefing.DueDate || '', Assignees: loadedBriefing.Assignees || [], RefURL: loadedBriefing.RefURL || '', CardColor: loadedBriefing.CardColor || '', PostStatus: loadedBriefing.PostStatus || 'ยังไม่โพส', PostUrl: loadedBriefing.PostUrl || '', PostDate: loadedBriefing.PostDate || '', Points: loadedBriefing.Points || 0 });
       setRefImages(getBriefingImages(loadedBriefing, 'RefImages', 'RefImage'));
       const ownResponse = (loadedResponses || []).find((item) => String(item.UserID) === String(user?.ID));
@@ -113,7 +122,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
       else if (loadedBriefing.Assignees?.length) setSelectedAssigneeId(String(loadedBriefing.Assignees[0]));
     } catch (error) { toast.error(`ไม่สามารถโหลดรายละเอียดบรีฟ: ${error.message}`, { position: 'bottom-right' }); }
     finally { setLoading(false); }
-  }, [briefing?.ID, isAssignee, user?.ID]);
+  }, [allUsers, briefing?.ID, isAssignee, user?.ID]);
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
     const onRealtimeUpdate = (event) => {
@@ -128,7 +137,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
 
   const uploadFiles = useCallback(async (files, folder) => {
     const usable = getImageFiles(files);
-    if (!usable.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return []; }
+    if (!usable.length) { toast.error('กรุณาเลือกไฟล์รูปภาพ เช่น JPG, PNG, WebP หรือ HEIC จาก iPhone', { position: 'bottom-right' }); return []; }
     setUploading(true);
     try {
       const compressed = await Promise.all(usable.map((file) => compressImageDetails(file)));
@@ -193,7 +202,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
           <div><FieldLabel text="ระดับความสำคัญ" /><CustomSelect value={formData.Priority} onChange={(Priority) => setFormData((current) => ({ ...current, Priority }))} options={[{ value: 'High', label: 'สูง' }, { value: 'Medium', label: 'กลาง' }, { value: 'Low', label: 'ต่ำ' }]} disabled={!canEditBrief} className={canEditBrief ? '' : 'opacity-60'} /></div><div><FieldLabel text="สถานะภาพรวม" /><CustomSelect value={formData.Status} onChange={(Status) => setFormData((current) => ({ ...current, Status }))} options={[...new Set([formData.Status, ...ASSIGNER_STATUSES])].filter((status) => status !== 'เสร็จสิ้น').map((status) => ({ value: status, label: status }))} disabled={!canEditStatus} className={canEditStatus ? '' : 'opacity-60'} /></div>
           <label className="block"><FieldLabel text="คะแนนตั้งต้น" /><input type="number" min="0" value={formData.Points} disabled={!canEditPoints} onChange={(event) => setFormData((current) => ({ ...current, Points: Math.max(0, Number(event.target.value) || 0) }))} className="field" /></label><ReferenceLinkField value={formData.RefURL} editable={canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, RefURL: event.target.value }))} />
         </div><div className="mt-5"><FieldLabel text="ผู้รับมอบหมาย" />{canEditBrief && <CustomSelect value="" placeholder="เพิ่มผู้รับผิดชอบ" searchable options={assigneeOptions.filter((option) => !formData.Assignees.some((id) => String(id) === option.value))} onChange={(id) => id && setFormData((current) => ({ ...current, Assignees: [...current.Assignees, id] }))} />}<div className="mt-2 flex flex-wrap gap-2">{formData.Assignees.length ? formData.Assignees.map((id) => { const person = allUsers.find((item) => String(item.ID) === String(id)); return <span key={id} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700"><PersonAvatar person={person} size="h-5 w-5" />{person?.Name || person?.Username || id}{canEditBrief && <button type="button" onClick={() => setFormData((current) => ({ ...current, Assignees: current.Assignees.filter((item) => String(item) !== String(id)) }))} className="ml-1 rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={13} /></button>}</span>; }) : <span className="text-xs text-slate-400">ยังไม่ได้ระบุผู้รับผิดชอบ</span>}</div></div></div><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><ImageGrid label="รูปอ้างอิงจากผู้มอบหมาย" images={refImages} editable={canEditBrief} onRemove={(index) => setRefImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} onPreview={setPreviewImage} onAdd={addReferenceImages} isUploading={uploading} sizes={imageSizes} /></div></section>
-        <section className="min-w-0 space-y-5"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-800">การส่งมอบงาน</h3><p className="text-xs text-slate-500">เลือกชื่อเพื่อดูงานของแต่ละผู้รับมอบหมาย</p></div><span className="text-xs text-slate-500">{formData.Assignees.length} คน</span></div><div className="mb-4 flex gap-2 overflow-x-auto pb-1">{formData.Assignees.map((id) => { const person = allUsers.find((item) => String(item.ID) === String(id)); const response = responses.find((item) => String(item.UserID) === String(id)); const selected = String(id) === String(selectedAssigneeId); return <button key={id} type="button" onClick={() => setSelectedAssigneeId(String(id))} className={`flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-bold transition ${selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><PersonAvatar person={person} size="h-6 w-6" /><span className="max-w-24 truncate">{person?.Name || person?.Username || id}</span>{response?.Status && <span className="h-2 w-2 rounded-full bg-current opacity-70" />}</button>; })}</div>
+        <section className="min-w-0 space-y-5"><ReviewNoteList notes={reviewNotes} /><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-800">การส่งมอบงาน</h3><p className="text-xs text-slate-500">เลือกชื่อเพื่อดูงานของแต่ละผู้รับมอบหมาย</p></div><span className="text-xs text-slate-500">{formData.Assignees.length} คน</span></div><div className="mb-4 flex gap-2 overflow-x-auto pb-1">{formData.Assignees.map((id) => { const person = allUsers.find((item) => String(item.ID) === String(id)); const response = responses.find((item) => String(item.UserID) === String(id)); const selected = String(id) === String(selectedAssigneeId); return <button key={id} type="button" onClick={() => setSelectedAssigneeId(String(id))} className={`flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-bold transition ${selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><PersonAvatar person={person} size="h-6 w-6" /><span className="max-w-24 truncate">{person?.Name || person?.Username || id}</span>{response?.Status && <span className="h-2 w-2 rounded-full bg-current opacity-70" />}</button>; })}</div>
           {!selectedAssigneeId ? <EmptyAssignee /> : String(selectedAssigneeId) === String(user?.ID) && isAssignee ? <div className="space-y-5"><ImageGrid label="หลักฐานหรือผลลัพธ์งานของฉัน" images={myResponse.ResultImages} editable onRemove={(index) => setMyResponse((current) => ({ ...current, ResultImages: current.ResultImages.filter((_, itemIndex) => itemIndex !== index) }))} onPreview={setPreviewImage} onAdd={addResultImages} isUploading={uploading} sizes={imageSizes} /><label className="block"><FieldLabel text="ลิงก์ผลงาน 1" optional /><input type="url" value={myResponse.URL1} onChange={(event) => setMyResponse((current) => ({ ...current, URL1: event.target.value }))} className="field" placeholder="https://…" /></label><label className="block"><FieldLabel text="ลิงก์ผลงาน 2" optional /><input type="url" value={myResponse.URL2} onChange={(event) => setMyResponse((current) => ({ ...current, URL2: event.target.value }))} className="field" placeholder="https://…" /></label><label className="block"><FieldLabel text="บันทึกการส่งงาน" optional /><textarea value={myResponse.Note} onChange={(event) => setMyResponse((current) => ({ ...current, Note: event.target.value }))} className="field min-h-28 resize-y" placeholder="สรุปสิ่งที่ทำ ข้อสังเกต หรืองานที่ต้องการให้ตรวจ" /></label><div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><FieldLabel text="สถานะงานของฉัน (ระบบกำหนด)" /><StatusPill status={recipientSystemStatus} /><p className="mt-1.5 text-xs text-slate-500">ดูสถานะได้อย่างเดียว ระบบจะแจ้งเมื่อมีการสั่งแก้หรืออัปเดตงาน</p></div>{!canEditBrief && <button type="button" disabled={saving || uploading} onClick={handleSaveResponse} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><Send size={17} />{saving ? 'กำลังบันทึก…' : 'บันทึกรายละเอียดการส่งงาน'}</button>}</div> : <SubmittedWork response={selectedResponse} person={selectedAssignee} onPreview={setPreviewImage} />}
         </div>{(isCreator || isAdmin || isDepartmentHead) && <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900"><div className="flex gap-2"><AlertCircle size={18} className="mt-0.5 shrink-0 text-blue-600" /><p><b>การปิดงาน:</b> กด “ส่งตรวจ” เพื่อส่งให้หัวหน้าแผนกหรือผู้ดูแลอนุมัติเท่านั้น งานจะเป็น <b>เสร็จสิ้น</b> หลังได้รับอนุมัติในหน้าตรวจงาน</p></div></div>}</section>
       </div></main>}
@@ -206,7 +215,32 @@ const ScoreSummary = ({ briefing }) => {
   const bonus = getBonusLevelDetails(briefing?.BonusLevel || 'standard', 0);
   return <div className="flex flex-wrap gap-1.5 text-[10px] font-bold"><span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">คะแนน {formatBriefingPoints(briefing?.Points || 0)}</span>{Number(briefing?.DeductedPoints || 0) > 0 && <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-700">หัก {formatBriefingPoints(briefing.DeductedPoints)}</span>}{briefing?.BonusLevel && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{bonus.label}{Number(briefing?.BonusPoints || 0) > 0 ? ` · +${formatBriefingPoints(briefing.BonusPoints)}` : ''}</span>}{!briefing?.BonusLevel && Number(briefing?.BonusPoints || 0) > 0 && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">พิเศษเดิม +{formatBriefingPoints(briefing.BonusPoints)}</span>}{Number(briefing?.ScoreAdjustment || 0) !== 0 && <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-700">ปรับ {Number(briefing.ScoreAdjustment) > 0 ? '+' : ''}{formatBriefingPoints(briefing.ScoreAdjustment)}</span>}{briefing?.Status === 'เสร็จสิ้น' && <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">สุทธิ {formatBriefingPoints(getBriefingAwardedPoints(briefing))}</span>}</div>;
 };
-const EmptyAssignee = () => <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-slate-400"><UserRound size={28} className="mb-2" /><p className="text-sm font-bold">ยังไม่มีผู้รับมอบหมาย</p></div>;
+const NOTE_TONES = {
+  orange: 'border-orange-200 bg-orange-50 text-orange-900',
+  rose: 'border-rose-200 bg-rose-50 text-rose-900',
+  red: 'border-red-300 bg-red-50 text-red-900',
+  sky: 'border-sky-200 bg-sky-50 text-sky-900',
+  violet: 'border-violet-200 bg-violet-50 text-violet-900',
+  slate: 'border-slate-200 bg-slate-50 text-slate-800',
+};
+
+/**
+ * Every order a department head sends carries a mandatory note. The recipient
+ * reads it here, on the briefing itself, instead of only in the review queue.
+ */
+const ReviewNoteList = ({ notes }) => {
+  if (!notes.length) return null;
+  return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <div className="mb-3 flex items-center gap-2"><ClipboardCheck size={17} className="text-fuchsia-600" /><h3 className="font-black text-slate-800">คำสั่งและหมายเหตุจากหัวหน้าแผนก</h3><span className="ml-auto text-xs text-slate-500">{notes.length} รายการ</span></div>
+    <ol className="space-y-2">{notes.map((note) => <li key={note.id} className={`rounded-xl border p-3 ${NOTE_TONES[note.tone] || NOTE_TONES.slate}`}>
+      <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black">{note.label}</span>{note.amount && <span className="rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold">{note.amount}</span>}<span className="ml-auto text-[10px] opacity-70">{note.createdAt ? new Date(note.createdAt).toLocaleString('th-TH') : ''}</span></div>
+      {note.comment && <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6">{note.comment}</p>}
+      <p className="mt-1 text-[10px] opacity-70">โดย {note.reviewer}</p>
+    </li>)}</ol>
+  </div>;
+};
+
+const EmptyAssignee = () =><div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-slate-400"><UserRound size={28} className="mb-2" /><p className="text-sm font-bold">ยังไม่มีผู้รับมอบหมาย</p></div>;
 const SubmittedWork = ({ response, person, onPreview }) => {
   if (!response) return <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-slate-400"><UploadCloud size={28} className="mb-2" /><p className="text-sm font-bold">{person?.Name || 'ผู้รับงาน'} ยังไม่ได้ส่งความคืบหน้า</p></div>;
   const images = getBriefingImages(response, 'ResultImages', 'ResultImage');

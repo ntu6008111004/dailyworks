@@ -55,3 +55,18 @@ test('assignee submission atomically saves evidence and sets both statuses to wa
   assert.match(migration, /UPDATE "Briefings"\s+SET "Status" = 'รอตรวจ'/);
   assert.match(migration, /Only an assigned recipient may submit this work/);
 });
+
+test('no corrective review action can be sent without a written reason', () => {
+  assert.match(migration, /p_action IN \('needs_revision', 'rejected', 'severe_error'\) AND btrim\(COALESCE\(p_comment, ''\)\) = ''/);
+  assert.match(migration, /RAISE EXCEPTION 'A comment is required for this review action'/);
+  assert.match(migration, /RAISE EXCEPTION 'A reason is required when extending a deadline'/);
+  assert.match(migration, /RAISE EXCEPTION 'Additional work details are required'/);
+});
+
+test('an approved briefing pays the same score to the briefer and to every recipient', () => {
+  // The score lives on the briefing, not on a per-person share: approval stores
+  // one FinalPoints and every participant is credited that same amount.
+  assert.match(migration, /"FinalPoints" = v_remaining_points/);
+  assert.doesNotMatch(migration, /v_remaining_points\s*\/\s*(cardinality|jsonb_array_length)/);
+  assert.match(migration, /"Points" = COALESCE\("Points", 0\) \+ p_extra_points/);
+});

@@ -7,10 +7,14 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getScoreAdjustmentPreview } from '../src/utils/briefingScore.js';
+import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember } from '../src/utils/briefingScore.js';
 import { getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
+import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
+import { briefingSelectAt, BRIEFING_SELECT_LADDER, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
+import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
+import { compareBriefingsByDueDate, sortBriefingsByDueDate } from '../src/utils/briefingOrder.js';
 
 test('recipient cannot alter the assigning brief, including a JSON-assignee record', () => {
   const briefing = { CreatorID: 'creator', Assignees: '["recipient", "other"]' };
@@ -128,4 +132,136 @@ test('monthly error deductions can target both creator and assignees without dup
       { id: 'recipient', person: users[1], roleLabel: 'ผู้รับงาน' },
     ],
   );
+});
+
+test('a head instruction reaches the briefing page with its mandatory note', () => {
+  const users = [{ ID: 'head-1', Name: 'หัวหน้ากราฟิก' }];
+  const history = [
+    { ID: 1, Action: 'NEEDS_REVISION', Comment: 'แก้สีโลโก้', PointsDeducted: 1, ReviewerID: 'head-1', CreatedAt: '2026-08-19T03:00:00.000Z' },
+    { ID: 2, Action: 'EXTRA_WORK', Comment: 'ทำแบนเนอร์เพิ่ม 2 ชิ้น', ExtraPoints: 3, ReviewerID: 'head-1', CreatedAt: '2026-08-20T03:00:00.000Z' },
+    { ID: 3, Action: 'DEADLINE_EXTENDED', Comment: 'รอไฟล์ลูกค้า', ExtensionDays: 2, NewDueDate: '2026-08-24', ReviewerID: 'head-1', CreatedAt: '2026-08-20T02:00:00.000Z' },
+    { ID: 4, Action: 'BONUS_UPDATED', Comment: '', BonusLevel: 'good', ReviewerID: 'head-1', CreatedAt: '2026-08-20T04:00:00.000Z' },
+  ];
+
+  const notes = summarizeReviewNotes(history, users);
+  assert.deepEqual(notes.map((note) => note.action), ['EXTRA_WORK', 'DEADLINE_EXTENDED', 'NEEDS_REVISION']);
+  assert.equal(notes[0].label, 'สั่งงานเพิ่ม');
+  assert.equal(notes[0].amount, 'เพิ่มคะแนนงาน +3');
+  assert.equal(notes[0].comment, 'ทำแบนเนอร์เพิ่ม 2 ชิ้น');
+  assert.equal(notes[0].reviewer, 'หัวหน้ากราฟิก');
+  assert.equal(notes[1].amount, 'ขยาย 2 วัน ถึง 2026-08-24');
+  assert.equal(notes[2].amount, 'หักคะแนนงาน 1');
+  assert.equal(getLatestReviewInstruction(history, users).action, 'EXTRA_WORK');
+  assert.equal(getLatestReviewInstruction([]), null);
+  assert.equal(describeReviewAmount({ Action: 'APPROVED' }), '');
+  assert.equal(summarizeReviewNotes(null)[0], undefined);
+  assert.equal(summarizeReviewNotes([{ ID: 9, Action: 'REJECTED', ReviewerID: 'ghost' }])[0].reviewer, 'หัวหน้าแผนก');
+  assert.equal(REVIEW_ACTION_LABELS.SEVERE_ERROR, 'ความผิดพลาดร้ายแรง');
+});
+
+test('every corrective review action forces a note, approval stays optional', () => {
+  ['needs_revision', 'rejected', 'severe_error', 'extra_work', 'extend_deadline'].forEach((action) => {
+    assert.equal(requiresReviewComment(action), true, action);
+  });
+  assert.equal(requiresReviewComment('approved'), false);
+  assert.equal(requiresReviewComment('bonus'), false);
+  assert.equal(requiresReviewComment(null), false);
+});
+
+test('the briefing select degrades newest column first and remembers the working level', () => {
+  assert.match(briefingSelectAt(0), /ScoreAdjustment/);
+  assert.match(briefingSelectAt(1), /BonusLevel/);
+  assert.doesNotMatch(briefingSelectAt(1), /ScoreAdjustment/);
+  assert.doesNotMatch(briefingSelectAt(2), /BonusLevel/);
+  assert.doesNotMatch(briefingSelectAt(3), /LatePenaltyEnabled/);
+  assert.equal(briefingSelectAt(99), BRIEFING_SELECT_LADDER.at(-1));
+  assert.equal(nextBriefingSelectIndex(0), 1);
+  assert.equal(nextBriefingSelectIndex(BRIEFING_SELECT_LADDER.length - 1), -1);
+
+  assert.equal(isMissingSchemaField({ code: '42703', message: 'column Briefings.ScoreAdjustment does not exist' }), true);
+  assert.equal(isMissingSchemaField({ message: 'Could not find BonusLevel in the schema cache' }), true);
+  assert.equal(isMissingSchemaField({ code: '401', message: 'JWT expired' }), false);
+  assert.equal(isMissingSchemaField(null), false);
+
+  const store = new Map();
+  const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
+  assert.equal(readBriefingSelectIndex(storage), 0);
+  rememberBriefingSelectIndex(1, storage);
+  assert.equal(readBriefingSelectIndex(storage), 1);
+  rememberBriefingSelectIndex(0, storage);
+  assert.equal(readBriefingSelectIndex(storage), 1, 'level 0 is the default, never worth storing');
+
+  const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(readBriefingSelectIndex(blocked), 0);
+  rememberBriefingSelectIndex(2, blocked);
+  assert.equal(readBriefingSelectIndex(undefined), 0);
+});
+
+test('a review rejected by the database is explained in Thai instead of a bare 400', () => {
+  assert.equal(
+    describeReviewError({ code: 'P0001', message: 'A selected user is not a participant in this briefing' }),
+    'มีผู้ที่เลือกไว้ไม่ได้เกี่ยวข้องกับงานนี้ กรุณาเลือกเฉพาะผู้บรีฟงานหรือผู้รับงาน',
+  );
+  assert.equal(
+    describeReviewError({ code: 'P0001', message: 'A comment is required for this review action' }),
+    'กรุณาระบุหมายเหตุหรือเหตุผลก่อนส่งคำสั่งนี้',
+  );
+  assert.match(
+    describeReviewError({ code: 'PGRST202', message: 'Could not find the function public.review_briefing(p_target_user_ids)' }),
+    /migration 20260820_briefing_monthly_penalties\.sql/,
+  );
+  assert.equal(isOutdatedReviewFunction({ message: 'function public.review_briefing does not exist' }), true);
+  assert.equal(isOutdatedReviewFunction({ code: 'P0001', message: 'Briefing not found' }), false);
+  assert.equal(isOutdatedReviewFunction(null), false);
+  assert.equal(describeReviewError({ message: 'network unreachable' }), 'network unreachable');
+  assert.equal(describeReviewError(null), 'ตรวจงานไม่สำเร็จ');
+  assert.equal(describeReviewError({}), 'ตรวจงานไม่สำเร็จ');
+});
+
+test('the briefing queue is ordered by deadline, undated work last', () => {
+  const ordered = sortBriefingsByDueDate([
+    { ID: 'later', DueDate: '2026-09-01', CreatedAt: '2026-08-01T00:00:00.000Z' },
+    { ID: 'undated', DueDate: '', CreatedAt: '2026-08-19T00:00:00.000Z' },
+    { ID: 'due-soon-old', DueDate: '2026-08-21', CreatedAt: '2026-08-02T00:00:00.000Z' },
+    { ID: 'due-soon-new', DueDate: '2026-08-21', CreatedAt: '2026-08-18T00:00:00.000Z' },
+    { ID: 'start-only', StartDate: '2026-08-20', CreatedAt: '2026-08-03T00:00:00.000Z' },
+    { ID: 'broken-date', DueDate: 'unknown', CreatedAt: '2026-08-04T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(ordered.map((item) => item.ID), ['start-only', 'due-soon-new', 'due-soon-old', 'later', 'undated', 'broken-date']);
+  assert.equal(compareBriefingsByDueDate({ DueDate: '2026-08-21' }, { DueDate: '2026-08-21' }), 0);
+  assert.deepEqual(sortBriefingsByDueDate(), []);
+  assert.deepEqual(sortBriefingsByDueDate(null), []);
+});
+
+test('a briefing score is paid per person, not divided between briefer and recipients', () => {
+  // 5 points, approved, nothing deducted: everyone involved earns the same 5.
+  const approved = { Status: 'เสร็จสิ้น', Points: 5, DeductedPoints: 0, FinalPoints: 5, BonusPoints: 0 };
+  const briefer = { isCreator: true, isAssignee: false, memberStatus: 'เสร็จสิ้น' };
+  const firstRecipient = { isCreator: false, isAssignee: true, memberStatus: 'เสร็จสิ้น' };
+  const secondRecipient = { isCreator: false, isAssignee: true, memberStatus: 'เสร็จสิ้น' };
+  assert.equal(getMemberBriefingAward(approved, briefer), 5);
+  assert.equal(getMemberBriefingAward(approved, firstRecipient), 5);
+  assert.equal(getMemberBriefingAward(approved, secondRecipient), 5);
+
+  // Someone who briefed the work and also received it is still paid once.
+  assert.equal(getMemberBriefingAward(approved, { isCreator: true, isAssignee: true, memberStatus: 'เสร็จสิ้น' }), 5);
+
+  // A Task deduction lowers every share by the same amount, never one side only.
+  const corrected = { Status: 'เสร็จสิ้น', Points: 5, DeductedPoints: 1, FinalPoints: 4, BonusPoints: 0 };
+  assert.equal(getMemberBriefingAward(corrected, briefer), 4);
+  assert.equal(getMemberBriefingAward(corrected, firstRecipient), 4);
+
+  // Extra work raises the shared Task score, so both sides gain it together.
+  const withExtraWork = { Status: 'เสร็จสิ้น', Points: 8, DeductedPoints: 0, FinalPoints: 8, BonusPoints: 4 };
+  assert.equal(getMemberBriefingAward(withExtraWork, briefer), 12);
+  assert.equal(getMemberBriefingAward(withExtraWork, firstRecipient), 12);
+
+  // Nothing is earned before approval, and an outsider never earns anything.
+  const waiting = { Status: 'ส่งตรวจ', Points: 5, DeductedPoints: 0, BonusPoints: 0 };
+  assert.equal(getMemberBriefingAward(waiting, briefer), 0);
+  assert.equal(isBriefingEarnedByMember(waiting, briefer), false);
+  assert.equal(isBriefingEarnedByMember(waiting, { isCreator: false, isAssignee: true, memberStatus: 'เสร็จสิ้น' }), true);
+  assert.equal(isBriefingEarnedByMember(approved, { isCreator: false, isAssignee: false }), false);
+  assert.equal(isBriefingEarnedByMember(approved), false);
+  assert.equal(getMemberBriefingAward(approved, { isCreator: false, isAssignee: false }), 0);
 });

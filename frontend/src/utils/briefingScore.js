@@ -46,6 +46,27 @@ export function getBriefingAwardedPoints(briefing = {}) {
   return Math.max(0, scoreNumber(basePoints + bonusPoints + scoreAdjustment));
 }
 
+/**
+ * True when this person has earned the briefing score. A recipient earns it as
+ * soon as their own delivery is completed; the person who briefed the work
+ * earns it when the whole briefing is approved.
+ */
+export function isBriefingEarnedByMember(briefing, { isCreator = false, isAssignee = false, memberStatus = '' } = {}) {
+  if (!isCreator && !isAssignee) return false;
+  const briefingCompleted = String(briefing?.Status || '') === 'เสร็จสิ้น';
+  const ownWorkCompleted = briefingCompleted || String(memberStatus || '') === 'เสร็จสิ้น';
+  return (isAssignee && ownWorkCompleted) || (isCreator && briefingCompleted);
+}
+
+/**
+ * The score is per person, never divided: a 5-point briefing pays the person
+ * who briefed it 5 and every recipient 5. Someone who is both is still paid
+ * once, and any Task deduction lowers everyone's share by the same amount.
+ */
+export function getMemberBriefingAward(briefing, roles) {
+  return isBriefingEarnedByMember(briefing, roles) ? getBriefingAwardedPoints(briefing) : 0;
+}
+
 export function getScoreAdjustmentPreview(briefing, targetPoints) {
   const currentPoints = getBriefingAwardedPoints(briefing);
   const target = Math.max(0, scoreNumber(targetPoints));
