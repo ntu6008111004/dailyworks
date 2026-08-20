@@ -70,3 +70,15 @@ test('an approved briefing pays the same score to the briefer and to every recip
   assert.doesNotMatch(migration, /v_remaining_points\s*\/\s*(cardinality|jsonb_array_length)/);
   assert.match(migration, /"Points" = COALESCE\("Points", 0\) \+ p_extra_points/);
 });
+
+test('every user may read their own point ledger, heads their department, admins everyone', () => {
+  const selfAccess = fs.readFileSync(
+    path.join(__dirname, '..', 'migration', '20260820_briefing_ledger_self_access.sql'),
+    'utf8',
+  );
+  assert.match(selfAccess, /v_viewer\."Role" = 'Admin'/);
+  assert.match(selfAccess, /v_viewer\."Role" = 'Head' AND target\."Department" IS NOT DISTINCT FROM v_viewer\."Department"/);
+  assert.match(selfAccess, /OR ledger\."UserID" = p_viewer_id/);
+  assert.doesNotMatch(selfAccess, /Only a head or admin may view/);
+  assert.match(selfAccess, /RAISE EXCEPTION 'Viewer not found'/);
+});

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
-import { AlertCircle, Activity, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
+import { AlertCircle, Activity, Award, CheckCircle2, Clock, AlertTriangle, PlayCircle, ClipboardList, X } from 'lucide-react';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { LoadingModal } from '../components/LoadingModal';
 import { StatusTasksModal } from '../components/StatusTasksModal';
 import { CustomSelect } from '../components/CustomSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
+import { formatBriefingPoints } from '../utils/briefingScore';
+import { getBangkokMonthRange } from '../utils/briefingPointLedger';
+import { computeMemberScore } from '../utils/briefingMemberScore';
 
 function dashboardFilterStorageKey(userId) {
   return `worklogs_dashboard_filters:${encodeURIComponent(String(userId || 'anonymous'))}`;
@@ -52,6 +55,7 @@ export const Dashboard = () => {
   const canSeeAll = isAdmin || isHRHead;
   
   const [allUsers, setAllUsers] = useState([]);
+  const [myScore, setMyScore] = useState(null);
 
   useEffect(() => {
     setSavedFiltersUserId('');
@@ -91,7 +95,24 @@ export const Dashboard = () => {
     return () => observer.disconnect();
   }, []);
 
+// The personal net score uses the same rulebook and month window as the
+  // team overview, so both pages report the same number for this user.
   useEffect(() => {
+    if (!userId) return undefined;
+    let mounted = true;
+    const month = getBangkokMonthRange();
+    Promise.all([
+      apiService.getBriefings(),
+      apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status'),
+      apiService.getBriefingPointLedger({ startDate: month.start, endDate: month.end }).catch(() => []),
+    ]).then(([briefings, responses, ledger]) => {
+      if (!mounted) return;
+      setMyScore(computeMemberScore({ briefings, responses, ledger, memberId: userId, startDate: month.start, endDate: month.end }));
+    }).catch((error) => console.warn('[Dashboard] personal score failed', error));
+    return () => { mounted = false; };
+  }, [userId]);
+
+    useEffect(() => {
     let isMounted = true;
     
     const fetchData = async () => {
@@ -270,6 +291,17 @@ export const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="glass p-6 rounded-2xl flex items-center gap-4 border-l-4 border-indigo-400 border-y border-r border-transparent">
+          <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
+            <Award size={24} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-500">คะแนนสุทธิของฉัน (เดือนนี้)</p>
+            <p className="text-2xl font-bold text-indigo-700">{myScore ? formatBriefingPoints(myScore.netPoints) : '—'}</p>
+            {myScore && myScore.deductionSummary.netDeduction > 0 && <p className="text-[11px] font-semibold text-rose-500">ได้ {formatBriefingPoints(myScore.totalPoints)} · ถูกหักสุทธิ {formatBriefingPoints(myScore.deductionSummary.netDeduction)}</p>}
+          </div>
+        </div>
+
         <div 
           onClick={() => { setSelectedStatus('ทั้งหมด'); setIsStatusModalOpen(true); }}
           className="glass p-6 rounded-2xl flex items-center gap-4 cursor-pointer hover:shadow-md transition-all border border-transparent hover:border-blue-200"

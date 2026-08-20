@@ -14,7 +14,8 @@ import { updateGateDecision } from '../src/utils/updateGate.js';
 import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
 import { briefingSelectAt, BRIEFING_SELECT_LADDER, BRIEFING_SELECT_RETRY_MS, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
 import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
-import { compareBriefingsByDueDate, sortBriefingsByDueDate } from '../src/utils/briefingOrder.js';
+import { compareBriefingsByDueDate, isBriefingFinished, sortBriefingsByDueDate } from '../src/utils/briefingOrder.js';
+import { computeMemberScore, filterMemberLedger, isBriefingInMemberRange } from '../src/utils/briefingMemberScore.js';
 
 test('recipient cannot alter the assigning brief, including a JSON-assignee record', () => {
   const briefing = { CreatorID: 'creator', Assignees: '["recipient", "other"]' };
@@ -289,4 +290,63 @@ test('a briefing cannot be saved by its creator without a positive score', () =>
   assert.equal(getBriefingPointsError(0.5), '');
   assert.equal(getBriefingPointsError(5), '');
   assert.equal(getBriefingPointsError('8'), '');
+});
+
+test('unfinished briefings outrank closed work regardless of deadline', () => {
+  const ordered = sortBriefingsByDueDate([
+    { ID: 'done-early', Status: 'เสร็จสิ้น', DueDate: '2026-08-01', CreatedAt: '2026-08-01T00:00:00.000Z' },
+    { ID: 'active-late', Status: 'ดำเนินการ', DueDate: '2026-09-15', CreatedAt: '2026-08-02T00:00:00.000Z' },
+    { ID: 'cancelled', Status: 'ยกเลิกงาน', DueDate: '2026-08-02', CreatedAt: '2026-08-03T00:00:00.000Z' },
+    { ID: 'waiting-review', Status: 'ส่งตรวจ', DueDate: '2026-08-25', CreatedAt: '2026-08-04T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(ordered.map((item) => item.ID), ['waiting-review', 'active-late', 'done-early', 'cancelled']);
+  assert.equal(isBriefingFinished({ Status: 'เสร็จสิ้น' }), true);
+  assert.equal(isBriefingFinished({ Status: 'เสร็จ' }), true);
+  assert.equal(isBriefingFinished({ Status: 'รอตรวจ' }), false);
+  assert.equal(isBriefingFinished(null), false);
+});
+
+test('the dashboard and team overview share one member score rulebook', () => {
+  const briefings = [
+    // Approved 5-point briefing completed this month: briefer and recipient both earn 5.
+    { ID: 'b1', Status: 'เสร็จสิ้น', CreatorID: 'boss', Assignees: ['worker'], Points: 5, FinalPoints: 5, BonusPoints: 0, CompletedAt: '2026-08-10T04:00:00.000Z' },
+    // Waiting review: nobody is paid yet.
+    { ID: 'b2', Status: 'ส่งตรวจ', CreatorID: 'boss', Assignees: ['worker'], Points: 3, StartDate: '2026-08-05' },
+    // Completed outside the range: excluded.
+    { ID: 'b3', Status: 'เสร็จสิ้น', CreatorID: 'boss', Assignees: ['worker'], Points: 9, FinalPoints: 9, BonusPoints: 0, CompletedAt: '2026-07-20T04:00:00.000Z' },
+  ];
+  const ledger = [
+    { UserID: 'worker', EntryType: 'LATE_PENALTY', Points: 4, CreatedAt: '2026-08-11T04:00:00.000Z' },
+    { UserID: 'worker', EntryType: 'LATE_REFUND', Points: 3, CreatedAt: '2026-08-12T04:00:00.000Z' },
+    { UserID: 'worker', EntryType: 'ERROR_PENALTY', Points: 5, CreatedAt: '2026-07-01T04:00:00.000Z' },
+    { UserID: 'boss', EntryType: 'SEVERE_ERROR_PENALTY', Points: 50, CreatedAt: '2026-08-13T04:00:00.000Z' },
+  ];
+  const range = { startDate: '2026-08-01', endDate: '2026-08-31' };
+
+  const worker = computeMemberScore({ briefings, responses: [], ledger, memberId: 'worker', ...range });
+  assert.equal(worker.totalPoints, 5);
+  assert.equal(worker.deductionSummary.netDeduction, 1, 'July penalty stays out of the August window');
+  assert.equal(worker.netPoints, 4);
+  assert.equal(worker.ledgerEntries.length, 2);
+
+  const boss = computeMemberScore({ briefings, responses: [], ledger, memberId: 'boss', ...range });
+  assert.equal(boss.totalPoints, 5, 'the briefer earns the same 5, not a split share');
+  assert.equal(boss.netPoints, 0, 'net points never go below zero');
+
+  const outsider = computeMemberScore({ briefings, responses: [], ledger, memberId: 'ghost', ...range });
+  assert.deepEqual([outsider.totalPoints, outsider.netPoints], [0, 0]);
+
+  // A recipient whose own delivery is complete earns before the whole briefing closes.
+  const partial = computeMemberScore({
+    briefings: [{ ID: 'b4', Status: 'รอตรวจ', CreatorID: 'boss', Assignees: ['worker'], Points: 2, StartDate: '2026-08-06' }],
+    responses: [{ BriefingID: 'b4', UserID: 'worker', Status: 'เสร็จสิ้น' }],
+    ledger: [],
+    memberId: 'worker', ...range,
+  });
+  assert.equal(partial.totalPoints, 2);
+
+  assert.equal(isBriefingInMemberRange({ Status: 'ดำเนินการ', StartDate: '2026-08-05' }, '2026-08-01', '2026-08-31'), true);
+  assert.equal(isBriefingInMemberRange({ Status: 'เสร็จสิ้น', CompletedAt: '2026-07-20T04:00:00.000Z' }, '2026-08-01', '2026-08-31'), false);
+  assert.equal(isBriefingInMemberRange({ Status: 'ดำเนินการ' }, '2026-08-01', '2026-08-31'), true, 'undated work stays visible');
+  assert.equal(filterMemberLedger(null, 'worker', '', '').length, 0);
 });

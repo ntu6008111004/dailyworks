@@ -158,8 +158,8 @@ export const Tasks = () => {
   const userName = user?.Name || user?.name;
   const userDept = user?.Department || user?.department;
   const isAdmin = userRole === 'Admin';
-  const isHRHead = userRole === 'Head' && userDept === 'HR';
-  const canSeeAll = isAdmin || isHRHead;
+  // Tasks are personal: only an admin looks across people.
+  const canSeeAll = isAdmin;
 
   // ─── Permissions ────────────────────────────────────────────────────────────
   const DEFAULT_PERMS = { showDailySummary: true, showMonthlySummary: true, showFullTaskDetail: true };
@@ -176,7 +176,6 @@ export const Tasks = () => {
   // ─── Derived filter lists ────────────────────────────────────────────────────
   const uniqueDepartments = [...new Set(allUsers.map(u => u.Department))].filter(Boolean);
   const filteredUsers = allUsers.filter(u => {
-    if (userRole === 'Head' && !canSeeAll && u.Department !== userDept) return false;
     if (u.Role === 'Admin') return false;
     return filterDepartment === 'All' || u.Department === filterDepartment;
   });
@@ -250,7 +249,7 @@ export const Tasks = () => {
     fetchPage(1);
 
     // Fetch user list for filter dropdowns (Admins/Heads only)
-    if (canSeeAll || userRole === 'Head') {
+    if (canSeeAll) {
       apiService.getUsers().then(data => { if (isMounted) setAllUsers(data); }).catch(() => { });
     }
 
@@ -576,7 +575,7 @@ export const Tasks = () => {
             <CustomDatePicker selectedDate={localEndDate} onChange={(date) => setLocalEndDate(date)} borderDashed placeholder="ถึง" />
           </div>
 
-          {(canSeeAll || userRole === 'Head') && (
+          {canSeeAll && (
             <div className="flex items-center gap-2 text-black w-full lg:w-auto">
               {canSeeAll && (
                 <CustomSelect

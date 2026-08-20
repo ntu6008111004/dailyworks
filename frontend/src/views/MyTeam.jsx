@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
-import { formatBriefingPoints, getMemberBriefingAward, isBriefingEarnedByMember } from '../utils/briefingScore';
-import { POINT_LEDGER_LABELS, getBangkokMonthRange, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../utils/briefingPointLedger';
+import { formatBriefingPoints } from '../utils/briefingScore';
+import { computeMemberScore } from '../utils/briefingMemberScore';
+import { POINT_LEDGER_LABELS, getBangkokMonthRange } from '../utils/briefingPointLedger';
 
 // Daily work always opens on the month being scored.
 const CURRENT_MONTH = getBangkokMonthRange();
@@ -78,8 +79,6 @@ export const MyTeam = () => {
 
     // 2. Map stats per member
     const members = filteredUsers.map(member => {
-      let totalPoints = 0;
-      let specialPoints = 0;
       let completedCount = 0;
       let inProgressCount = 0;
       let notStartedCount = 0;
@@ -87,31 +86,14 @@ export const MyTeam = () => {
       let briefedInProgressCount = 0;
       let briefedNotStartedCount = 0;
 
-      const memberLedger = pointLedger.filter((entry) => {
-        if (String(entry.UserID) !== String(member.ID)) return false;
-        const entryDate = toBangkokDateKey(entry.CreatedAt);
-        if (startDate && entryDate < startDate) return false;
-        if (endDate && entryDate > endDate) return false;
-        return true;
-      });
-      
+      // Points and deductions share one rulebook with the personal dashboard.
+      const score = computeMemberScore({ briefings: allBriefings, responses: allResponses, ledger: pointLedger, memberId: member.ID, startDate, endDate });
+
       allBriefings.forEach(b => {
         const isCreator = String(b.CreatorID) === String(member.ID);
         const isAssignee = Array.isArray(b.Assignees) && b.Assignees.some(id => String(id) === String(member.ID));
         
         if (!isCreator && !isAssignee) return;
-        
-        // Find individual assignee response for this briefing to get individual status for points
-        const memberResponse = allResponses.find(r => String(r.BriefingID) === String(b.ID) && String(r.UserID) === String(member.ID));
-        let memberStatus = memberResponse?.Status || 'รอดำเนินการ';
-        
-        // If overall briefing is completed, individual status is also completed
-        if (b.Status === 'เสร็จสิ้น') {
-          memberStatus = 'เสร็จสิ้น';
-        }
-        
-        // Determine if completed/active from this user's perspective
-        const isCompleted = isBriefingEarnedByMember(b, { isCreator, isAssignee, memberStatus });
         
         // Check date filter range based on overall status (matches activeBriefings card calculation)
         const dateStr = b.Status === 'เสร็จสิ้น' 
@@ -122,16 +104,6 @@ export const MyTeam = () => {
           const targetDate = dateStr.slice(0, 10); // YYYY-MM-DD
           if (startDate && targetDate < startDate) return;
           if (endDate && targetDate > endDate) return;
-        }
-
-        // Award points if completed from this user's perspective
-        if (isCompleted) {
-          // Legacy completed briefings have no FinalPoints/BonusPoints, so they
-          // keep their original total. New reviewed work receives only its
-          // non-negative final score plus the approved special score.
-          const bonusPoints = Math.max(0, Number(b.BonusPoints) || 0);
-          totalPoints += getMemberBriefingAward(b, { isCreator, isAssignee, memberStatus });
-          specialPoints += bonusPoints;
         }
 
         // Assignee and Creator roles for counts to prevent duplicate count on same user
@@ -157,14 +129,13 @@ export const MyTeam = () => {
         }
       });
       
-      const deductionSummary = summarizePointLedger(memberLedger);
       return {
         ...member,
-        totalPoints,
-        netPoints: getNetTeamPoints(totalPoints, memberLedger),
-        specialPoints,
-        deductionSummary,
-        ledgerEntries: memberLedger,
+        totalPoints: score.totalPoints,
+        netPoints: score.netPoints,
+        specialPoints: score.specialPoints,
+        deductionSummary: score.deductionSummary,
+        ledgerEntries: score.ledgerEntries,
         completedCount,
         inProgressCount,
         notStartedCount,

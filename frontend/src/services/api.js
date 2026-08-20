@@ -306,8 +306,8 @@ export const apiService = {
             const endDate = data.endDate || '';
 
             const userRole = (data.userRole || 'Staff').toString().trim();
-            const userDept = (data.userDept || '').toString().trim();
-            const canSeeAll = userRole === 'Admin' || (userRole === 'Head' && userDept === 'HR');
+            // Tasks are personal: every role except Admin reads only its own rows.
+            const canSeeAll = userRole === 'Admin';
             const currentUserId = String(data.userId || '');
 
             let filtered = mergedTasks.filter(t => {
@@ -316,11 +316,7 @@ export const apiService = {
               const tDept = (t.Department || '').toString().trim().toLowerCase();
 
               if (!canSeeAll) {
-                if (userRole === 'Staff' && tUserId !== currentUserId) return false;
-                if (userRole === 'Head') {
-                  if (tDept !== userDept.toLowerCase()) return false;
-                  if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
-                }
+                if (tUserId !== currentUserId) return false;
               } else {
                 if (department !== 'All' && tDept !== department.toLowerCase()) return false;
                 if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
