@@ -1,1332 +1,204 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { X, Plus, Trash2, Link as LinkIcon, Image as ImageIcon, UploadCloud, User, CheckCircle2, AlertCircle, Save, ExternalLink, NotebookTabs, Calendar, Clock, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle, ClipboardCheck, ExternalLink, Image as ImageIcon,
+  Link as LinkIcon, Loader2, Plus, Save, Send, UploadCloud, UserRound, X
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { LoadingModal } from './LoadingModal';
-import { ConfirmModal } from './ConfirmModal';
-import { CustomSelect } from './CustomSelect';
-import { CustomDatePicker } from './CustomDatePicker';
 import { apiService } from '../services/api';
-import { compressImageDetails, formatImageSize, getImageFiles } from '../utils/compressImage';
 import { useAuth } from '../context/AuthContext';
-import { format } from 'date-fns';
-import { th } from 'date-fns/locale';
+import { compressImageDetails, formatImageSize, getImageFiles, snapshotSelectedFiles } from '../utils/compressImage';
+import { getBriefingImages, MAX_BRIEFING_IMAGES } from '../utils/briefingImages';
+import {
+  canEditBriefingContent,
+  canEditBriefingStatus,
+  isBriefingAssignee,
+  isBriefingCreator,
+} from '../utils/briefingPermissions';
+import { getBriefingAwardedPoints } from '../utils/briefingScore';
+import { CustomSelect } from './CustomSelect';
 
-const BRIEFING_PALETTE = [
-  { name: 'Crimson', hex: '#be123c', text: 'white' },   // Deep Rose
-  { name: 'Violet', hex: '#7c3aed', text: 'white' },    // Rich Purple
-  { name: 'Sapphire', hex: '#1d4ed8', text: 'white' },  // Strong Blue
-  { name: 'Indigo', hex: '#4338ca', text: 'white' },    // Deep Blue-Purple
-  { name: 'Turquoise', hex: '#0d9488', text: 'white' }, // Teal
-  { name: 'Orange', hex: '#ea580c', text: 'white' },    // Strong Orange
-  { name: 'Slate', hex: '#475569', text: 'white' },     // Professional Gray
-  { name: 'Sky', hex: '#0284c7', text: 'white' },      // Bright Sky
-];
-
-const ACTIVE_COLORS = {
-  'รอดำเนินการ': 'bg-slate-600 border-slate-600 text-white shadow-md',
-  'กำลังทำ': 'bg-blue-600 border-blue-600 text-white shadow-md',
-  'รอตรวจ': 'bg-pink-400 border-pink-400 text-white shadow-md',
-  'รอแก้ไข': 'bg-yellow-400 border-yellow-400 text-yellow-950 shadow-md',
-  'เสร็จสิ้น': 'bg-[#198754] border-[#198754] text-white shadow-md',
-  'ยกเลิกงาน': 'bg-zinc-600 border-zinc-600 text-white shadow-md'
+const MAX_IMAGES = MAX_BRIEFING_IMAGES;
+const ASSIGNER_STATUSES = ['แก้ไข', 'ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'สั่งแก้ไข', 'ยกเลิกงาน', 'ส่งตรวจ'];
+const STATUS_STYLES = {
+  'แก้ไข': 'bg-violet-50 text-violet-700 border-violet-200',
+  'ดำเนินการ': 'bg-slate-100 text-slate-700 border-slate-200',
+  'รอดำเนินการ': 'bg-slate-100 text-slate-700 border-slate-200',
+  'กำลังทำ': 'bg-blue-50 text-blue-700 border-blue-200',
+  'รอตรวจ': 'bg-amber-50 text-amber-700 border-amber-200',
+  'ส่งตรวจ': 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+  'สั่งแก้ไข': 'bg-orange-50 text-orange-700 border-orange-200',
+  'รอแก้ไข': 'bg-orange-50 text-orange-700 border-orange-200',
+  'ยกเลิกงาน': 'bg-zinc-100 text-zinc-700 border-zinc-200',
+  'เสร็จสิ้น': 'bg-emerald-50 text-emerald-700 border-emerald-200',
 };
 
-const READONLY_COLORS = {
-  'รอดำเนินการ': 'bg-slate-50 text-slate-600 border border-slate-200 ring-slate-500/10',
-  'กำลังทำ': 'bg-blue-50 text-blue-600 border border-blue-200 ring-blue-500/10',
-  'รอตรวจ': 'bg-pink-50 text-pink-600 border border-pink-200 ring-pink-500/10',
-  'รอแก้ไข': 'bg-yellow-50 text-yellow-700 border border-yellow-200 ring-yellow-500/10',
-  'เสร็จสิ้น': 'bg-green-50 text-green-700 border border-green-200 ring-green-500/10',
-  'ยกเลิกงาน': 'bg-zinc-50 text-zinc-600 border border-zinc-200 ring-zinc-500/10'
-};
+const PersonAvatar = ({ person, size = 'w-8 h-8' }) => person?.ProfileImage ? (
+  <img src={person.ProfileImage} alt="" className={`${size} rounded-full border border-white object-cover shadow-sm`} />
+) : (
+  <span className={`${size} flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 font-bold text-slate-600`}>
+    {(person?.Name || person?.Username || 'U').charAt(0).toUpperCase()}
+  </span>
+);
 
-export const BriefingModal = ({ briefing, onClose, onSaved, allUsers }) => {
+const StatusPill = ({ status }) => <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${STATUS_STYLES[status] || STATUS_STYLES['ดำเนินการ']}`}>{status || 'ดำเนินการ'}</span>;
+const FieldLabel = ({ text, optional }) => <span className="mb-1.5 block text-xs font-black text-slate-700">{text}{optional && <span className="ml-1 font-medium text-slate-400">(ไม่บังคับ)</span>}</span>;
+
+const ImageGrid = ({ images, editable, onRemove, onPreview, label, onAdd, isUploading, sizes }) => (
+  <section className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><p className="text-sm font-black text-slate-800">{label}</p><p className="text-xs text-slate-500">สูงสุด {MAX_IMAGES} รูป · บีบอัดและเก็บใน Storage ไม่เกิน 2 MB/รูป</p></div>
+      {editable && images.length < MAX_IMAGES && <label className={`inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 ${isUploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'}`}>
+        {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}{isUploading ? 'กำลังอัปโหลด…' : `เพิ่มรูป (${images.length}/${MAX_IMAGES})`}
+        <input className="hidden" type="file" accept="image/*" multiple disabled={isUploading} onChange={onAdd} />
+      </label>}
+    </div>
+    {images.length ? <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">{images.map((image, index) => <div key={`${image}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      <img src={image} alt={`รูปที่ ${index + 1}`} className="h-full w-full cursor-zoom-in object-cover" onClick={() => onPreview(image)} />
+      {sizes[image] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">{formatImageSize(sizes[image])}</span>}
+      {editable && <button type="button" aria-label="ลบรูป" onClick={() => onRemove(index)} className="absolute right-1 top-1 rounded-lg bg-rose-600 p-1 text-white opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100"><X size={13} /></button>}
+    </div>)}</div> : <div className="flex min-h-28 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 text-center text-slate-400"><ImageIcon size={23} className="mb-2" /><p className="text-xs font-medium">ยังไม่มีรูปภาพประกอบ</p></div>}
+  </section>
+);
+
+export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => {
   const { user } = useAuth();
   const isAdmin = user?.Role === 'Admin';
-  // Check if current user is Head of the creator's department
-  const creator = allUsers.find(u => String(u.ID) === String(briefing?.CreatorID));
-  const isDeptHead = user?.Role === 'Head' && creator?.Department === user?.Department;
-  const perms = user?.Permissions || {};
-  const canManagePostStatus = isAdmin || perms.canManagePostStatus;
-
-  const [saving, setSaving] = useState(false);
+  const creator = allUsers.find((item) => String(item.ID) === String(briefing?.CreatorID));
+  const isDepartmentHead = user?.Role === 'Head' && creator?.Department === user?.Department;
+  const isCreator = !briefing || isBriefingCreator(briefing, user?.ID);
+  const isAssignee = isBriefingAssignee(briefing, user?.ID);
+  // An assignee may only update their own delivery response.  Even when that
+  // person also has an administrative role, the assigning person's brief must
+  // stay read-only in this workflow.
+  const canEditBrief = !briefing || canEditBriefingContent({ briefing, userId: user?.ID, isAdmin, isDepartmentHead });
+  const canEditStatus = !briefing || canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
+  const canEditPoints = !briefing || (canEditBrief && isCreator);
+  const [fullBriefing, setFullBriefing] = useState(briefing || null);
   const [responses, setResponses] = useState([]);
-  const [isLoadingResponses, setIsLoadingResponses] = useState(true);
-  const [reviewerNote, setReviewerNote] = useState('');
-  const [reviewerImages, setReviewerImages] = useState([]);
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState(() => {
-    const userId = String(user?.ID || '');
-    if (briefing?.Assignees?.some(id => String(id) === userId)) {
-      return userId;
-    }
-    return briefing?.Assignees?.length > 0 ? String(briefing.Assignees[0]) : null;
-  });
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState(() => isAssignee ? String(user?.ID) : String(briefing?.Assignees?.[0] || ''));
+  const [loading, setLoading] = useState(Boolean(briefing?.ID));
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const [focusedSide, setFocusedSide] = useState(() => {
-    const userId = String(user?.ID || '');
-    // If Assignee is viewing their own tasks, right is active. Admin defaults to left.
-    if (briefing?.Assignees?.some(id => String(id) === userId)) return null;
-    return 'left';
-  });
-  const [isDragging, setIsDragging] = useState(false);
-  
-  const isCreator = !briefing || String(briefing.CreatorID) === String(user?.ID);
-  const canEditCore = !briefing || isCreator || isAdmin || isDeptHead;
-  // คะแนนเป็นสิทธิ์เฉพาะเจ้าของบรีฟ แม้ Admin/Head จะยังแก้รายละเอียดงานได้ตามเดิม
-  const canEditPoints = !briefing || isCreator;
-  
+  const [imageSizes, setImageSizes] = useState({});
+  const [refImages, setRefImages] = useState(() => getBriefingImages(briefing, 'RefImages', 'RefImage'));
   const [formData, setFormData] = useState({
-    Title: briefing?.Title || '',
-    Detail: briefing?.Detail || '',
-    CreatorNote: briefing?.CreatorNote || '',
-    Priority: briefing?.Priority || 'Medium',
-    Status: briefing?.Status || 'รอดำเนินการ',
-    StartDate: briefing?.StartDate || new Date().toISOString().split('T')[0],
-    DueDate: briefing?.DueDate || new Date().toISOString().split('T')[0],
-    Assignees: briefing?.Assignees || [],
-    RefURL: briefing?.RefURL || '',
-    CardColor: briefing?.CardColor || '',
-    PostStatus: briefing?.PostStatus || 'ยังไม่โพส',
-    PostUrl: briefing?.PostUrl || '',
-    PostDate: briefing?.PostDate || new Date().toISOString().split('T')[0],
-    Points: briefing?.Points || 0
+    Title: briefing?.Title || '', Detail: briefing?.Detail || '', CreatorNote: briefing?.CreatorNote || '', Priority: briefing?.Priority || 'Medium',
+    Status: briefing?.Status || 'ดำเนินการ', StartDate: briefing?.StartDate || new Date().toISOString().slice(0, 10), DueDate: briefing?.DueDate || new Date().toISOString().slice(0, 10),
+    Assignees: briefing?.Assignees || [], RefURL: briefing?.RefURL || '', CardColor: briefing?.CardColor || '', PostStatus: briefing?.PostStatus || 'ยังไม่โพส',
+    PostUrl: briefing?.PostUrl || '', PostDate: briefing?.PostDate || '', Points: briefing?.Points || 0,
   });
+  const [myResponse, setMyResponse] = useState({ ResultImages: [], URL1: '', URL2: '', Status: 'ดำเนินการ', Note: '' });
+  const selectedResponse = responses.find((item) => String(item.UserID) === String(selectedAssigneeId));
+  const selectedAssignee = allUsers.find((item) => String(item.ID) === String(selectedAssigneeId));
 
-  const [isLoadingBriefing, setIsLoadingBriefing] = useState(false);
-  const [isProcessingImages, setIsProcessingImages] = useState(false);
-  const [imageSizeByUrl, setImageSizeByUrl] = useState({});
-
-  const processImages = useCallback(async (files) => {
-    if (isProcessingImages) {
-      toast.error('กำลังบีบอัดรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
-      return [];
-    }
-    setIsProcessingImages(true);
+  const loadData = useCallback(async () => {
+    if (!briefing?.ID) return;
+    setLoading(true);
     try {
-      const results = await Promise.all(files.map((file) => compressImageDetails(file)));
-      setImageSizeByUrl((current) => ({
-        ...current,
-        ...Object.fromEntries(results.map((result) => [result.dataUrl, result.sizeBytes])),
-      }));
-      return results.map((result) => result.dataUrl);
-    } catch (error) {
-      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
-      return [];
-    } finally {
-      setIsProcessingImages(false);
-    }
-  }, [isProcessingImages]);
-
+      const [loadedBriefing, loadedResponses] = await Promise.all([apiService.getBriefingById(briefing.ID), apiService.getBriefingResponses(briefing.ID)]);
+      setFullBriefing(loadedBriefing); setResponses(loadedResponses || []);
+      setFormData({ Title: loadedBriefing.Title || '', Detail: loadedBriefing.Detail || '', CreatorNote: loadedBriefing.CreatorNote || '', Priority: loadedBriefing.Priority || 'Medium', Status: loadedBriefing.Status || 'ดำเนินการ', StartDate: loadedBriefing.StartDate || '', DueDate: loadedBriefing.DueDate || '', Assignees: loadedBriefing.Assignees || [], RefURL: loadedBriefing.RefURL || '', CardColor: loadedBriefing.CardColor || '', PostStatus: loadedBriefing.PostStatus || 'ยังไม่โพส', PostUrl: loadedBriefing.PostUrl || '', PostDate: loadedBriefing.PostDate || '', Points: loadedBriefing.Points || 0 });
+      setRefImages(getBriefingImages(loadedBriefing, 'RefImages', 'RefImage'));
+      const ownResponse = (loadedResponses || []).find((item) => String(item.UserID) === String(user?.ID));
+      if (ownResponse && isAssignee) { setSelectedAssigneeId(String(user?.ID)); setMyResponse({ ResultImages: getBriefingImages(ownResponse, 'ResultImages', 'ResultImage'), URL1: ownResponse.URL1 || '', URL2: ownResponse.URL2 || '', Status: ownResponse.Status || 'ดำเนินการ', Note: ownResponse.Note || '' }); }
+      else if (isAssignee) setSelectedAssigneeId(String(user?.ID));
+      else if (loadedBriefing.Assignees?.length) setSelectedAssigneeId(String(loadedBriefing.Assignees[0]));
+    } catch (error) { toast.error(`ไม่สามารถโหลดรายละเอียดบรีฟ: ${error.message}`, { position: 'bottom-right' }); }
+    finally { setLoading(false); }
+  }, [briefing?.ID, isAssignee, user?.ID]);
+  useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
-    const loadFullBriefing = async () => {
-      if (!briefing?.ID) return;
-      setIsLoadingBriefing(true);
-      try {
-        const fullBriefing = await apiService.getBriefingById(briefing.ID);
-        setFormData({
-          Title: fullBriefing.Title || '',
-          Detail: fullBriefing.Detail || '',
-          CreatorNote: fullBriefing.CreatorNote || '',
-          Priority: fullBriefing.Priority || 'Medium',
-          Status: fullBriefing.Status || 'รอดำเนินการ',
-          StartDate: fullBriefing.StartDate || '',
-          DueDate: fullBriefing.DueDate || '',
-          Assignees: fullBriefing.Assignees || [],
-          RefURL: fullBriefing.RefURL || '',
-          CardColor: fullBriefing.CardColor || '',
-          PostStatus: fullBriefing.PostStatus || 'ยังไม่โพส',
-          PostUrl: fullBriefing.PostUrl || '',
-          PostDate: fullBriefing.PostDate || '',
-          Points: fullBriefing.Points || 0
-        });
-        const imgs = [];
-        if (fullBriefing.RefImage1) imgs.push(fullBriefing.RefImage1);
-        if (fullBriefing.RefImage2) imgs.push(fullBriefing.RefImage2);
-        if (fullBriefing.RefImage3) imgs.push(fullBriefing.RefImage3);
-        if (fullBriefing.RefImage4) imgs.push(fullBriefing.RefImage4);
-        if (fullBriefing.RefImage5) imgs.push(fullBriefing.RefImage5);
-        if (fullBriefing.RefImage6) imgs.push(fullBriefing.RefImage6);
-        setRefImages(imgs);
-      } catch (e) {
-        console.error('Failed to load full briefing', e);
-        toast.error('ไม่สามารถโหลดข้อมูลรูปภาพบรีฟได้', { position: 'bottom-right' });
-      } finally {
-        setIsLoadingBriefing(false);
-      }
+    const onRealtimeUpdate = (event) => {
+      const incoming = event.detail?.briefing;
+      if (!incoming || event.detail?.eventType === 'DELETE' || String(incoming.ID) !== String(briefing?.ID)) return;
+      setFullBriefing((current) => ({ ...(current || {}), ...incoming }));
+      if (incoming.Status) setFormData((current) => ({ ...current, Status: incoming.Status }));
     };
-
-    loadFullBriefing();
+    window.addEventListener('remote-briefing-update', onRealtimeUpdate);
+    return () => window.removeEventListener('remote-briefing-update', onRealtimeUpdate);
   }, [briefing?.ID]);
 
-  const [refImages, setRefImages] = useState(() => {
-    const imgs = [];
-    if (briefing?.RefImage1) imgs.push(briefing.RefImage1);
-    if (briefing?.RefImage2) imgs.push(briefing.RefImage2);
-    if (briefing?.RefImage3) imgs.push(briefing.RefImage3);
-    if (briefing?.RefImage4) imgs.push(briefing.RefImage4);
-    if (briefing?.RefImage5) imgs.push(briefing.RefImage5);
-    if (briefing?.RefImage6) imgs.push(briefing.RefImage6);
-    return imgs;
-  });
-
-  // Assignee's own response state
-  const [myResponse, setMyResponse] = useState({
-    ResultImages: [],
-    URL1: '',
-    URL2: '',
-    Status: 'รอดำเนินการ',
-    Note: ''
-  });
-
-  const isAssignee = briefing?.Assignees?.some(id => String(id) === String(user?.ID));
-
-  const loadResponses = useCallback(async () => {
-    setIsLoadingResponses(true);
+  const uploadFiles = useCallback(async (files, folder) => {
+    const usable = getImageFiles(files);
+    if (!usable.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return []; }
+    setUploading(true);
     try {
-      if (!briefing?.ID) return;
-      const data = await apiService.getBriefingResponses(briefing.ID);
-      setResponses(data || []);
-      
-      // Select the current user if they are an assignee, otherwise select first assignee
-      const userId = String(user?.ID || '');
-      if (isAssignee) {
-        setSelectedAssigneeId(userId);
-        const resp = data.find(r => String(r.UserID) === userId);
-        if (resp) {
-          const imgs = [];
-          [1,2,3,4,5,6].forEach(i => { if (resp[`ResultImage${i}`]) imgs.push(resp[`ResultImage${i}`]); });
-          setMyResponse({
-            ResultImages: imgs,
-            URL1: resp.URL1 || '',
-            URL2: resp.URL2 || '',
-            Status: resp.Status || 'รอดำเนินการ',
-            Note: resp.Note || ''
-          });
-        }
-      } else if (briefing.Assignees?.length > 0) {
-        setSelectedAssigneeId(String(briefing.Assignees[0]));
-      }
-    } catch (e) {
-      console.error('Failed to load responses', e);
-    } finally {
-      setIsLoadingResponses(false);
-    }
-  }, [briefing?.ID, isAssignee, briefing?.Assignees, user?.ID]);
+      const compressed = await Promise.all(usable.map((file) => compressImageDetails(file)));
+      const uploaded = await Promise.all(compressed.map((result) => apiService.uploadImage(result.blob, { folder })));
+      setImageSizes((current) => ({ ...current, ...Object.fromEntries(uploaded.map((file, index) => [file.url, compressed[index].sizeBytes])) }));
+      return uploaded.map((file) => file.url);
+    } catch (error) { toast.error(error.message || 'อัปโหลดรูปภาพไม่สำเร็จ', { position: 'bottom-right' }); return []; }
+    finally { setUploading(false); }
+  }, []);
 
-  useEffect(() => {
-    if (briefing?.ID) {
-      loadResponses();
-    }
-  }, [briefing?.ID, loadResponses]);
+  const addReferenceImages = async (event) => { const files = snapshotSelectedFiles(event.currentTarget); if (refImages.length + files.length > MAX_IMAGES) { toast.error(`แนบรูปอ้างอิงได้สูงสุด ${MAX_IMAGES} รูป`, { position: 'bottom-right' }); return; } const images = await uploadFiles(files, 'briefings/reference'); if (images.length) setRefImages((current) => [...current, ...images]); };
+  const addResultImages = async (event) => { const files = snapshotSelectedFiles(event.currentTarget); if (myResponse.ResultImages.length + files.length > MAX_IMAGES) { toast.error(`แนบหลักฐานงานได้สูงสุด ${MAX_IMAGES} รูป`, { position: 'bottom-right' }); return; } const images = await uploadFiles(files, 'briefings/result'); if (images.length) setMyResponse((current) => ({ ...current, ResultImages: [...current.ResultImages, ...images] })); };
 
-  // Ctrl+V Paste handling for images
-  useEffect(() => {
-    const handlePaste = async (e) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      
-      const files = [];
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const file = items[i].getAsFile();
-          if (file) files.push(file);
-        }
-      }
-      
-      if (files.length > 0) {
-        const news = await processImages(files);
-        if (!news.length) return;
-        // If we're an assignee and on our tab, or if we're the creator
-        if (selectedAssigneeId === String(user?.ID || '')) {
-          if (myResponse.ResultImages.length + news.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          setMyResponse(prev => ({ ...prev, ResultImages: [...prev.ResultImages, ...news] }));
-          toast.success('วางรูปภาพสำเร็จ (ผลการทำงาน)', { position: 'bottom-right' });
-        } else if (canEditCore) {
-          if (refImages.length + news.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          setRefImages(prev => [...prev, ...news]);
-          toast.success('วางรูปภาพสำเร็จ (รูปอ้างอิง)', { position: 'bottom-right' });
-        }
-      }
-    };
-
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [canEditCore, refImages, myResponse, processImages, selectedAssigneeId, user?.ID]);
+  const persistMyResponse = () => apiService.saveBriefingResponse({
+    BriefingID: briefing.ID,
+    UserID: String(user?.ID || ''),
+    URL1: myResponse.URL1,
+    URL2: myResponse.URL2,
+    Note: myResponse.Note,
+    ResultImages: myResponse.ResultImages,
+  });
 
   const handleSaveBriefing = async () => {
-    if (saving || isProcessingImages) {
-      if (isProcessingImages) toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
-      return;
-    }
+    if (saving || uploading) return;
+    if (!formData.Title.trim() || !formData.Detail.trim()) { toast.error('กรุณาระบุชื่อและรายละเอียดงาน', { position: 'bottom-right' }); return; }
     setSaving(true);
     try {
-      const refImagePayload = {};
-      for (let i = 1; i <= 6; i++) {
-        refImagePayload[`RefImage${i}`] = refImages[i - 1] || null;
-      }
-      const payload = {
-        ...formData,
-        ...refImagePayload
-      };
-
-      // Do not send Points when this is someone else's briefing. This protects
-      // the value even when that user can edit other briefing details.
-      if (briefing?.ID && !canEditPoints) {
-        delete payload.Points;
-      }
-      
-      if (briefing?.ID) {
-        payload.ID = briefing.ID;
-        await apiService.updateBriefing(payload);
-      } else {
-        await apiService.addBriefing(payload);
-      }
+      const payload = { ...formData, RefImages: refImages };
+      if (briefing?.ID && !canEditPoints) delete payload.Points;
+      if (briefing?.ID) await apiService.updateBriefing({ ...payload, ID: briefing.ID });
+      else await apiService.addBriefing(payload);
       toast.success('บันทึกบรีฟงานเรียบร้อย', { position: 'bottom-right' });
       onSaved();
-    } catch (e) {
-      toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
-    } finally {
-      setSaving(false);
     }
+    catch (error) { toast.error(`บันทึกไม่สำเร็จ: ${error.message}`, { position: 'bottom-right' }); }
+    finally { setSaving(false); }
   };
 
   const handleSaveResponse = async () => {
-    if (saving || isProcessingImages) {
-      if (isProcessingImages) toast.error('กำลังเตรียมรูปภาพ กรุณารอสักครู่', { position: 'bottom-right' });
-      return;
-    }
+    if (!briefing?.ID || saving || uploading) return;
     setSaving(true);
     try {
-      // Auto status trigger: เมื่อผู้รับมอบหมายแนบงาน (รูป/URL/โน้ต) ให้เปลี่ยนสถานะเป็น 'รอตรวจ' เสมอ
-      let currentStatus = myResponse.Status;
-      const hasContent = myResponse.ResultImages.length > 0 || myResponse.URL1 || myResponse.URL2 || myResponse.Note;
-
-      // Auto-change to 'รอตรวจ' when there is content attached
-      // ยกเว้นสถานะ 'เสร็จสิ้น', 'ยกเลิกงาน' ที่ไม่ควร override, หรือ 'รอตรวจ' ที่เป็นอยู่แล้ว
-      if (hasContent && currentStatus !== 'เสร็จสิ้น' && currentStatus !== 'ยกเลิกงาน' && currentStatus !== 'รอตรวจ') {
-        currentStatus = 'รอตรวจ';
-      }
-
-      // Auto Overall Status Calculation on Client
-      const assigneeIds = formData.Assignees;
-      const latestStatuses = assigneeIds.map(id => {
-        if (String(id) === String(user?.ID)) {
-          return currentStatus;
-        }
-        const r = responses.find(resp => String(resp.UserID) === String(id));
-        return r?.Status || 'รอดำเนินการ';
-      });
-
-      let newOverallStatus = formData.Status;
-      if (latestStatuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
-      else if (latestStatuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
-      else if (latestStatuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
-      else if (latestStatuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
-      else if (latestStatuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
-      else newOverallStatus = 'กำลังทำ';
-
-      const resultImagePayload = {};
-      for (let i = 1; i <= 6; i++) {
-        resultImagePayload[`ResultImage${i}`] = myResponse.ResultImages[i - 1] || null;
-      }
-
-      const payload = {
-        BriefingID: briefing.ID,
-        UserID: String(user?.ID || ''),
-        URL1: myResponse.URL1,
-        URL2: myResponse.URL2,
-        Status: currentStatus,
-        Note: myResponse.Note,
-        NewOverallStatus: newOverallStatus,
-        ...resultImagePayload
-      };
-      await apiService.saveBriefingResponse(payload);
-      
-      toast.success('บันทึกผลการบรีฟเรียบร้อย', { position: 'bottom-right' });
-      loadResponses();
-      onSaved();
-    } catch (e) {
-      toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
-    } finally {
-      setSaving(false);
-    }
+      await persistMyResponse();
+      toast.success('บันทึกรูป ลิงก์ และหมายเหตุการส่งงานเรียบร้อย', { position: 'bottom-right' }); await loadData(); onSaved();
+    } catch (error) { toast.error(`บันทึกไม่สำเร็จ: ${error.message}`, { position: 'bottom-right' }); }
+    finally { setSaving(false); }
   };
 
-  const triggerAutoOverallStatus = async () => {
-    if (!briefing?.ID) return;
-    
-    try {
-      // Get latest responses (including the one just saved)
-      const latestResps = await apiService.getBriefingResponses(briefing.ID);
-      const assigneeIds = formData.Assignees;
-      
-      let newOverallStatus = formData.Status;
-      const statuses = assigneeIds.map(id => {
-        const r = latestResps.find(resp => String(resp.UserID) === String(id));
-        return r?.Status || 'รอดำเนินการ';
-      });
+  const assigneeOptions = useMemo(() => allUsers.filter((item) => item.Role !== 'Admin').map((item) => ({ value: String(item.ID), label: `${item.Name || item.Username} · ${item.Department || 'ไม่ระบุแผนก'}` })), [allUsers]);
+  const pointsAfterDeduction = Math.max(0, Number(fullBriefing?.Points ?? formData.Points ?? 0) - Number(fullBriefing?.DeductedPoints || 0));
+  const recipientSystemStatus = fullBriefing?.Status || formData.Status || 'ดำเนินการ';
 
-      if (statuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
-      else if (statuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
-      else if (statuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
-      else if (statuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
-      else if (statuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
-      else newOverallStatus = 'กำลังทำ';
+  return <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true">
+    <div className="flex h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl">
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-blue-50 via-white to-violet-50 px-4 py-4 sm:px-6"><div className="min-w-0"><div className="mb-1 flex flex-wrap items-center gap-2"><span className="rounded-md bg-blue-600 px-2 py-0.5 text-[10px] font-black tracking-wider text-white">{briefing?.RunningID || 'สร้างบรีฟใหม่'}</span>{briefing && <StatusPill status={fullBriefing?.Status || briefing.Status} />}</div><h2 className="truncate text-lg font-black text-slate-900 sm:text-xl">{briefing ? 'รายละเอียดบรีฟงาน' : 'สร้างบรีฟงานใหม่'}</h2>{fullBriefing?.Status === 'ส่งตรวจ' && <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-fuchsia-700"><ClipboardCheck size={14} /> ส่งเข้าคิวตรวจหัวหน้าแผนกแล้ว</p>}</div><button type="button" onClick={onClose} className="rounded-xl p-2 text-slate-500 transition hover:bg-white hover:text-slate-900" aria-label="ปิด"><X size={22} /></button></header>
+      {loading ? <div className="flex flex-1 items-center justify-center text-slate-500"><Loader2 className="mr-2 animate-spin" size={20} /> กำลังโหลดรายละเอียด…</div> : <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"><div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+        <section className="min-w-0 space-y-5"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><h3 className="font-black text-slate-800">ข้อมูลงานที่บรีฟ</h3>{briefing && <ScoreSummary briefing={fullBriefing || briefing} finalPoints={pointsAfterDeduction} />}</div><div className="grid gap-4 sm:grid-cols-2">
+          <label className="block sm:col-span-2"><FieldLabel text="ชื่องาน" /><input value={formData.Title} disabled={!canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, Title: event.target.value }))} className="field" placeholder="ระบุชื่องานให้ค้นหาและเข้าใจง่าย" /></label>
+          <label className="block sm:col-span-2"><FieldLabel text="รายละเอียดงาน" /><textarea value={formData.Detail} disabled={!canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, Detail: event.target.value }))} className="field min-h-32 resize-y" placeholder="ขอบเขตงาน เงื่อนไข และผลลัพธ์ที่ต้องการ" /></label>
+          <label className="block sm:col-span-2"><FieldLabel text="หมายเหตุผู้มอบหมาย" optional /><textarea value={formData.CreatorNote} disabled={!canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, CreatorNote: event.target.value }))} className="field min-h-20 resize-y" placeholder="ข้อมูลเพิ่มเติมสำหรับผู้รับงาน" /></label>
+          <label className="block"><FieldLabel text="วันเริ่มต้น" /><input type="date" value={formData.StartDate} disabled={!canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, StartDate: event.target.value }))} className="field" /></label><label className="block"><FieldLabel text="วันสิ้นสุด" /><input type="date" value={formData.DueDate} disabled={!canEditBrief} onChange={(event) => setFormData((current) => ({ ...current, DueDate: event.target.value }))} className="field" /></label>
+          <div><FieldLabel text="ระดับความสำคัญ" /><CustomSelect value={formData.Priority} onChange={(Priority) => setFormData((current) => ({ ...current, Priority }))} options={[{ value: 'High', label: 'สูง' }, { value: 'Medium', label: 'กลาง' }, { value: 'Low', label: 'ต่ำ' }]} disabled={!canEditBrief} className={canEditBrief ? '' : 'opacity-60'} /></div><div><FieldLabel text="สถานะภาพรวม" /><CustomSelect value={formData.Status} onChange={(Status) => setFormData((current) => ({ ...current, Status }))} options={[...new Set([formData.Status, ...ASSIGNER_STATUSES])].filter((status) => status !== 'เสร็จสิ้น').map((status) => ({ value: status, label: status }))} disabled={!canEditStatus} className={canEditStatus ? '' : 'opacity-60'} /></div>
+          <label className="block"><FieldLabel text="คะแนนตั้งต้น" /><input type="number" min="0" value={formData.Points} disabled={!canEditPoints} onChange={(event) => setFormData((current) => ({ ...current, Points: Math.max(0, Number(event.target.value) || 0) }))} className="field" /></label>{canEditBrief ? <label className="block"><FieldLabel text="ลิงก์อ้างอิง" optional /><input type="url" value={formData.RefURL} onChange={(event) => setFormData((current) => ({ ...current, RefURL: event.target.value }))} className="field" placeholder="https://…" /></label> : <div><FieldLabel text="ลิงก์อ้างอิง" optional />{formData.RefURL ? <a href={formData.RefURL} target="_blank" rel="noreferrer" className="field flex items-center gap-2 text-blue-700 hover:bg-blue-50"><LinkIcon size={14} /><span className="truncate">{formData.RefURL}</span><ExternalLink className="ml-auto shrink-0" size={14} /></a> : <p className="field text-slate-400">ไม่มีลิงก์อ้างอิง</p>}</div>}
+        </div><div className="mt-5"><FieldLabel text="ผู้รับมอบหมาย" />{canEditBrief && <CustomSelect value="" placeholder="เพิ่มผู้รับผิดชอบ" searchable options={assigneeOptions.filter((option) => !formData.Assignees.some((id) => String(id) === option.value))} onChange={(id) => id && setFormData((current) => ({ ...current, Assignees: [...current.Assignees, id] }))} />}<div className="mt-2 flex flex-wrap gap-2">{formData.Assignees.length ? formData.Assignees.map((id) => { const person = allUsers.find((item) => String(item.ID) === String(id)); return <span key={id} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700"><PersonAvatar person={person} size="h-5 w-5" />{person?.Name || person?.Username || id}{canEditBrief && <button type="button" onClick={() => setFormData((current) => ({ ...current, Assignees: current.Assignees.filter((item) => String(item) !== String(id)) }))} className="ml-1 rounded p-0.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={13} /></button>}</span>; }) : <span className="text-xs text-slate-400">ยังไม่ได้ระบุผู้รับผิดชอบ</span>}</div></div></div><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><ImageGrid label="รูปอ้างอิงจากผู้มอบหมาย" images={refImages} editable={canEditBrief} onRemove={(index) => setRefImages((current) => current.filter((_, itemIndex) => itemIndex !== index))} onPreview={setPreviewImage} onAdd={addReferenceImages} isUploading={uploading} sizes={imageSizes} /></div></section>
+        <section className="min-w-0 space-y-5"><div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black text-slate-800">การส่งมอบงาน</h3><p className="text-xs text-slate-500">เลือกชื่อเพื่อดูงานของแต่ละผู้รับมอบหมาย</p></div><span className="text-xs text-slate-500">{formData.Assignees.length} คน</span></div><div className="mb-4 flex gap-2 overflow-x-auto pb-1">{formData.Assignees.map((id) => { const person = allUsers.find((item) => String(item.ID) === String(id)); const response = responses.find((item) => String(item.UserID) === String(id)); const selected = String(id) === String(selectedAssigneeId); return <button key={id} type="button" onClick={() => setSelectedAssigneeId(String(id))} className={`flex shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-bold transition ${selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}><PersonAvatar person={person} size="h-6 w-6" /><span className="max-w-24 truncate">{person?.Name || person?.Username || id}</span>{response?.Status && <span className="h-2 w-2 rounded-full bg-current opacity-70" />}</button>; })}</div>
+          {!selectedAssigneeId ? <EmptyAssignee /> : String(selectedAssigneeId) === String(user?.ID) && isAssignee ? <div className="space-y-5"><ImageGrid label="หลักฐานหรือผลลัพธ์งานของฉัน" images={myResponse.ResultImages} editable onRemove={(index) => setMyResponse((current) => ({ ...current, ResultImages: current.ResultImages.filter((_, itemIndex) => itemIndex !== index) }))} onPreview={setPreviewImage} onAdd={addResultImages} isUploading={uploading} sizes={imageSizes} /><label className="block"><FieldLabel text="ลิงก์ผลงาน 1" optional /><input type="url" value={myResponse.URL1} onChange={(event) => setMyResponse((current) => ({ ...current, URL1: event.target.value }))} className="field" placeholder="https://…" /></label><label className="block"><FieldLabel text="ลิงก์ผลงาน 2" optional /><input type="url" value={myResponse.URL2} onChange={(event) => setMyResponse((current) => ({ ...current, URL2: event.target.value }))} className="field" placeholder="https://…" /></label><label className="block"><FieldLabel text="บันทึกการส่งงาน" optional /><textarea value={myResponse.Note} onChange={(event) => setMyResponse((current) => ({ ...current, Note: event.target.value }))} className="field min-h-28 resize-y" placeholder="สรุปสิ่งที่ทำ ข้อสังเกต หรืองานที่ต้องการให้ตรวจ" /></label><div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><FieldLabel text="สถานะงานของฉัน (ระบบกำหนด)" /><StatusPill status={recipientSystemStatus} /><p className="mt-1.5 text-xs text-slate-500">ดูสถานะได้อย่างเดียว ระบบจะแจ้งเมื่อมีการสั่งแก้หรืออัปเดตงาน</p></div>{!canEditBrief && <button type="button" disabled={saving || uploading} onClick={handleSaveResponse} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><Send size={17} />{saving ? 'กำลังบันทึก…' : 'บันทึกรายละเอียดการส่งงาน'}</button>}</div> : <SubmittedWork response={selectedResponse} person={selectedAssignee} onPreview={setPreviewImage} />}
+        </div>{(isCreator || isAdmin || isDepartmentHead) && <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-900"><div className="flex gap-2"><AlertCircle size={18} className="mt-0.5 shrink-0 text-blue-600" /><p><b>การปิดงาน:</b> กด “ส่งตรวจ” เพื่อส่งให้หัวหน้าแผนกหรือผู้ดูแลอนุมัติเท่านั้น งานจะเป็น <b>เสร็จสิ้น</b> หลังได้รับอนุมัติในหน้าตรวจงาน</p></div></div>}</section>
+      </div></main>}
+      <footer className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6"><button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-100">ปิด</button>{canEditBrief && <button type="button" disabled={saving || uploading} onClick={handleSaveBriefing} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"><Save size={17} />{saving ? 'กำลังบันทึก…' : 'บันทึกข้อมูลงาน'}</button>}</footer>
+    </div>{previewImage && <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-950/90 p-4" onClick={() => setPreviewImage(null)}><img src={previewImage} alt="ตัวอย่างรูป" className="max-h-full max-w-full rounded-xl object-contain" /><button type="button" className="absolute right-5 top-5 rounded-xl bg-white p-2 text-slate-800" onClick={() => setPreviewImage(null)}><X size={20} /></button></div>}
+  </div>;
+};
 
-      if (newOverallStatus !== formData.Status) {
-        setFormData(prev => ({ ...prev, Status: newOverallStatus }));
-        const briefingUpdate = { ...formData, ID: briefing.ID, Status: newOverallStatus };
-        if (!canEditPoints) delete briefingUpdate.Points;
-        await apiService.updateBriefing(briefingUpdate);
-      }
-    } catch (e) {
-      console.error('Failed to trigger auto overall status:', e);
-    }
-  };
-
-  const handleRefImageAdd = async (e) => {
-    const files = getImageFiles(e.target.files);
-    e.target.value = '';
-    if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
-    if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-    try {
-      const news = await processImages(files);
-      if (!news.length) return;
-      setRefImages((previous) => [...previous, ...news]);
-      toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
-    } catch (error) {
-      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
-    }
-  };
-
-  const handleResultImageAdd = async (e) => {
-    const files = getImageFiles(e.target.files);
-    e.target.value = '';
-    if (!files.length) { toast.error('กรุณาเลือกรูปภาพ JPG, PNG หรือ WebP', { position: 'bottom-right' }); return; }
-    if (myResponse.ResultImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-    try {
-      const news = await processImages(files);
-      if (!news.length) return;
-      setMyResponse((previous) => ({ ...previous, ResultImages: [...previous.ResultImages, ...news] }));
-      toast.success(`เตรียมรูปภาพ ${news.length} รูปเรียบร้อย`, { position: 'bottom-right' });
-    } catch (error) {
-      toast.error(error.message || 'ไม่สามารถเตรียมรูปภาพได้', { position: 'bottom-right' });
-    }
-  };
-
-  const selectedUserInfo = allUsers.find(u => String(u.ID) === String(selectedAssigneeId));
-  const selectedResponse = responses.find(r => String(r.UserID) === String(selectedAssigneeId));
-
-  useEffect(() => {
-    if (selectedResponse) {
-      const imgs = [];
-      for (let i = 1; i <= 6; i++) {
-        const url = selectedResponse[`ReviewImage${i}`];
-        if (url && url.trim() !== '') imgs.push(url);
-      }
-      setReviewerImages(imgs);
-      setReviewerNote('');
-    } else {
-      setReviewerImages([]);
-      setReviewerNote('');
-    }
-  }, [selectedResponse]);
-
-  const handleDragOver = (e) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(true);
-  };
-  const handleDragLeave = (e) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-  };
-  const handleDrop = async (e) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-    const files = getImageFiles(e.dataTransfer.files);
-    if (!files.length) return;
-    
-    if (String(user?.ID) === selectedAssigneeId && myResponse) {
-      if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-      const processed = await processImages(files);
-      if (!processed.length) return;
-      setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
-      toast.success(`ลากวางรูป ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
-    } else if (canEditCore) {
-      if (focusedSide === 'right') {
-        if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป (ลบรูปเดิมก่อน)', { position: 'bottom-right' }); return; }
-        const processed = await processImages(files);
-        if (!processed.length) return;
-        setReviewerImages(prev => [...prev, ...processed]);
-        toast.success(`ลากวางรูปตรวจประเมิน ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
-      } else {
-        if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-        const processed = await processImages(files);
-        if (!processed.length) return;
-        setRefImages(prev => [...prev, ...processed]);
-        toast.success(`ลากวางรูปอ้างอิง ${files.length} รูปเรียบร้อย`, { position: 'bottom-right' });
-      }
-    }
-  };
-
-  const handlePaste = async (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    const files = [];
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.indexOf('image') !== -1) {
-        const file = items[i].getAsFile();
-        if (file) files.push(file);
-      }
-    }
-    if (files.length > 0) {
-      if (String(user?.ID) === selectedAssigneeId && myResponse) {
-        if (myResponse.ResultImages.length + files.length > 6) { toast.error('แนบรูปได้สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-        const processed = await processImages(files);
-        if (!processed.length) return;
-        setMyResponse(prev => ({...prev, ResultImages: [...prev.ResultImages, ...processed]}));
-        toast.success(`เพิ่มรูป ${files.length} รูป`, { position: 'bottom-right' });
-      } else if (canEditCore) {
-        if (focusedSide === 'right') {
-          if (reviewerImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          const processed = await processImages(files);
-          if (!processed.length) return;
-          setReviewerImages(prev => [...prev, ...processed]);
-          toast.success(`เพิ่มรูปตรวจประเมิน ${files.length} รูป`, { position: 'bottom-right' });
-        } else {
-          if (refImages.length + files.length > 6) { toast.error('สูงสุด 6 รูป', { position: 'bottom-right' }); return; }
-          const processed = await processImages(files);
-          if (!processed.length) return;
-          setRefImages(prev => [...prev, ...processed]);
-          toast.success(`เพิ่มรูปอ้างอิง ${files.length} รูป`, { position: 'bottom-right' });
-        }
-      }
-    }
-  };
-
-  return (
-    <div 
-      className="ios-glass-overlay p-4 !z-50"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      onPaste={handlePaste}
-    >
-      <div className={`ios-soft-card w-full max-w-5xl h-[92vh] flex flex-col border-4 transition-colors ${isDragging ? 'border-blue-500' : 'border-transparent'}`}>
-        {/* Top Accent Line */}
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-        
-        {/* Header */}
-        <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-             <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-200">
-               <NotebookTabs size={24} />
-             </div>
-             <div>
-               <h2 className="text-xl font-bold text-slate-900">
-                 {briefing ? `บรีฟงาน #${briefing.RunningID}` : 'สร้างบรีฟงานใหม่'}
-               </h2>
-                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold font-inter">
-                  {briefing && (
-                    <span className="flex items-center gap-1 uppercase tracking-wider">
-                      <Calendar size={10} /> {format(new Date(briefing.CreatedAt), 'dd/MM/yyyy')}
-                    </span>
-                  )}
-                  {saving && (
-                    <span className="flex items-center gap-1.5 text-blue-600 font-bold animate-pulse ml-2 px-2 py-0.5 bg-blue-50 rounded-lg">
-                      <RefreshCw size={10} className="animate-spin" /> กำลังบันทึก...
-                    </span>
-                  )}
-                </div>
-              </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {canEditCore && briefing?.ID && (
-              <button 
-                onClick={() => {
-                  if (saving) return;
-                  if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบบรีฟงานนี้?')) {
-                    setSaving(true);
-                    apiService.deleteBriefing(briefing.ID)
-                      .then(() => {
-                        toast.success('ลบบรีฟงานเรียบร้อย', { position: 'bottom-right' });
-                        onSaved();
-                      })
-                      .catch(e => toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' }))
-                      .finally(() => setSaving(false));
-                  }
-                }}
-                disabled={saving}
-                className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
-                title="ลบบรีฟงาน"
-              >
-                <Trash2 size={24} />
-              </button>
-            )}
-            <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-xl transition-all border border-transparent hover:border-slate-200">
-              <X size={24} />
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            
-            {/* Left Column: Core Briefing (ID 4) */}
-            <div className={`lg:col-span-7 space-y-8 transition-all duration-300 relative ${focusedSide === 'right' ? 'opacity-30 blur-[2px]' : ''}`}>
-              {focusedSide === 'right' && <div className="absolute inset-0 z-10 cursor-pointer" onClick={() => setFocusedSide('left')} title="คลิกเพื่อแก้ไขส่วนบรีฟงาน" />}
-              
-              <section className="space-y-4">
-                <div className="space-y-2">
-                   <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider block ml-0.5">หัวเรื่อง / โปรเจค</label>
-                   <input 
-                    type="text"
-                    value={formData.Title}
-                    onChange={e => setFormData({...formData, Title: e.target.value})}
-                    placeholder="ใส่หัวเรื่องงานบรีฟ..."
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-base"
-                    readOnly={!canEditCore}
-                   />
-                </div>
-
-                <div className="flex flex-col gap-5 p-6 bg-slate-50 border border-slate-100 rounded-3xl">
-                  <div className="flex flex-wrap items-center gap-8">
-                    <div className="space-y-2">
-                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">ระดับความสำคัญ</label>
-                       <div className="flex gap-1.5">
-                          {['High', 'Medium', 'Low'].map(p => (
-                            <button 
-                             key={p}
-                             type="button"
-                             onClick={() => canEditCore && setFormData({...formData, Priority: p})}
-                             className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${formData.Priority === p ? (p === 'High' ? 'bg-red-500 border-red-500 text-white' : p === 'Medium' ? 'bg-amber-500 border-amber-500 text-white' : 'bg-blue-500 border-blue-500 text-white shadow-md scale-105') : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}
-                             disabled={!canEditCore}
-                            >
-                              {p === 'High' ? 'สูง' : p === 'Medium' ? 'กลาง' : 'ต่ำ'}
-                            </button>
-                          ))}
-                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">คะแนน (Points)</label>
-                       <input 
-                         type="number"
-                         min="0"
-                         value={formData.Points || ''}
-                         onChange={e => setFormData({...formData, Points: parseInt(e.target.value) || 0})}
-                         placeholder="ใส่คะแนน..."
-                         disabled={!canEditPoints}
-                         className="w-24 px-3 py-1 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-bold text-slate-800 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                       />
-                       {!canEditPoints && (
-                         <p className="text-[10px] font-medium text-slate-400">เฉพาะผู้สร้างบรีฟแก้ไขคะแนนได้</p>
-                       )}
-                    </div>
-
-                    <div className="space-y-2">
-                       <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block ml-1">สถานะภาพรวม</label>
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                          {['รอดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'เสร็จสิ้น', 'ยกเลิกงาน'].map(s => {
-                            const isActive = formData.Status === s;
-                            if (!canEditCore) {
-                              if (!isActive) return null;
-                              return (
-                                <div key={s} className={`px-2 py-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 ${READONLY_COLORS[s] || 'bg-slate-50 text-slate-500'}`}>
-                                  <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse opacity-50" />
-                                  {s}
-                                </div>
-                              );
-                            }
-                            return (
-                              <button 
-                                key={s} 
-                                type="button"
-                                onClick={() => setFormData({...formData, Status: s})}
-                                disabled={saving}
-                                className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all ${isActive ? ACTIVE_COLORS[s] : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'} ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                {s}
-                              </button>
-                            );
-                          })}
-                        </div>
-                    </div>
-                  </div>
-
-                  {canManagePostStatus && (
-                    <div className="flex flex-col gap-4 pt-4 border-t border-slate-200 border-dashed">
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">สถานะการโพสต์ (แยก)</label>
-                         <div className="flex gap-2">
-                            {['ยังไม่โพส', 'โพสแล้ว'].map(s => {
-                              const isActive = formData.PostStatus === s;
-                              return (
-                                <button 
-                                  key={s} 
-                                  type="button"
-                                  onClick={() => setFormData({...formData, PostStatus: s})}
-                                  disabled={!canEditCore || saving}
-                                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${isActive ? (s === 'โพสแล้ว' ? 'bg-green-600 border-green-600 text-white shadow-md' : 'bg-slate-600 border-slate-600 text-white shadow-md') : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}
-                                >
-                                  {s}
-                                </button>
-                              );
-                            })}
-                         </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {formData.PostStatus === 'โพสแล้ว' && (
-                          <div className="space-y-2 col-span-1">
-                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">URL ที่โพสต์</label>
-                             <input 
-                              type="text"
-                              value={formData.PostUrl}
-                              onChange={e => setFormData({...formData, PostUrl: e.target.value})}
-                              placeholder="https://..."
-                              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs"
-                              readOnly={!canEditCore}
-                             />
-                          </div>
-                        )}
-                        <div className="col-span-1">
-                          <CustomDatePicker 
-                            label="วันที่โพสต์" 
-                            selectedDate={formData.PostDate} 
-                            onChange={v => setFormData({...formData, PostDate: v})} 
-                            readonly={!canEditCore}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-
-                  <div className="grid grid-cols-2 gap-4">
-                     <CustomDatePicker 
-                       label="วันที่เริ่มบรีฟ" 
-                       selectedDate={formData.StartDate} 
-                       onChange={v => setFormData({...formData, StartDate: v})} 
-                       readonly={!canEditCore}
-                     />
-                     <CustomDatePicker 
-                       label="กำหนดส่งงาน" 
-                       selectedDate={formData.DueDate} 
-                       onChange={v => setFormData({...formData, DueDate: v})} 
-                       readonly={!canEditCore}
-                     />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider ml-0.5">รายละเอียดการบรีฟ</h3>
-                </div>
-                
-                {canEditCore ? (
-                  <textarea 
-                    value={formData.Detail}
-                    onChange={e => setFormData({...formData, Detail: e.target.value})}
-                    placeholder="ใส่รายละเอียดสิ่งที่ต้องการให้ทำ..."
-                    className="w-full min-h-[100px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none font-medium text-slate-800 text-sm"
-                  />
-                ) : (
-                  <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-slate-700 leading-relaxed whitespace-pre-line font-medium italic text-sm">
-                    {briefing?.Detail}
-                  </div>
-                )}
-              </section>
-
-              {canEditCore && (
-                <section className="space-y-3">
-                   <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider ml-0.5">หมายเหตุ (ภายใน)</label>
-                   <textarea 
-                    value={formData.CreatorNote}
-                    onChange={e => setFormData({...formData, CreatorNote: e.target.value})}
-                    placeholder="โน้ตช่วยจำ หรือคำแนะนำเพิ่มเติม..."
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm italic"
-                   />
-                </section>
-              )}
-
-              {/* Reference Images */}
-               <section className="space-y-4">
-                <div className="flex items-center justify-between">
-                   <h3 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-0.5">
-                     <ImageIcon size={16} className="text-blue-500" />
-                     รูปภาพอ้างอิง (Ref Images)
-                   </h3>
-                   {canEditCore && (
-                     <label className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer transition-colors border border-blue-100 uppercase tracking-wider">
-                       {isProcessingImages ? 'กำลังบีบอัดรูป...' : `เพิ่มรูปภาพ (${refImages.length}/6)`}
-                       <input type="file" multiple accept="image/*" className="hidden" onChange={handleRefImageAdd} disabled={refImages.length >= 6 || isProcessingImages} />
-                     </label>
-                   )}
-                </div>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  {isLoadingBriefing ? (
-                    <div className="col-span-3 py-10 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-400">
-                       <RefreshCw size={32} className="mb-2 opacity-50 animate-spin text-blue-500" />
-                       <span className="text-sm font-medium">กำลังโหลดรูปภาพอ้างอิง...</span>
-                    </div>
-                  ) : (
-                    <>
-                      {refImages.map((img, i) => (
-                        <div key={i} className="relative aspect-[4/3] rounded-xl overflow-hidden group border border-slate-200 shadow-sm bg-slate-50">
-                           <img src={img} className="w-full h-full object-cover" />
-                           {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1.5 py-0.5 text-[9px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
-                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <button onClick={() => setPreviewImage(img)} className="p-1.5 bg-white rounded-lg text-slate-800"><ExternalLink size={14}/></button>
-                              {canEditCore && (
-                                <button onClick={() => setRefImages(refImages.filter((_, idx) => idx !== i))} className="p-1.5 bg-red-500 rounded-lg text-white"><Trash2 size={14}/></button>
-                              )}
-                           </div>
-                        </div>
-                      ))}
-                      {refImages.length === 0 && (
-                        <div className="col-span-3 py-10 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300">
-                           <ImageIcon size={32} className="mb-2 opacity-50" />
-                           <span className="text-sm font-medium">ไม่มีรูปภาพอ้างอิง</span>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                <div className="space-y-2 mt-4">
-                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-1">
-                    <LinkIcon size={14} className="text-blue-500" /> ลิงก์อ้างอิง (Reference URL)
-                  </label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="url"
-                      value={formData.RefURL}
-                      onChange={e => setFormData({...formData, RefURL: e.target.value})}
-                      placeholder="https://..."
-                      className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20"
-                      readOnly={!canEditCore}
-                    />
-                    {formData.RefURL && (
-                      <a 
-                        href={formData.RefURL} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-               {/* Assignments & Dates */}
-              <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                 <div className="space-y-4">
-                    <div className="space-y-3">
-                      <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2 ml-0.5">
-                        <User size={16} className="text-indigo-500" />
-                        ผู้ได้รับมอบหมาย
-                      </label>
-                       {canEditCore ? (
-                        <div className="flex flex-wrap gap-2">
-                           {allUsers.filter(u => u.Role === 'Staff').map(u => (
-                             <button 
-                              key={u.ID}
-                              type="button"
-                              onClick={() => {
-                                const news = formData.Assignees.includes(u.ID) ? formData.Assignees.filter(id => id !== u.ID) : [...formData.Assignees, u.ID];
-                                setFormData({...formData, Assignees: news});
-                              }}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-2xl text-xs font-bold border transition-all ${formData.Assignees.includes(u.ID) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300'}`}
-                             >
-                               <div className={`w-5 h-5 rounded-full overflow-hidden flex items-center justify-center shrink-0 ${formData.Assignees.includes(u.ID) ? 'bg-white/20' : 'bg-slate-100 text-slate-400'}`}>
-                                 {u.ProfileImage ? (
-                                   <img src={u.ProfileImage} className="w-full h-full object-cover" alt="" />
-                                 ) : (
-                                   <span className="text-[10px]">{u.Name?.charAt(0)}</span>
-                                 )}
-                               </div>
-                               {u.Name}
-                             </button>
-                           ))}
-                        </div>
-                      ) : (
-                        <div className="flex -space-x-2">
-                           {formData.Assignees.map(id => {
-                             const u = allUsers.find(cu => String(cu.ID) === String(id));
-                             return (
-                                <div key={id} className="w-8 h-8 rounded-full bg-blue-100 border-2 border-white flex items-center justify-center overflow-hidden" title={u?.Name}>
-                                  {u?.ProfileImage ? (
-                                    <img src={u.ProfileImage} className="w-full h-full object-cover" alt="" />
-                                  ) : (
-                                    <span className="text-[10px] font-bold text-blue-600">{u?.Name?.charAt(0)}</span>
-                                  )}
-                                </div>
-                             );
-                           })}
-                        </div>
-                      )}
-                    </div>
-
-                    {canEditCore && (
-                      <div className="space-y-3">
-                        <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider ml-1">ระบุสีของ Card (Palette)</label>
-                        <div className="flex flex-wrap gap-2">
-                          {BRIEFING_PALETTE.map(c => (
-                            <button
-                              key={c.hex}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, CardColor: c.hex })}
-                              className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 flex items-center justify-center ${formData.CardColor === c.hex ? 'border-blue-500 ring-2 ring-blue-200' : 'border-white'}`}
-                              style={{ backgroundColor: c.hex }}
-                              title={c.name}
-                            >
-                              {formData.CardColor === c.hex && (
-                                <div className={`w-1.5 h-1.5 rounded-full bg-${c.text === 'white' ? 'white' : 'slate-900'}`} />
-                              )}
-                            </button>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, CardColor: '' })}
-                            className={`w-8 h-8 rounded-full border-2 border-slate-200 bg-white text-slate-400 flex items-center justify-center text-[8px] transition-all ${!formData.CardColor ? 'border-blue-500 ring-2 ring-blue-200 text-blue-500' : ''}`}
-                            title="ล้างสี"
-                          >
-                            ล้าง
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                 </div>
-
-                   <div className="flex gap-4 items-end">
-                    {canEditCore && (
-                      <button 
-                        onClick={handleSaveBriefing}
-                        disabled={saving || isProcessingImages}
-                        className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 h-fit ${(saving || isProcessingImages) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />} 
-                        {saving ? 'กำลังบันทึก...' : isProcessingImages ? 'กำลังเตรียมรูป...' : 'บันทึกข้อมูลบรีฟ'}
-                      </button>
-                    )}
-                  </div>
-              </section>
-            </div>
-
-            {/* Right Column: Responses (Assignee Interaction) */}
-            <div className={`lg:col-span-5 border-l border-slate-100 pl-4 space-y-8 transition-all duration-300 relative ${focusedSide === 'left' ? 'opacity-30 blur-[2px]' : ''}`}>
-               {focusedSide === 'left' && <div className="absolute inset-0 z-10 cursor-pointer rounded-2xl" onClick={() => setFocusedSide('right')} title="คลิกเพื่อตรวจงาน/คุยกับผู้รับผิดชอบ" />}
-               
-               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">สถานะและความคืบหน้า</h3>
-               
-               {/* Assignee Selection Tabs */}
-               <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                  {formData.Assignees.map(id => {
-                    const u = allUsers.find(cu => String(cu.ID) === String(id));
-                    const resp = responses.find(r => String(r.UserID) === String(id));
-                    const isDone = resp?.Status === 'เสร็จสิ้น';
-                    return (
-                      <button 
-                        key={id} 
-                        onClick={() => { setSelectedAssigneeId(String(id)); setReviewerNote(''); setReviewerImages([]); }}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-2xl border shrink-0 transition-all ${selectedAssigneeId === String(id) ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm ring-1 ring-indigo-200' : 'bg-white border-slate-200 text-slate-400'}`}
-                      >
-                        <div className={`w-2 h-2 rounded-full ${isDone ? 'bg-green-500' : 'bg-slate-300'}`} />
-                        <span className="text-xs font-bold uppercase tracking-tight">{u?.Name?.split(' ')[0]}</span>
-                      </button>
-                    );
-                  })}
-               </div>
-
-               {isLoadingResponses ? (
-                  <div className="space-y-6 animate-pulse p-4">
-                    <div className="h-4 w-3/4 bg-slate-100 rounded-full mb-4"></div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="aspect-square bg-slate-50 rounded-xl"></div>
-                      <div className="aspect-square bg-slate-50 rounded-xl"></div>
-                      <div className="aspect-square bg-slate-50 rounded-xl"></div>
-                    </div>
-                  </div>
-               ) : (formData.Assignees.length === 0 || !selectedAssigneeId) ? (
-                  <div className="text-center py-20 bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center">
-                    <User size={48} className="mx-auto mb-4 opacity-20 text-slate-400" />
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">ยังไม่มีข้อมูล</p>
-                    <p className="text-xs text-slate-300 mt-2 font-medium">กรุณามอบหมายงานให้พนักงานก่อน</p>
-                  </div>
-                ) : selectedAssigneeId ? (
-                 <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-6">
-
-
-                    {/* Result Form (Edit if me, View if other) */}
-                    {(String(user?.ID) === selectedAssigneeId) ? (
-                      <div className="space-y-6">
-                        <section className="space-y-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                             <UploadCloud size={14} className="text-blue-500" /> แนบหลักฐานการทำ (MAX 6)
-                           </label>
-                           <div className="grid grid-cols-3 gap-2">
-                              {myResponse.ResultImages.map((img, i) => (
-                                <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
-                                  <img src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
-                                  {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1 py-0.5 text-[8px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
-                                  <button onClick={() => setMyResponse({...myResponse, ResultImages: myResponse.ResultImages.filter((_, idx) => idx !== i)})} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={10}/></button>
-                                </div>
-                              ))}
-                              {myResponse.ResultImages.length < 6 && (
-                                <label className="aspect-square border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-pointer transition-all">
-                                  <Plus size={24} />
-                                  <input type="file" multiple accept="image/*" className="hidden" onChange={handleResultImageAdd} disabled={isProcessingImages} />
-                                </label>
-                              )}
-                           </div>
-                        </section>
-
-                        <section className="space-y-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                             <LinkIcon size={14} className="text-blue-500" /> ลิงก์ที่เกี่ยวข้อง (URLs)
-                           </label>
-                           <input type="url" value={myResponse.URL1} onChange={e => setMyResponse({...myResponse, URL1: e.target.value})} placeholder="ลิงก์ที่ 1" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" />
-                           <input type="url" value={myResponse.URL2} onChange={e => setMyResponse({...myResponse, URL2: e.target.value})} placeholder="ลิงก์ที่ 2" className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" />
-                        </section>
-
-                        <section className="space-y-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                             <CheckCircle2 size={14} className="text-green-500" /> สถานะของคุณ
-                           </label>
-                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                               {['รอดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'เสร็จสิ้น'].map(s => {
-                                 const isActive = myResponse.Status === s;
-                                 return (
-                                   <div 
-                                    key={s} 
-                                    className={`px-3 py-2 rounded-xl text-[10px] font-bold border transition-all flex items-center justify-center ${isActive ? ACTIVE_COLORS[s] : 'bg-slate-50 border-slate-100 text-slate-300'}`}
-                                   >
-                                     {isActive && <div className="w-1 h-1 rounded-full bg-white mr-1.5 animate-pulse" />}
-                                     {s}
-                                   </div>
-                                 );
-                               })}
-                             </div>
-                        </section>
-
-                        <section className="space-y-3">
-                           <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                             <NotebookTabs size={14} className="text-blue-500" /> บันทึก/หมายเหตุของคุณ
-                           </label>
-                           <textarea 
-                            value={myResponse.Note} 
-                            onChange={e => setMyResponse({...myResponse, Note: e.target.value})} 
-                            placeholder="ใส่หมายเหตุ หรือรายละเอียดการส่งงาน..." 
-                            className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20" 
-                           />
-                        </section>
-
-                        {selectedResponse && Object.keys(selectedResponse).some(k => k.startsWith('ReviewImage') && selectedResponse[k] && selectedResponse[k].trim() !== '') && (
-                          <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-3">
-                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                              <AlertCircle size={12} /> หมายเหตุประกอบจากผู้ตรวจ (Reviewer Feedback)
-                            </p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {[1,2,3,4,5,6].map(i => {
-                                const url = selectedResponse[`ReviewImage${i}`];
-                                if (!url || url.trim() === '') return null;
-                                return (
-                                  <div key={i} className="aspect-square rounded-xl overflow-hidden border border-amber-200/50 cursor-pointer shadow-sm" onClick={() => setPreviewImage(url)}>
-                                     <img src={url} alt="" className="w-full h-full object-cover" />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                         <button 
-                          onClick={handleSaveResponse}
-                          disabled={saving || isProcessingImages}
-                          className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-2xl font-bold shadow-lg shadow-green-100 hover:bg-green-700 transition-all active:scale-95 ${(saving || isProcessingImages) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          {saving ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                          {saving ? 'กำลังบันทึก...' : isProcessingImages ? 'กำลังเตรียมรูป...' : 'อัปเดตการทำงานของฉัน'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        {selectedResponse ? (
-                          <>
-                            <div className="space-y-3">
-                               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ไฟล์ส่งมอบ</p>
-                               <div className="grid grid-cols-3 gap-2">
-                                  {[1,2,3,4,5,6].map(i => {
-                                    const url = selectedResponse[`ResultImage${i}`];
-                                    if (!url) return null;
-                                    return (
-                                      <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-white">
-                                         <img src={url} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(url)} />
-                                      </div>
-                                    );
-                                  })}
-                               </div>
-                            </div>
-                            {(selectedResponse.URL1 || selectedResponse.URL2) && (
-                              <div className="space-y-2">
-                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ลิงก์แนบ</p>
-                                 {selectedResponse.URL1 && (
-                                   <a 
-                                     href={selectedResponse.URL1} 
-                                     target="_blank" 
-                                     rel="noreferrer" 
-                                     className="flex items-center gap-2 text-blue-600 text-xs font-medium bg-blue-50/90 border border-blue-100 p-2.5 rounded-xl hover:bg-blue-100 hover:text-blue-700 transition-colors min-w-0 group"
-                                     title={selectedResponse.URL1}
-                                   >
-                                     <ExternalLink size={14} className="shrink-0 text-blue-500 group-hover:scale-110 transition-transform" /> 
-                                     <span className="break-all min-w-0 flex-1">{selectedResponse.URL1}</span>
-                                   </a>
-                                 )}
-                                 {selectedResponse.URL2 && (
-                                   <a 
-                                     href={selectedResponse.URL2} 
-                                     target="_blank" 
-                                     rel="noreferrer" 
-                                     className="flex items-center gap-2 text-blue-600 text-xs font-medium bg-blue-50/90 border border-blue-100 p-2.5 rounded-xl hover:bg-blue-100 hover:text-blue-700 transition-colors min-w-0 group"
-                                     title={selectedResponse.URL2}
-                                   >
-                                     <ExternalLink size={14} className="shrink-0 text-blue-500 group-hover:scale-110 transition-transform" /> 
-                                     <span className="break-all min-w-0 flex-1">{selectedResponse.URL2}</span>
-                                   </a>
-                                 )}
-                              </div>
-                            )}
-                            
-                            {Object.keys(selectedResponse).some(k => k.startsWith('ReviewImage') && selectedResponse[k] && selectedResponse[k].trim() !== '') && (
-                              <div className="space-y-3">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">ภาพประกอบการตรวจจากแอดมิน</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                  {[1,2,3,4,5,6].map(i => {
-                                    const url = selectedResponse[`ReviewImage${i}`];
-                                    if (!url || url.trim() === '') return null;
-                                    return (
-                                      <div key={i} className="aspect-square rounded-xl overflow-hidden border border-slate-200 cursor-pointer bg-white" onClick={() => setPreviewImage(url)}>
-                                         <img src={url} alt="" className="w-full h-full object-cover" />
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {selectedResponse.Note && (
-                              <div className="space-y-2">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">หมายเหตุจากผู้ปฏิบัติงาน</p>
-                                <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm text-slate-700 whitespace-pre-wrap">
-                                  {selectedResponse.Note}
-                                </div>
-                              </div>
-                            )}
-
-
-
-                            {canEditCore && String(user?.ID) !== String(selectedAssigneeId) && (
-                              <div className="space-y-4">
-                                <div className="space-y-2">
-                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">หมายเหตุผู้ตรวจ (Admin Note)</p>
-                                  <textarea 
-                                    value={reviewerNote}
-                                    onChange={e => setReviewerNote(e.target.value)}
-                                    placeholder="พิมพ์หมายเหตุ การสั่งแก้ไข หรือคำชมที่นี่..."
-                                    className="w-full p-3 bg-white border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                    <UploadCloud size={14} className="text-blue-500" /> แนบภาพประกอบการตรวจ (MAX 6)
-                                  </label>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {reviewerImages.map((img, i) => (
-                                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 group">
-                                        <img loading="lazy" src={img} className="w-full h-full object-cover cursor-pointer" onClick={() => setPreviewImage(img)} />
-                                        {imageSizeByUrl[img] && <span className="absolute bottom-1 left-1 rounded bg-slate-950/70 px-1 py-0.5 text-[8px] font-semibold text-white">{formatImageSize(imageSizeByUrl[img])}</span>}
-                                        <button onClick={() => setReviewerImages(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <X size={10}/>
-                                        </button>
-                                      </div>
-                                    ))}
-                                    {reviewerImages.length < 6 && (
-                                      <label className={`${reviewerImages.length === 0 ? 'col-span-3 py-6' : 'aspect-square'} border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50 flex flex-col items-center justify-center text-slate-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-500 cursor-pointer transition-all`}>
-                                        {reviewerImages.length === 0 ? (
-                                          <>
-                                            <ImageIcon size={24} className="mb-2 opacity-30" />
-                                            <p className="text-xs font-medium text-center">คลิกเลือกรูป / Ctrl+V / ลากวาง<br/>(จำกัด 6 รูป)</p>
-                                          </>
-                                        ) : (
-                                          <Plus size={24} />
-                                        )}
-                                        <input 
-                                          type="file" 
-                                          multiple 
-                                          accept="image/*" 
-                                          className="hidden" 
-                                          disabled={isProcessingImages}
-                                          onChange={async (e) => {
-                                            const files = getImageFiles(e.target.files);
-                                            e.target.value = '';
-                                            if (!files.length) return;
-                                            if (reviewerImages.length + files.length > 6) {
-                                              toast.error('แนบรูปได้สูงสุด 6 รูปเท่านั้น');
-                                              return;
-                                            }
-                                            const processed = await processImages(files);
-                                            if (!processed.length) return;
-                                            setReviewerImages(prev => [...prev, ...processed]);
-                                          }} 
-                                        />
-                                      </label>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
-                               <div>
-                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">สถานะ</p>
-                                 <p className="text-sm font-bold text-slate-700">{selectedResponse.Status}</p>
-                               </div>
-                               <div className="flex gap-2">
-                                 {canEditCore && (
-                                   <button 
-                                     onClick={async () => {
-                                       setSaving(true);
-                                       try {
-                                         let finalNote = selectedResponse.Note || '';
-                                         const timestamp = format(new Date(), 'd MMM yy HH:mm', { locale: th });
-                                         if (reviewerNote.trim()) finalNote += `\n\n[สั่งแก้ไขโดย ${user?.Name} ${timestamp}]: ${reviewerNote.trim()}`;
-                                         
-                                         const assigneeIds = formData.Assignees;
-                                         const latestStatuses = assigneeIds.map(id => {
-                                           if (String(id) === String(selectedAssigneeId)) {
-                                             return 'รอแก้ไข';
-                                           }
-                                           const r = responses.find(resp => String(resp.UserID) === String(id));
-                                           return r?.Status || 'รอดำเนินการ';
-                                         });
-
-                                         let newOverallStatus = formData.Status;
-                                         if (latestStatuses.some(s => s === 'รอตรวจ')) newOverallStatus = 'รอตรวจ';
-                                         else if (latestStatuses.some(s => s === 'รอแก้ไข')) newOverallStatus = 'รอแก้ไข';
-                                         else if (latestStatuses.some(s => s === 'กำลังทำ')) newOverallStatus = 'กำลังทำ';
-                                         else if (latestStatuses.every(s => s === 'เสร็จสิ้น')) newOverallStatus = 'เสร็จสิ้น';
-                                         else if (latestStatuses.every(s => s === 'รอดำเนินการ')) newOverallStatus = 'รอดำเนินการ';
-                                         else newOverallStatus = 'กำลังทำ';
-
-                                         const updateData = {
-                                           ...selectedResponse,
-                                           Status: 'รอแก้ไข',
-                                           Note: finalNote,
-                                           NewOverallStatus: newOverallStatus
-                                         };
-                                         for (let i = 1; i <= 6; i++) {
-                                           updateData[`ReviewImage${i}`] = reviewerImages[i - 1] || null;
-                                         }
-
-                                          await apiService.saveBriefingResponse(updateData);
-                                          toast.success(`สั่งแก้ไขงานของ ${selectedUserInfo?.Name} แล้ว`, { position: 'bottom-right' });
-                                          setReviewerNote('');
-                                          setReviewerImages([]);
-                                          await triggerAutoOverallStatus('รอแก้ไข');
-                                          loadResponses();
-                                          onSaved();
-                                        } catch (e) {
-                                          toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
-                                        } finally {
-                                          setSaving(false);
-                                        }
-                                     }}
-                                     className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-amber-200 hover:bg-amber-600 transition-all active:scale-95"
-                                   >
-                                     <AlertCircle size={14} /> สั่งแก้ไข
-                                   </button>
-                                 )}
-                                 {canEditCore && (
-                                   <button 
-                                     onClick={async () => {
-                                       setSaving(true);
-                                       try {
-                                         let finalNote = selectedResponse.Note || '';
-                                         const timestamp = format(new Date(), 'd MMM yy HH:mm', { locale: th });
-                                         if (reviewerNote.trim()) finalNote += `\n\n[อนุมัติผ่านโดย ${user?.Name} ${timestamp}]: ${reviewerNote.trim()}`;
-
-                                         const updateData = {
-                                           ...selectedResponse,
-                                           Status: 'เสร็จสิ้น',
-                                           Note: finalNote
-                                         };
-                                         for (let i = 1; i <= 6; i++) {
-                                           updateData[`ReviewImage${i}`] = reviewerImages[i - 1] || null;
-                                         }
-
-                                          await apiService.saveBriefingResponse(updateData);
-                                          toast.success(`อนุมัติงานของ ${selectedUserInfo?.Name} แล้ว`, { position: 'bottom-right' });
-                                          setReviewerNote('');
-                                          setReviewerImages([]);
-                                          await triggerAutoOverallStatus('เสร็จสิ้น');
-                                          loadResponses();
-                                          onSaved();
-                                        } catch (e) {
-                                          toast.error('ล้มเหลว: ' + e.message, { position: 'bottom-right' });
-                                        } finally {
-                                          setSaving(false);
-                                        }
-                                     }}
-                                     className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-green-200 hover:bg-green-700 transition-all active:scale-95"
-                                   >
-                                     <CheckCircle2 size={14} /> ผ่าน (เสร็จสิ้น)
-                                   </button>
-                                 )}
-                               </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="py-12 border-2 border-dashed border-slate-100 rounded-[2rem] flex flex-col items-center justify-center text-slate-300">
-                             <Clock size={40} className="mb-3 opacity-30" />
-                             <p className="text-sm font-medium">ยังไม่มีข้อมูลการส่งงาน</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                 </div>
-               ) : (
-                 <div className="text-center py-20 text-slate-400">
-                    <AlertCircle size={48} className="mx-auto mb-4 opacity-20" />
-                    <p>กรุณาเลือกผู้ได้รับมอบหมายเพื่อดูรายละเอียด</p>
-                 </div>
-               )}
-            </div>
-          </div>
-        </div>
- 
-
-
-        {/* Image Preview Modal */}
-        {previewImage && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
-            <button className="absolute top-6 right-6 p-2 text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors z-10">
-              <X size={32} />
-            </button>
-            <div className="relative max-w-full max-h-full flex items-center justify-center p-4" onClick={e => e.stopPropagation()}>
-               <img src={previewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
-            </div>
-          </div>
-        )}
-      </div>
-
-       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
-        .scrollbar-none::-webkit-scrollbar { display: none; }
-      `}</style>
-    </div>
-  );
+const ScoreSummary = ({ briefing }) => <div className="flex flex-wrap gap-1.5 text-[10px] font-bold"><span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">คะแนน {briefing?.Points || 0}</span>{Number(briefing?.DeductedPoints || 0) > 0 && <span className="rounded-full bg-rose-50 px-2 py-1 text-rose-700">หัก {briefing.DeductedPoints}</span>}{Number(briefing?.BonusPoints || 0) > 0 && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">พิเศษ +{briefing.BonusPoints}</span>}{Number(briefing?.ScoreAdjustment || 0) !== 0 && <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-700">ปรับ {Number(briefing.ScoreAdjustment) > 0 ? '+' : ''}{briefing.ScoreAdjustment}</span>}{briefing?.Status === 'เสร็จสิ้น' && <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">สุทธิ {getBriefingAwardedPoints(briefing)}</span>}</div>;
+const EmptyAssignee = () => <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-slate-400"><UserRound size={28} className="mb-2" /><p className="text-sm font-bold">ยังไม่มีผู้รับมอบหมาย</p></div>;
+const SubmittedWork = ({ response, person, onPreview }) => {
+  if (!response) return <div className="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center text-slate-400"><UploadCloud size={28} className="mb-2" /><p className="text-sm font-bold">{person?.Name || 'ผู้รับงาน'} ยังไม่ได้ส่งความคืบหน้า</p></div>;
+  const images = getBriefingImages(response, 'ResultImages', 'ResultImage');
+  return <div className="space-y-4"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2"><PersonAvatar person={person} /><span className="text-sm font-black text-slate-800">{person?.Name || person?.Username || 'ผู้รับงาน'}</span></div><StatusPill status={response.Status} /></div>{response.Note && <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm whitespace-pre-wrap text-slate-700">{response.Note}</div>}{(response.URL1 || response.URL2) && <div className="space-y-2">{[response.URL1, response.URL2].filter(Boolean).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"><LinkIcon size={14} /><span className="truncate">{url}</span><ExternalLink size={13} className="ml-auto shrink-0" /></a>)}</div>}{images.length > 0 && <ImageGrid label="หลักฐานที่ส่ง" images={images} editable={false} onPreview={onPreview} sizes={{}} />}</div>;
 };

@@ -242,7 +242,7 @@ export const Tasks = () => {
     } finally {
       if (!isSilent) setLoading(false);
     }
-  }, [buildFilters, viewMode]);
+  }, [buildFilters, viewMode, sortBy, sortOrder]);
 
   // Initial mount: also fetch users list and all tasks for summary modals
   useEffect(() => {

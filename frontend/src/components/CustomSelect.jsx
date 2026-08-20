@@ -10,7 +10,8 @@ export const CustomSelect = ({
   className = '',
   label = '',
   searchable = false,
-  borderDashed = false
+  borderDashed = false,
+  disabled = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,6 +32,11 @@ export const CustomSelect = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Keep a previously-open portal hidden immediately if this field becomes
+  // read-only.  We deliberately derive this value instead of calling setState
+  // during render/effect, which avoids a cascade on permission changes.
+  const open = isOpen && !disabled;
 
   // Update position on window resize or scroll
   useEffect(() => {
@@ -54,6 +60,7 @@ export const CustomSelect = ({
   }, [isOpen]);
 
   const handleToggle = () => {
+    if (disabled) return;
     if (!isOpen && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -95,6 +102,7 @@ export const CustomSelect = ({
     : options;
 
   const handleSelect = (val) => {
+    if (disabled) return;
     onChange(val);
     setIsOpen(false);
   };
@@ -104,10 +112,12 @@ export const CustomSelect = ({
       {label && <label className="block text-[12px] font-bold text-slate-900 mb-1.5 uppercase tracking-wider ml-0.5">{label}</label>}
       <button
         type="button"
+        disabled={disabled}
+        aria-readonly={disabled || undefined}
         onClick={handleToggle}
         className={`w-full flex items-center justify-between px-3.5 py-2.5 bg-white rounded-xl text-sm transition-all outline-none text-left
           ${borderDashed ? 'border border-slate-300' : 'border border-slate-200'}
-          ${isOpen ? 'ring-4 ring-blue-500/10 border-blue-500 shadow-sm' : 'hover:border-slate-300 hover:bg-slate-50'}
+          ${disabled ? 'cursor-not-allowed bg-slate-50 text-slate-500 opacity-70' : open ? 'ring-4 ring-blue-500/10 border-blue-500 shadow-sm' : 'hover:border-slate-300 hover:bg-slate-50'}
         `}
       >
         <span className={`${!selectedOption ? 'text-slate-400 font-semibold' : 'text-slate-900 font-semibold'} truncate`}>
@@ -115,11 +125,11 @@ export const CustomSelect = ({
         </span>
         <ChevronDown 
           size={18} 
-          className={`text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
-      {isOpen && createPortal(
+      {open && createPortal(
         <div 
           ref={dropdownRef}
           className={`ios-dropdown-glass overflow-hidden rounded-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 shadow-2xl`}

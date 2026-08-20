@@ -7,6 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:images": "node --test test/imageCompatibility.test.js",
+    "test:images:coverage": "node --test --experimental-test-coverage --test-coverage-functions=90 --test-coverage-include=src/utils/compressImage.js --test-coverage-include=src/utils/briefingImages.js test/imageCompatibility.test.js",
+    "test:workflow:coverage": "node --test --experimental-test-coverage --test-coverage-functions=90 --test-coverage-include=src/utils/briefingPermissions.js --test-coverage-include=src/utils/briefingRealtime.js --test-coverage-include=src/utils/briefingScore.js --test-coverage-include=src/utils/updateGate.js test/workflowGuards.test.js",
+    "test:frontend:coverage": "node --test --test-concurrency=1 --experimental-test-coverage --test-coverage-functions=90 --test-coverage-include=src/utils/compressImage.js --test-coverage-include=src/utils/briefingImages.js --test-coverage-include=src/utils/briefingPermissions.js --test-coverage-include=src/utils/briefingRealtime.js --test-coverage-include=src/utils/briefingScore.js --test-coverage-include=src/utils/updateGate.js test/imageCompatibility.test.js test/workflowGuards.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

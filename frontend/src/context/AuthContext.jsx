@@ -321,7 +321,9 @@ export const AuthProvider = ({ children }) => {
           setAiSessionReady(true);
           return;
         }
-      } catch {}
+      } catch {
+        // A failed silent renewal simply leaves the AI session unavailable.
+      }
       if (isMounted) setAiSessionReady(false);
     };
 

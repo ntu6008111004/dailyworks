@@ -2,9 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   detectWorkIntent,
+  detectWorkDataset,
   extractQueryFilters,
   extractStaffMentions,
+  hasInternalWorkEvidence,
   isAllTimeQuestion,
+  isHypotheticalOrCalculation,
+  isWorkRelated,
   isSelfReference,
   signSession,
   validateChatMessages,
@@ -125,4 +129,25 @@ test('provider URL is allowlisted and insecure HTTP is opt-in', () => {
     /^http:/
   );
   assert.equal(validateProviderUrl('https://example.com/api/v1/chat/completions'), null);
+});
+
+test('work routing distinguishes internal records from calculations and unrelated questions', () => {
+  assert.equal(hasInternalWorkEvidence('ดูสถานะงานของฉันในระบบ'), true);
+  assert.equal(isWorkRelated('ดูสถานะงานของฉันในระบบ'), true);
+  assert.equal(isHypotheticalOrCalculation('ถ้าทำวันละ 3 งาน อีก 10 วันจะครบไหม'), true);
+  assert.equal(detectWorkIntent('ถ้าทำวันละ 3 งาน อีก 10 วันจะครบไหม'), 'none');
+  assert.equal(detectWorkDataset('คะแนนสะสมทีมของฉัน'), 'team');
+  assert.equal(detectWorkDataset('ดูบรีฟที่รอตรวจ'), 'briefings');
+  assert.equal(detectWorkDataset('แสดงรายการงานของฉัน'), 'tasks');
+  assert.equal(detectWorkDataset('อธิบายวิธีทำอาหาร'), 'none');
+});
+
+test('security validators fail closed for malformed session and chat input', () => {
+  assert.throws(() => signSession({ sub: 'user-1' }, 'too-short'), /32 characters/);
+  assert.equal(verifySession('not-a-session', SECRET), null);
+  assert.equal(verifySession('eyJ2IjoxLCJzdWIiOiJ1c2VyIn0.invalid', SECRET), null);
+  assert.equal(validateCredentialInput('x'.repeat(101), 'password'), null);
+  assert.equal(validateCredentialInput('user', 'x'.repeat(513)), null);
+  assert.equal(validateChatMessages([{ role: 'assistant', content: 'only reply' }]), null);
+  assert.equal(validateChatMessages(Array.from({ length: 13 }, () => ({ role: 'user', content: 'x' }))), null);
 });

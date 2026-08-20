@@ -315,3 +315,28 @@ h1, h2, h3, h4, h5, h6 {
 p, span, td, li {
   font-weight: 400; /* Ensure it's not too light */
 }
+
+.field,
+.review-field {
+  width: 100%;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.75rem;
+  background: white;
+  color: rgb(30 41 59);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.field:focus,
+.review-field:focus {
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.12);
+}
+
+.field:disabled {
+  cursor: not-allowed;
+  background: rgb(248 250 252);
+  color: rgb(100 116 139);
+}

@@ -70,7 +70,9 @@ function setCookie(name, value, days = 365) {
     }
     const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = name + "=" + (value || "") + expires + "; path=/; SameSite=Lax" + secureFlag;
-  } catch {}
+  } catch {
+    // Cookie storage is best-effort in restrictive browser contexts.
+  }
 }
 
 function getCookie(name) {
@@ -91,7 +93,9 @@ function eraseCookie(name) {
     if (typeof document === 'undefined') return;
     const secureFlag = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax' + secureFlag;
-  } catch {}
+  } catch {
+    // Cookie storage is best-effort in restrictive browser contexts.
+  }
 }
 
 function getSessionToken() {
@@ -231,7 +235,9 @@ async function createSession(username, password) {
       const base64 = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
       const decoded = JSON.parse(decodeURIComponent(escape(atob(base64))));
       tokenUserId = decoded.sub || null;
-    } catch {}
+    } catch {
+      // The optional token payload is only a fallback for a missing user id.
+    }
   }
   setSessionToken(token, tokenUserId);
   return token;
@@ -595,7 +601,7 @@ function inferUserIntent(messages) {
   };
 }
 
-async function fetchClientWorkSummaryContext() {
+async function _fetchClientWorkSummaryContext() {
   try {
     const rawSession = localStorage.getItem('dw_session');
     let currentUser = null;
@@ -608,7 +614,9 @@ async function fetchClientWorkSummaryContext() {
         }).join('');
         const decoded = decodeURIComponent(escape(atob(reversed)));
         if (decoded) currentUser = JSON.parse(decoded);
-      } catch {}
+      } catch {
+        // Fall back to the API session when the local session cannot be decoded.
+      }
     }
     const userId = currentUser?.ID || currentUser?.id || apiService.userId;
     const userName = currentUser?.Name || currentUser?.name || currentUser?.Username || 'ผู้ใช้';
@@ -718,19 +726,25 @@ function getLoggedInUserFromStorage() {
           const parsed = JSON.parse(decoded);
           if (parsed && (parsed.ID || parsed.id || parsed.Username || parsed.username)) return parsed;
         }
-      } catch {}
+      } catch {
+        // Ignore a malformed cached session and continue with other sources.
+      }
     }
     const legacyUser = localStorage.getItem('user');
     if (legacyUser) {
       try {
         const parsed = JSON.parse(legacyUser);
         if (parsed && (parsed.ID || parsed.id || parsed.Username || parsed.username)) return parsed;
-      } catch {}
+      } catch {
+        // Ignore a malformed legacy session and continue with other sources.
+      }
     }
     if (apiService.userId) {
       return { ID: apiService.userId, Username: apiService.executorId };
     }
-  } catch {}
+  } catch {
+    // No usable local user session is available.
+  }
   return null;
 }
 

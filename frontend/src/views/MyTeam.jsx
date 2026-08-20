@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
+import { getBriefingAwardedPoints } from '../utils/briefingScore';
 import { Users, Filter, Award, CheckCircle2, Activity, Calendar, Clock, RotateCcw } from 'lucide-react';
 import { LoadingModal } from '../components/LoadingModal';
 import { CustomSelect } from '../components/CustomSelect';
@@ -70,6 +71,7 @@ export const MyTeam = () => {
     // 2. Map stats per member
     const members = filteredUsers.map(member => {
       let totalPoints = 0;
+      let specialPoints = 0;
       let completedCount = 0;
       let inProgressCount = 0;
       let notStartedCount = 0;
@@ -108,7 +110,12 @@ export const MyTeam = () => {
 
         // Award points if completed from this user's perspective
         if (isCompleted) {
-          totalPoints += parseInt(b.Points) || 0;
+          // Legacy completed briefings have no FinalPoints/BonusPoints, so they
+          // keep their original total. New reviewed work receives only its
+          // non-negative final score plus the approved special score.
+          const bonusPoints = Math.max(0, parseInt(b.BonusPoints) || 0);
+          totalPoints += getBriefingAwardedPoints(b);
+          specialPoints += bonusPoints;
         }
 
         // Assignee and Creator roles for counts to prevent duplicate count on same user
@@ -118,17 +125,17 @@ export const MyTeam = () => {
         if (isUserAssignee) {
           if (b.Status === 'เสร็จสิ้น') {
             completedCount++;
-          } else if (['กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
             inProgressCount++;
-          } else if (b.Status === 'รอดำเนินการ') {
+          } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
             notStartedCount++;
           }
         } else if (isUserCreator) {
           if (b.Status === 'เสร็จสิ้น') {
             briefedCompletedCount++;
-          } else if (['กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
             briefedInProgressCount++;
-          } else if (b.Status === 'รอดำเนินการ') {
+          } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
             briefedNotStartedCount++;
           }
         }
@@ -137,6 +144,7 @@ export const MyTeam = () => {
       return {
         ...member,
         totalPoints,
+        specialPoints,
         completedCount,
         inProgressCount,
         notStartedCount,
@@ -174,9 +182,9 @@ export const MyTeam = () => {
 
       if (b.Status === 'เสร็จสิ้น') {
         teamCompleted++;
-      } else if (['กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
+      } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
         teamInProgress++;
-      } else if (b.Status === 'รอดำเนินการ') {
+      } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
         teamNotStarted++;
       }
     });
@@ -184,6 +192,7 @@ export const MyTeam = () => {
     const teamStats = {
       totalMembers: members.length,
       totalPointsAcrossTeam: members.reduce((sum, m) => sum + m.totalPoints, 0),
+      totalSpecialPointsAcrossTeam: members.reduce((sum, m) => sum + m.specialPoints, 0),
       totalCompletedAcrossTeam: teamCompleted,
       totalInProgressAcrossTeam: teamInProgress,
       totalNotStartedAcrossTeam: teamNotStarted
@@ -263,7 +272,7 @@ export const MyTeam = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard 
           icon={<Users size={20} />} 
           label="สมาชิกทั้งหมด" 
@@ -277,6 +286,13 @@ export const MyTeam = () => {
           value={stats.totalPointsAcrossTeam} 
           subtext="คำนวณตามตัวกรอง"
           color="purple" 
+        />
+        <StatCard
+          icon={<Award size={20} />}
+          label="คะแนนพิเศษ"
+          value={`+${stats.totalSpecialPointsAcrossTeam}`}
+          subtext="จากหัวหน้าแผนก"
+          color="amber"
         />
         <StatCard 
           icon={<CheckCircle2 size={20} />} 
@@ -309,6 +325,7 @@ export const MyTeam = () => {
               <tr>
                 <th className="px-6 py-4 font-semibold whitespace-nowrap">พนักงาน</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนรวมสะสม</th>
+                <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">คะแนนพิเศษ</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">บรีฟเสร็จสิ้น (งาน)</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">บรีฟดำเนินการ (งาน)</th>
                 <th className="px-6 py-4 font-semibold text-center whitespace-nowrap">บรีฟยังไม่เริ่ม (งาน)</th>
@@ -317,7 +334,7 @@ export const MyTeam = () => {
             <tbody className="divide-y divide-slate-100">
               {teamMembers.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users size={32} className="text-slate-300" />
                       <p>ไม่พบสมาชิกในทีม</p>
@@ -325,7 +342,7 @@ export const MyTeam = () => {
                   </td>
                 </tr>
               ) : (
-                teamMembers.map((member, idx) => (
+                teamMembers.map((member) => (
                   <tr key={member.ID} className="transition-colors group hover:bg-blue-50/20">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -359,6 +376,13 @@ export const MyTeam = () => {
                           {member.totalPoints}
                         </span>
                         <span className="text-[9px] uppercase tracking-wider text-purple-400 font-black">คะแนน</span>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex flex-col items-center justify-center min-w-20 h-16 px-3 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 group-hover:from-amber-100 group-hover:to-orange-100 group-hover:shadow-sm transition-all">
+                        <span className="text-2xl font-black text-amber-700">+{member.specialPoints}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-amber-500 font-black">พิเศษ</span>
                       </div>
                     </td>
 

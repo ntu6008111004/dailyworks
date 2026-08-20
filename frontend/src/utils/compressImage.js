@@ -55,8 +55,12 @@ const IMAGE_EXTENSIONS = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i;
  */
 export function isImageFile(file) {
   if (!file) return false;
-  if (file.type) return file.type.startsWith('image/');
-  return IMAGE_EXTENSIONS.test(file.name || '');
+  // Some Windows file associations report application/octet-stream for a real
+  // JPG/PNG/WebP. Trust a recognised extension as a fallback even when a MIME
+  // value exists; the browser decoder still validates the actual bytes before
+  // a file can be compressed and uploaded.
+  return String(file.type || '').toLowerCase().startsWith('image/')
+    || IMAGE_EXTENSIONS.test(file.name || '');
 }
 
 export function getImageFiles(fileList) {
@@ -64,9 +68,19 @@ export function getImageFiles(fileList) {
 }
 
 /**
- * Converts an image to a compact WebP data URL before it reaches Postgres.
- * The target keeps normal uploads near 400 KB of Base64 text, while the hard
- * cap prevents any individual text column from exceeding 2 MiB.
+ * A browser FileList is live: clearing the input may empty that same FileList.
+ * Copy it first so the selected files remain available for validation/upload.
+ */
+export function snapshotSelectedFiles(input) {
+  const files = Array.from(input?.files || []);
+  if (input) input.value = '';
+  return files;
+}
+
+/**
+ * Converts an image to a compact WebP blob before it is sent to Storage.
+ * `dataUrl` remains in the return value only for backwards compatibility with
+ * legacy call sites; new briefing uploads store the Storage URL, never Base64.
  */
 export async function compressImageDetails(file, {
   maxEdge = MAX_EDGE,
@@ -110,7 +124,7 @@ export async function compressImageDetails(file, {
         }
         const dataUrl = await blobToDataUrl(blob);
         const characterCount = getBase64CharacterCount(dataUrl);
-        const candidate = { dataUrl, sizeBytes: blob.size, characterCount };
+        const candidate = { dataUrl, blob, sizeBytes: blob.size, characterCount };
         if (!smallest || characterCount < smallest.characterCount) smallest = candidate;
         if (characterCount <= targetBase64Chars) return candidate;
       }

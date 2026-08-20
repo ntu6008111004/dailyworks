@@ -5,6 +5,40 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const IMAGE_STORAGE_BUCKET = 'worklog-images';
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const BRIEFING_SCHEMA_BACKOFF_KEY = 'briefing_score_schema_retry_after';
+const BRIEFING_LEGACY_FIELDS = 'ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points';
+const BRIEFING_REVIEW_FIELDS = `${BRIEFING_LEGACY_FIELDS}, ReviewSubmittedAt, ReviewedAt, ReviewedBy, DeductedPoints, CorrectionCount, RejectedCount, BonusPoints, FinalPoints`;
+const BRIEFING_SCORE_FIELDS = `${BRIEFING_REVIEW_FIELDS}, ScoreAdjustment`;
+let briefingScoreSchemaRetryAfter = 0;
+
+function isMissingSchemaField(error) {
+  if (!error) return false;
+  const text = [error.message, error.details, error.hint, error.code].filter(Boolean).join(' ');
+  return ['42703', 'PGRST204'].includes(String(error.code || ''))
+    || /column|schema cache|scoreadjustment|reviewsubmittedat|deductedpoints/i.test(text);
+}
+
+function getBriefingScoreSchemaRetryAfter() {
+  if (briefingScoreSchemaRetryAfter) return briefingScoreSchemaRetryAfter;
+  try {
+    briefingScoreSchemaRetryAfter = Number(sessionStorage.getItem(BRIEFING_SCHEMA_BACKOFF_KEY) || 0);
+  } catch {
+    // In-memory backoff still prevents repeated requests in restricted storage.
+  }
+  return briefingScoreSchemaRetryAfter;
+}
+
+function deferBriefingScoreSchemaProbe() {
+  briefingScoreSchemaRetryAfter = Date.now() + 10 * 60 * 1000;
+  try {
+    sessionStorage.setItem(BRIEFING_SCHEMA_BACKOFF_KEY, String(briefingScoreSchemaRetryAfter));
+  } catch {
+    // In-memory backoff still prevents repeated requests in restricted storage.
+  }
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Tiered in-memory cache — different TTLs for different data types
 // ───────────────────────────────────────────────────────────────────────────
@@ -529,10 +563,32 @@ export const apiService = {
           }
 
           case 'getBriefings': {
-            const { data: briefings, error } = await supabase
+            const shouldProbeScoreSchema = Date.now() >= getBriefingScoreSchemaRetryAfter();
+            const summaryFields = shouldProbeScoreSchema ? BRIEFING_SCORE_FIELDS : BRIEFING_REVIEW_FIELDS;
+            let { data: briefings, error } = await supabase
               .from('Briefings')
-              .select('ID, RunningID, Title, CreatorID, Detail, CreatorNote, Assignees, Status, Priority, StartDate, DueDate, LastUpdatedBy, CreatedAt, UpdatedAt, CompletedAt, CardColor, PostStatus, PostUrl, PostDate, Points')
+              .select(summaryFields)
               .order('CreatedAt', { ascending: false });
+
+            // Production can briefly run the UI before the incremental score
+            // migration. Retry without ScoreAdjustment and remember that result
+            // for ten minutes, preventing every poll/view from producing 400s.
+            if (error && shouldProbeScoreSchema && isMissingSchemaField(error)) {
+              deferBriefingScoreSchemaProbe();
+              ({ data: briefings, error } = await supabase
+                .from('Briefings')
+                .select(BRIEFING_REVIEW_FIELDS)
+                .order('CreatedAt', { ascending: false }));
+            }
+
+            // Keep the legacy briefing list readable if the full review schema
+            // itself has not been migrated yet.
+            if (error && isMissingSchemaField(error)) {
+              ({ data: briefings, error } = await supabase
+                .from('Briefings')
+                .select(BRIEFING_LEGACY_FIELDS)
+                .order('CreatedAt', { ascending: false }));
+            }
             if (error) throw error;
             resultData = (briefings || []).map(b => ({
               ...b,
@@ -578,7 +634,7 @@ export const apiService = {
                 Detail: data.Detail || '',
                 CreatorNote: data.CreatorNote || '',
                 Assignees: data.Assignees || [],
-                Status: data.Status || 'รอดำเนินการ',
+                Status: data.Status === 'เสร็จสิ้น' ? 'ส่งตรวจ' : (data.Status || 'ดำเนินการ'),
                 Priority: data.Priority || 'Medium',
                 StartDate: data.StartDate || '',
                 DueDate: data.DueDate || '',
@@ -589,6 +645,7 @@ export const apiService = {
                 PostDate: data.PostDate || '',
                 LastUpdatedBy: this.userId || null,
                 Points: data.Points || 0,
+                RefImages: Array.isArray(data.RefImages) ? data.RefImages : [],
                 ...Object.keys(data).reduce((acc, k) => {
                   if (k.startsWith('RefImage')) acc[k] = data[k];
                   return acc;
@@ -602,23 +659,51 @@ export const apiService = {
 
           case 'updateBriefing': {
             const updateFields = { ...data };
+            // The original brief belongs to its creator.  An assigned recipient
+            // must use saveBriefingResponse() for their result images, links,
+            // notes and personal progress instead of editing this record.
+            const { data: currentBriefing, error: briefingError } = await supabase
+              .from('Briefings')
+              .select('CreatorID, Assignees, Status')
+              .eq('ID', data.ID)
+              .maybeSingle();
+            if (briefingError) throw briefingError;
+            if (!currentBriefing) throw new Error('ไม่พบข้อมูลงานบรีฟ');
+            const currentAssignees = parseJson(currentBriefing.Assignees, []);
+            const isCreator = String(currentBriefing.CreatorID) === String(this.userId);
+            const isRecipient = Array.isArray(currentAssignees)
+              && currentAssignees.some((id) => String(id) === String(this.userId));
+            if (isRecipient) {
+              throw new Error('ผู้รับมอบหมายแก้ไขรายละเอียดบรีฟของผู้มอบหมายไม่ได้');
+            }
+            // A briefing may only become completed through review_briefing().
+            // This keeps completion, point calculation, and response statuses in
+            // one atomic server-side transition.
+            if (updateFields.Status === 'เสร็จสิ้น') {
+              throw new Error('งานบรีฟต้องผ่านการอนุมัติจากหัวหน้าแผนกก่อนจึงจะเสร็จสิ้นได้');
+            }
+            // Review-derived values are owned by the review transaction. Never
+            // accept them from a normal briefing edit, including a stale tab.
+            ['DeductedPoints', 'CorrectionCount', 'RejectedCount', 'BonusPoints', 'FinalPoints', 'ScoreAdjustment', 'ReviewedAt', 'ReviewedBy'].forEach((field) => {
+              delete updateFields[field];
+            });
+            if (updateFields.Status) {
+              if (currentBriefing.Status === 'เสร็จสิ้น') {
+                throw new Error('งานที่เสร็จสิ้นแล้วเป็นข้อมูลเดิม จึงไม่เปลี่ยนผ่าน workflow ใหม่');
+              }
+            }
             // คะแนนบรีฟเป็นของผู้สร้างบรีฟเท่านั้น แม้ผู้ใช้รายอื่นจะมีสิทธิ์
             // แก้ไขรายละเอียด/สถานะของบรีฟได้ตามบทบาทของตน
             if (Object.prototype.hasOwnProperty.call(updateFields, 'Points')) {
-              const { data: currentBriefing, error: ownerError } = await supabase
-                .from('Briefings')
-                .select('CreatorID')
-                .eq('ID', data.ID)
-                .maybeSingle();
-              if (ownerError) throw ownerError;
-              if (!currentBriefing || String(currentBriefing.CreatorID) !== String(this.userId)) {
+              if (!isCreator) {
                 delete updateFields.Points;
               }
             }
-            if (updateFields.Status === 'เสร็จสิ้น') {
-              updateFields.CompletedAt = new Date().toISOString();
-            } else if (updateFields.Status && updateFields.Status !== 'เสร็จสิ้น') {
+            if (updateFields.Status) {
               updateFields.CompletedAt = null;
+              if (updateFields.Status === 'ส่งตรวจ') {
+                updateFields.ReviewSubmittedAt = new Date().toISOString();
+              }
             }
             updateFields.UpdatedAt = new Date().toISOString();
             updateFields.LastUpdatedBy = this.userId || null;
@@ -634,6 +719,19 @@ export const apiService = {
           }
 
           case 'deleteBriefing': {
+            const { data: briefingForDelete, error: briefingForDeleteError } = await supabase
+              .from('Briefings')
+              .select('CreatorID, Assignees')
+              .eq('ID', data.id)
+              .maybeSingle();
+            if (briefingForDeleteError) throw briefingForDeleteError;
+            if (!briefingForDelete) throw new Error('ไม่พบข้อมูลงานบรีฟ');
+            const deleteAssignees = parseJson(briefingForDelete.Assignees, []);
+            const isDeleteRecipient = Array.isArray(deleteAssignees)
+              && deleteAssignees.some((id) => String(id) === String(this.userId));
+            if (isDeleteRecipient) {
+              throw new Error('ผู้รับมอบหมายลบบรีฟงานของผู้มอบหมายไม่ได้');
+            }
             const { error } = await supabase
               .from('Briefings')
               .delete()
@@ -657,13 +755,29 @@ export const apiService = {
           }
 
           case 'saveBriefingResponse': {
+            const responseUserId = this.userId || data.UserID;
+            const { data: briefingForResponse, error: briefingForResponseError } = await supabase
+              .from('Briefings')
+              .select('Assignees, Status')
+              .eq('ID', data.BriefingID)
+              .maybeSingle();
+            if (briefingForResponseError) throw briefingForResponseError;
+            if (!briefingForResponse) throw new Error('ไม่พบข้อมูลงานบรีฟ');
+            const responseAssignees = parseJson(briefingForResponse.Assignees, []);
+            if (!responseUserId || !Array.isArray(responseAssignees) || !responseAssignees.some((id) => String(id) === String(responseUserId))) {
+              throw new Error('เฉพาะผู้รับมอบหมายเท่านั้นที่บันทึกการส่งงานของตนเองได้');
+            }
             const responseData = {
               BriefingID: data.BriefingID,
-              UserID: data.UserID || this.userId,
+              UserID: responseUserId,
               URL1: data.URL1 || '',
               URL2: data.URL2 || '',
-              Status: data.Status || 'รอดำเนินการ',
+              // Recipient status is system-owned. Ignore stale clients that
+              // still submit a Status or NewOverallStatus field.
+              Status: briefingForResponse.Status || 'รอดำเนินการ',
               Note: data.Note || '',
+              ResultImages: Array.isArray(data.ResultImages) ? data.ResultImages : [],
+              ReviewImages: Array.isArray(data.ReviewImages) ? data.ReviewImages : [],
               UpdatedAt: new Date().toISOString(),
               ...Object.keys(data).reduce((acc, k) => {
                 if (k.startsWith('ResultImage') || k.startsWith('ReviewImage')) {
@@ -698,18 +812,6 @@ export const apiService = {
                 }]);
               if (insertErr) throw insertErr;
             }
-
-            const briefingUpdate = {
-              UpdatedAt: new Date().toISOString(),
-              LastUpdatedBy: this.userId || null
-            };
-            if (data.NewOverallStatus) {
-              briefingUpdate.Status = data.NewOverallStatus;
-            }
-            await supabase
-              .from('Briefings')
-              .update(briefingUpdate)
-              .eq('ID', data.BriefingID);
 
             resultData = { message: 'Response saved' };
             break;
@@ -851,12 +953,35 @@ export const apiService = {
     });
   },
 
-  uploadImage(base64) {
-    return Promise.resolve({
-      id: crypto.randomUUID(),
-      url: base64,
-      downloadUrl: base64
-    });
+  async uploadImage(file, { folder = 'briefings' } = {}) {
+    if (!(file instanceof Blob)) {
+      throw new Error('อัปโหลดได้เฉพาะไฟล์รูปภาพ ไม่รองรับการบันทึก Base64 ใหม่');
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error('รูปภาพต้องมีขนาดไม่เกิน 2 MB หลังบีบอัด');
+    }
+
+    const safeFolder = String(folder || 'briefings').replace(/[^a-zA-Z0-9/_-]/g, '-');
+    const owner = String(this.userId || 'anonymous').replace(/[^a-zA-Z0-9_-]/g, '-');
+    const objectPath = `${safeFolder}/${owner}/${Date.now()}-${crypto.randomUUID()}.webp`;
+    const { data, error } = await supabase.storage
+      .from(IMAGE_STORAGE_BUCKET)
+      .upload(objectPath, file, {
+        cacheControl: '31536000',
+        contentType: 'image/webp',
+        upsert: false,
+      });
+    if (error) throw error;
+
+    const { data: publicUrl } = supabase.storage
+      .from(IMAGE_STORAGE_BUCKET)
+      .getPublicUrl(data.path);
+    return {
+      id: data.path,
+      path: data.path,
+      url: publicUrl.publicUrl,
+      downloadUrl: publicUrl.publicUrl
+    };
   },
 
   // Master Positions
@@ -918,6 +1043,66 @@ export const apiService = {
       this.clearCacheFor('getBriefings', 'getBriefingResponses');
       return res;
     });
+  },
+
+  async getBriefingReviewSettings(department) {
+    const { data, error } = await supabase
+      .from('BriefingReviewSettings')
+      .select('*')
+      .eq('Department', department || '')
+      .maybeSingle();
+    if (error) throw error;
+    return data || {
+      Department: department || '',
+      CorrectionDeduction: 1,
+      RejectedDeduction: 1,
+    };
+  },
+
+  async saveBriefingReviewSettings(data) {
+    const payload = {
+      Department: data.Department || '',
+      CorrectionDeduction: Math.max(0, Number(data.CorrectionDeduction) || 0),
+      RejectedDeduction: Math.max(0, Number(data.RejectedDeduction) || 0),
+      UpdatedBy: this.userId || null,
+      UpdatedAt: new Date().toISOString(),
+    };
+    const { data: saved, error } = await supabase.rpc('save_briefing_review_settings', {
+      p_department: payload.Department,
+      p_updated_by: payload.UpdatedBy,
+      p_correction_deduction: payload.CorrectionDeduction,
+      p_rejected_deduction: payload.RejectedDeduction,
+    });
+    if (error) throw error;
+    return saved;
+  },
+
+  async getBriefingReviewHistory(briefingId) {
+    const { data, error } = await supabase
+      .from('BriefingReviewHistory')
+      .select('*')
+      .eq('BriefingID', briefingId)
+      .order('CreatedAt', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async reviewBriefing({ briefingId, action, comment = '', bonusPoints = null, targetPoints = null }) {
+    const payload = {
+      p_briefing_id: briefingId,
+      p_reviewer_id: this.userId,
+      p_action: action,
+      p_comment: comment,
+      p_bonus_points: bonusPoints,
+    };
+    // Keep existing review actions compatible until the incremental score
+    // migration has been applied. Only the new adjustment action needs its
+    // sixth database argument.
+    if (action === 'score_adjustment') payload.p_target_points = targetPoints;
+    const { data, error } = await supabase.rpc('review_briefing', payload);
+    if (error) throw error;
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
+    return data;
   },
 
   updateUserPermissions(userId, permissions) {

@@ -12,6 +12,8 @@ import { CustomSelect } from '../components/CustomSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { BriefingModal } from '../components/BriefingModal';
 import { BriefingTimeline } from '../components/BriefingTimeline';
+import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermissions';
+import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
 
 export const Briefing = () => {
   const { user } = useAuth();
@@ -92,9 +94,17 @@ export const Briefing = () => {
   };
 
   useEffect(() => {
-    const onRemoteUpdate = () => {
-      // Background poller detected an update. Fetch fresh data silently.
-      handleRefresh(true);
+    const onRemoteUpdate = (event) => {
+      if (!event.detail?.briefing?.ID) {
+        handleRefresh(true);
+        return;
+      }
+      setBriefings((current) => applyBriefingRealtimeChange(current, event.detail));
+      if (event.detail.eventType !== 'DELETE') {
+        setEditingBriefing((current) => String(current?.ID) === String(event.detail.briefing.ID)
+          ? { ...current, ...event.detail.briefing }
+          : current);
+      }
     };
     window.addEventListener('remote-briefing-update', onRemoteUpdate);
     return () => window.removeEventListener('remote-briefing-update', onRemoteUpdate);
@@ -210,6 +220,14 @@ export const Briefing = () => {
   };
 
   const handleStatusChange = async (briefing, newStatus) => {
+    const canChangeStatus = canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
+    if (!canChangeStatus) {
+      toast.error('ผู้รับมอบหมายแก้ไขได้เฉพาะส่วนส่งมอบงานของตนเอง');
+      return;
+    }
+    // Completion is no longer a selectable client-side transition.  Keep this
+    // guard for a stale browser tab that still submits the old label.
+    if (newStatus === 'เสร็จสิ้น') newStatus = 'ส่งตรวจ';
     const oldStatus = briefing.Status;
     try {
       setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: newStatus, syncState: 'syncing' } : b));
@@ -218,7 +236,7 @@ export const Briefing = () => {
       setTimeout(() => {
         setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, syncState: null } : b));
       }, 1500);
-      toast.success('อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
+      toast.success(newStatus === 'ส่งตรวจ' ? 'ส่งงานเข้าคิวตรวจหัวหน้าแผนกแล้ว' : 'อัปเดตสถานะเป็น ' + newStatus + ' เรียบร้อย');
     } catch (error) {
       setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: oldStatus, syncState: null } : b));
       toast.error('อัปเดตสถานะไม่สำเร็จ: ' + error.message);
@@ -226,6 +244,10 @@ export const Briefing = () => {
   };
 
   const handlePostStatusToggle = async (briefing) => {
+    if (!canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin })) {
+      toast.error('ผู้รับมอบหมายแก้ไขได้เฉพาะส่วนส่งมอบงานของตนเอง');
+      return;
+    }
     const pStatus = briefing.PostStatus || 'ยังไม่โพส';
     const newStatus = pStatus === 'ยังไม่โพส' ? 'โพสแล้ว' : 'ยังไม่โพส';
     const oldStatus = pStatus;
@@ -298,6 +320,11 @@ export const Briefing = () => {
       };
     }, [isOpen, onToggle]);
 
+    const canChangeStatus = canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
+    if (!canChangeStatus) {
+      return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 border-2 shadow-sm ${statusColors[currentStatus] || statusColors['รอดำเนินการ']}`}>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : currentStatus}</span>;
+    }
+
     return (
       <div className="relative">
         <button
@@ -311,7 +338,7 @@ export const Briefing = () => {
         
         {isOpen && createPortal(
           <div ref={dropdownRef} style={dropdownStyles} className="bg-white/90 backdrop-blur-xl rounded-xl shadow-2xl border border-slate-200/60 p-1 py-1.5 z-[999999] animate-in fade-in zoom-in-95 duration-150">
-            {Object.entries(statusColors).filter(([s]) => s !== 'Overdue').map(([status, color]) => (
+            {Object.entries(statusColors).filter(([s]) => s !== 'Overdue' && s !== 'เสร็จสิ้น').map(([status, color]) => (
               <button
                 key={status}
                 onClick={(e) => {
@@ -333,9 +360,13 @@ export const Briefing = () => {
   };
 
   const statusColors = {
+    'แก้ไข': 'bg-violet-100 text-violet-700 border border-violet-200 font-bold',
+    'ดำเนินการ': 'bg-slate-100 text-slate-700 border border-slate-200 font-bold',
     'รอดำเนินการ': 'bg-slate-100 text-slate-700 border border-slate-200 font-bold',
     'กำลังทำ': 'bg-blue-100 text-blue-700 border border-blue-200 font-bold',
     'รอตรวจ': 'bg-pink-100 text-pink-700 border border-pink-200 font-bold',
+    'ส่งตรวจ': 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200 font-bold',
+    'สั่งแก้ไข': 'bg-orange-100 text-orange-700 border border-orange-200 font-bold',
     'รอแก้ไข': 'bg-yellow-100 text-yellow-800 border border-yellow-200 font-bold',
     'เสร็จสิ้น': 'bg-green-100 text-green-800 border border-green-200 font-bold',
     'ยกเลิกงาน': 'bg-zinc-100 text-zinc-600 border border-zinc-200 font-bold',
@@ -567,7 +598,7 @@ export const Briefing = () => {
                 onPostStatusToggle={() => handlePostStatusToggle(b)}
                 statusColor={statusColors[apiService.isBriefingOverdue(b) ? 'Overdue' : b.Status]}
                 priorityColor={priorityColors[b.Priority]}
-                StatusDropdown={StatusDropdown}
+                StatusMenu={StatusDropdown}
                 openStatusId={openStatusId}
                 setOpenStatusId={setOpenStatusId}
               />
@@ -605,7 +636,10 @@ export const Briefing = () => {
                       const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
                       const isOverdue = apiService.isBriefingOverdue(b);
                       const pStatus = b.PostStatus || 'ยังไม่โพส';
-                      const canManagePostStatus = isAdmin || perms.canManagePostStatus;
+                      const canManagePostStatus = (isAdmin || perms.canManagePostStatus)
+                        && canEditBriefingStatus({ briefing: b, userId: user?.ID, isAdmin });
+                      const canDeleteBriefing = !isRecipientOnly(b, user?.ID)
+                        && (isAdmin || String(b.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department));
                       
                       const rowStyle = b.CardColor ? { borderLeft: `4px solid ${b.CardColor}` } : {};
 
@@ -709,7 +743,7 @@ export const Briefing = () => {
                                 >
                                   <Edit2 size={14} />
                                 </button>
-                                {(isAdmin || String(b.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department)) && (
+                                {canDeleteBriefing && (
                                   <button 
                                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(b.ID); }}
                                     className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
@@ -789,11 +823,14 @@ const StatCard = ({ label, value, color, icon, onClick, active }) => (
   </button>
 );
 
-// eslint-disable-next-line react/display-name
-const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPostStatusToggle, priorityColor, user, StatusDropdown, openStatusId, setOpenStatusId }) => {
+const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPostStatusToggle, priorityColor, user, StatusMenu, openStatusId, setOpenStatusId }) => {
   const creator = allUsers.find(u => String(u.ID) === String(briefing.CreatorID));
   const assigneesCount = briefing.Assignees?.length || 0;
   const isOverdue = apiService.isBriefingOverdue(briefing);
+  const isAdmin = user?.Role === 'Admin';
+  const canChangeBriefing = canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
+  const canDeleteBriefing = !isRecipientOnly(briefing, user?.ID)
+    && (isAdmin || String(briefing.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department));
 
   const lastViewed = user ? localStorage.getItem(`lastViewedBriefing_${user.ID}_${briefing.ID}`) : null;
   const updatedAt = briefing.UpdatedAt || briefing.CreatedAt;
@@ -848,12 +885,12 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
       <div className="flex flex-col gap-3 mt-auto">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusDropdown 
-              briefing={briefing} 
-              currentStatus={briefing.Status} 
-              isOpen={openStatusId === briefing.ID}
-              onToggle={setOpenStatusId}
-            />
+            {React.createElement(StatusMenu, {
+              briefing,
+              currentStatus: briefing.Status,
+              isOpen: openStatusId === briefing.ID,
+              onToggle: setOpenStatusId
+            })}
             <div className="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg">
               <Calendar size={13} />
               {briefing.DueDate ? format(new Date(briefing.DueDate), 'd MMM yy', { locale: th }) : 'ไม่มีกำหนดส่ง'}
@@ -879,9 +916,8 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-slate-400 uppercase">สถานะโพส:</span>
             {(() => {
-              const isAdmin = user?.Role === 'Admin';
               const perms = user?.Permissions || {};
-              const canManagePostStatus = isAdmin || perms.canManagePostStatus;
+              const canManagePostStatus = canChangeBriefing && (isAdmin || perms.canManagePostStatus);
               const pStatus = briefing.PostStatus || 'ยังไม่โพส';
               
               if (canManagePostStatus) {
@@ -946,7 +982,7 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
         </div>
       </div>
       
-      {(user?.Role === 'Admin' || String(briefing.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && allUsers.find(u => String(u.ID) === String(briefing.CreatorID))?.Department === user?.Department)) && (
+      {canDeleteBriefing && (
         <button 
           onClick={onDelete}
           className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border border-slate-100 bg-white/80 backdrop-blur-sm shadow-sm z-20"

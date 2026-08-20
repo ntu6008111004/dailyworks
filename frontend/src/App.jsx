@@ -11,6 +11,7 @@ import { AdminRoles } from './views/AdminRoles';
 import { MyProfile } from './views/MyProfile';
 import { MyTeam } from './views/MyTeam';
 import { Briefing } from './views/Briefing';
+import { BriefingReview } from './views/BriefingReview';
 import { ChatbotWorklog } from './views/ChatbotWorklog';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
@@ -42,6 +43,7 @@ function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="timeline" element={<Timeline />} />
             <Route path="briefing" element={<Briefing />} />
+            <Route path="briefing/review" element={<BriefingReview />} />
             <Route path="chatbot" element={<ChatbotWorklog />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="team" element={<MyTeam />} />

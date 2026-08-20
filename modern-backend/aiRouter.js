@@ -18,7 +18,7 @@ const { requestDataPlan } = require('./lib/dataAgent');
 
 const TASK_FIELDS = 'ID, Detail, Status, Priority, StartDate, DueDate, UserID, StaffName, Department, CreatedAt, CompletedAt';
 const TASK_METRIC_FIELDS = 'ID, Status, StartDate, DueDate, CreatedAt, CompletedAt, StaffName, Department';
-const BRIEFING_FIELDS = 'ID, RunningID, Title, Detail, CreatorID, Assignees, Status, Priority, StartDate, DueDate, CreatedAt, UpdatedAt, CompletedAt, Points, PostStatus';
+const BRIEFING_FIELDS = 'ID, RunningID, Title, Detail, CreatorID, Assignees, Status, Priority, StartDate, DueDate, CreatedAt, UpdatedAt, CompletedAt, Points, PostStatus, DeductedPoints, BonusPoints, FinalPoints, ScoreAdjustment';
 const TEAM_USER_FIELDS = 'ID, Name, Department, Role';
 const TASK_METRIC_PAGE_SIZE = 1000;
 // CatLog AI uses a persistent browser session so staff do not have to log in
@@ -495,7 +495,13 @@ async function loadTeamMetrics(supabase, user, filters) {
       const response = responseByMemberBriefing.get(`${briefing.ID}:${memberId}`);
       const memberStatus = briefing.Status === 'เสร็จสิ้น' ? 'เสร็จสิ้น' : (response?.Status || 'รอดำเนินการ');
       const completedForPoints = (isAssignee && memberStatus === 'เสร็จสิ้น') || (isCreator && briefing.Status === 'เสร็จสิ้น');
-      if (completedForPoints) metric.totalPoints += Number(briefing.Points) || 0;
+      if (completedForPoints) {
+        const finalPoints = briefing.FinalPoints === null || briefing.FinalPoints === undefined
+          ? Math.max(0, (Number(briefing.Points) || 0) - (Number(briefing.DeductedPoints) || 0))
+          : Math.max(0, Number(briefing.FinalPoints) || 0);
+        const awardedPoints = Math.max(0, finalPoints + Math.max(0, Number(briefing.BonusPoints) || 0) + (Number(briefing.ScoreAdjustment) || 0));
+        metric.totalPoints += awardedPoints;
+      }
       if (!group) continue;
       if (isAssignee) metric.received[group] += 1;
       else if (isCreator) metric.assigned[group] += 1;
@@ -636,6 +642,9 @@ async function buildWorkContext(supabase, user, question, dashboardFilters, agen
         status: briefing.Status,
         priority: briefing.Priority,
         points: Number(briefing.Points) || 0,
+        awardedPoints: briefing.Status === 'เสร็จสิ้น'
+          ? Math.max(0, (Number(briefing.FinalPoints ?? briefing.Points) || 0) + (Number(briefing.BonusPoints) || 0) + (Number(briefing.ScoreAdjustment) || 0))
+          : 0,
         startDate: briefing.StartDate,
         dueDate: briefing.DueDate,
         createdAt: briefing.CreatedAt,
