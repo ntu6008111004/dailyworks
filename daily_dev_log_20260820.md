@@ -139,7 +139,7 @@
 
 ## ไฟล์ SQL ที่ต้องรันก่อน Deploy
 
-> อัปเดตท้ายวัน: migration ทุกไฟล์ด้านล่าง รวมถึง  และ  ถูกรันบนฐานข้อมูล production ครบแล้ว (ดูเรื่องที่ 12)
+> อัปเดตท้ายวัน: migration ทุกไฟล์ด้านล่าง รวมถึง `20260820_briefing_schema_catchup.sql` และ `20260820_briefing_ledger_self_access.sql` ถูกรันบนฐานข้อมูล production ครบแล้ว (ดูเรื่องที่ 12)
 
 - ประเภท: Database Migration
 - สิ่งที่ทำ:
