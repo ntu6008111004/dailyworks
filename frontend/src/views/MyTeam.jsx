@@ -41,7 +41,7 @@ export const MyTeam = () => {
         apiService.getUsers({ includeImage: true }),
         apiService.getBriefings(),
         apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status, SubmittedAt, UpdatedAt'),
-        apiService.getBriefingPointLedger(),
+        apiService.getBriefingPointLedger({ viewerId: user?.ID || user?.id }).catch((error) => { console.warn('[MyTeam] point ledger unavailable', error); return []; }),
       ]);
       
       setAllUsers(usersData || []);

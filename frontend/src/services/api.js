@@ -1111,9 +1111,13 @@ export const apiService = {
     return data;
   },
 
-  async getBriefingPointLedger({ startDate = null, endDate = null } = {}) {
+  async getBriefingPointLedger({ startDate = null, endDate = null, viewerId = null } = {}) {
+    // On a hard refresh a view can fetch before the auth effect has stored the
+    // session here, so callers pass their own user id explicitly.
+    const viewer = String(viewerId || this.userId || '');
+    if (!viewer) return [];
     const { data, error } = await supabase.rpc('get_briefing_point_ledger', {
-      p_viewer_id: this.userId,
+      p_viewer_id: viewer,
       p_start_date: startDate || null,
       p_end_date: endDate || null,
     });

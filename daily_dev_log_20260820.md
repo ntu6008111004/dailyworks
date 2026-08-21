@@ -242,3 +242,12 @@
   - ESLint ผ่านทุกไฟล์ใน Git, production build ผ่านทุกรอบ
   - ตรวจของจริงในเบราว์เซอร์: ปุ่มตรวจงาน 6 ช่องสูงเท่ากัน, ปุ่มร้ายแรงเข้าหน้ายืนยัน, ตารางตรวจงานครบ 8 คอลัมน์พร้อมป้ายเลยกำหนด และยิง RPC จริงบน production ด้วยบัญชี Staff
   - Push ขึ้น `main` และ `dev` (commit เดียวกัน) รวม 9 commits: 119c839 → 17a767f — Vercel deploy จาก 17a767f
+
+## เรื่องที่ 21: แก้หน้าภาพรวมทีมล้มทั้งหน้าเมื่อ refresh (Viewer not found)
+
+- ประเภท: Bug Fix
+- สาเหตุ: ตอน refresh หน้าตรง ๆ effect ของหน้า MyTeam ยิง `get_briefing_point_ledger` ก่อนที่ AuthContext จะบันทึก userId ลง apiService ทำให้ viewer เป็นค่าว่าง RPC ตอบ 400 "Viewer not found" และเพราะอยู่ใน Promise.all จึงพาข้อมูลทีมทั้งหน้าล้มไปด้วย
+- สิ่งที่ทำ:
+  - หน้า MyTeam และ Dashboard ส่ง viewerId ของตัวเองจาก useAuth ตรง ๆ ไม่พึ่งลำดับ effect
+  - `getBriefingPointLedger` ไม่ยิง RPC เมื่อไม่มี viewer (คืนลิสต์ว่าง) และฝั่ง MyTeam ครอบ catch แยก — สมุดคะแนนล้มก็แสดงข้อมูลทีมส่วนที่เหลือได้
+- ผลลัพธ์: refresh หน้าภาพรวมทีมแล้วข้อมูลขึ้นครบทุกครั้ง Frontend test ผ่าน 32/32, coverage 100%, build ผ่าน

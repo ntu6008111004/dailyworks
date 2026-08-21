@@ -104,7 +104,7 @@ export const Dashboard = () => {
     Promise.all([
       apiService.getBriefings(),
       apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status'),
-      apiService.getBriefingPointLedger({ startDate: month.start, endDate: month.end }).catch(() => []),
+      apiService.getBriefingPointLedger({ startDate: month.start, endDate: month.end, viewerId: userId }).catch(() => []),
     ]).then(([briefings, responses, ledger]) => {
       if (!mounted) return;
       setMyScore(computeMemberScore({ briefings, responses, ledger, memberId: userId, startDate: month.start, endDate: month.end }));
