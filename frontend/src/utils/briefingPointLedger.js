@@ -49,6 +49,19 @@ export function getBriefingReviewParticipants(briefing, users = []) {
   }));
 }
 
+/**
+ * Days the work is past its due date as of today in Bangkok. The review
+ * dialog prefills the extension field with this so the head only confirms —
+ * exactly the days needed to make the work on time again.
+ */
+export function getOverdueDays(dueDate, now = Date.now()) {
+  const due = String(dueDate || '').slice(0, 10);
+  const today = toBangkokDateKey(now);
+  if (!due || !today) return 0;
+  const difference = Math.round((new Date(today) - new Date(due)) / 86400000);
+  return Number.isFinite(difference) ? Math.max(0, difference) : 0;
+}
+
 export function getLatePenaltyPoints(lateDays) {
   const days = Math.max(0, Math.trunc(number(lateDays)));
   if (days === 0) return 0;

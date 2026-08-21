@@ -8,7 +8,7 @@ import {
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
 import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember, isBriefingScoreLocked } from '../src/utils/briefingScore.js';
-import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
+import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, getOverdueDays, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
 import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
@@ -381,4 +381,16 @@ test('the review queue triages by priority first, then the nearest deadline', ()
   assert.deepEqual(ordered.map((item) => item.ID), ['high-soon', 'high-late', 'no-priority', 'medium-soon', 'low-soon']);
   assert.equal(compareBriefingsForReview({ Priority: 'High', DueDate: '2026-08-21' }, { Priority: 'High', DueDate: '2026-08-21' }), 0);
   assert.deepEqual(sortBriefingsForReview(null), []);
+});
+
+test('the extension field is prefilled with the days the work is overdue in Bangkok', () => {
+  // 2026-08-20 17:30 UTC is already 2026-08-21 00:30 in Bangkok.
+  const now = new Date('2026-08-20T17:30:00.000Z').getTime();
+  assert.equal(getOverdueDays('2026-08-18', now), 3);
+  assert.equal(getOverdueDays('2026-08-20', now), 1);
+  assert.equal(getOverdueDays('2026-08-21', now), 0, 'due today is not overdue');
+  assert.equal(getOverdueDays('2026-08-25', now), 0, 'future due dates stay at zero');
+  assert.equal(getOverdueDays('', now), 0);
+  assert.equal(getOverdueDays(null, now), 0);
+  assert.equal(getOverdueDays('2026-07-01', now), 51, 'long overdue counts every day');
 });
