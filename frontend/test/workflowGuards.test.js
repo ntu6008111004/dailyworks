@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   canEditBriefingContent,
   canEditBriefingStatus,
+  canStartBriefingWork,
   isBriefingAssignee,
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
@@ -393,4 +394,20 @@ test('the extension field is prefilled with the days the work is overdue in Bang
   assert.equal(getOverdueDays('', now), 0);
   assert.equal(getOverdueDays(null, now), 0);
   assert.equal(getOverdueDays('2026-07-01', now), 51, 'long overdue counts every day');
+});
+
+test('a recipient can start work with one button until it is in review, closed or cancelled', () => {
+  const briefing = { CreatorID: 'creator', Assignees: ['recipient'] };
+  ['ดำเนินการ', 'รอดำเนินการ', 'แก้ไข', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอตรวจ'].forEach((status) => {
+    assert.equal(canStartBriefingWork({ briefing, userId: 'recipient', status }), true, status);
+  });
+  ['ส่งตรวจ', 'เสร็จสิ้น', 'ยกเลิกงาน'].forEach((status) => {
+    assert.equal(canStartBriefingWork({ briefing, userId: 'recipient', status }), false, status);
+  });
+  assert.equal(canStartBriefingWork({ briefing, userId: 'recipient', status: 'กำลังทำ' }), false, 'already started hides the button');
+  assert.equal(canStartBriefingWork({ briefing, userId: 'creator', status: 'ดำเนินการ' }), false, 'the briefer is not a recipient');
+  assert.equal(canStartBriefingWork({ briefing: { ...briefing, Status: 'ดำเนินการ' }, userId: 'recipient' }), true, 'falls back to the briefing status');
+  assert.equal(canStartBriefingWork({ briefing: null, userId: 'recipient', status: 'ดำเนินการ' }), false);
+  assert.equal(describeReviewError({ code: 'P0001', message: 'Only an assigned recipient may start this work' }), 'เฉพาะผู้รับงานเท่านั้นที่กดเริ่มงานนี้ได้');
+  assert.equal(describeReviewError({ code: 'P0001', message: 'Work in review, completed or cancelled cannot be started' }), 'งานที่ส่งตรวจ เสร็จสิ้น หรือยกเลิกแล้ว กดเริ่มงานใหม่ไม่ได้');
 });

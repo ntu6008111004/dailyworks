@@ -19,6 +19,8 @@ const RULE_MESSAGES = [
   [/completed legacy briefings cannot be changed/i, 'งานนี้ปิดด้วยระบบเดิม จึงใช้ workflow ตรวจงานใหม่ไม่ได้'],
   [/completed or cancelled work cannot be submitted again/i, 'งานที่เสร็จสิ้นหรือยกเลิกแล้ว ส่งงานซ้ำไม่ได้'],
   [/only an assigned recipient may submit this work/i, 'เฉพาะผู้รับงานเท่านั้นที่ส่งงานนี้ได้'],
+  [/only an assigned recipient may start this work/i, 'เฉพาะผู้รับงานเท่านั้นที่กดเริ่มงานนี้ได้'],
+  [/work in review, completed or cancelled cannot be started/i, 'งานที่ส่งตรวจ เสร็จสิ้น หรือยกเลิกแล้ว กดเริ่มงานใหม่ไม่ได้'],
   [/unsupported review action/i, 'คำสั่งตรวจงานนี้ไม่รองรับ'],
   [/unsupported bonus level/i, 'ระดับคะแนนพิเศษนี้ไม่รองรับ'],
   [/briefing not found/i, 'ไม่พบงานบรีฟนี้ อาจถูกลบไปแล้ว'],

@@ -82,3 +82,15 @@ test('every user may read their own point ledger, heads their department, admins
   assert.doesNotMatch(selfAccess, /Only a head or admin may view/);
   assert.match(selfAccess, /RAISE EXCEPTION 'Viewer not found'/);
 });
+
+test('a recipient may start work once, flipping the briefing to กำลังทำ for the briefer', () => {
+  const startWork = fs.readFileSync(
+    path.join(__dirname, '..', 'migration', '20260820_briefing_start_work.sql'),
+    'utf8',
+  );
+  assert.match(startWork, /CREATE OR REPLACE FUNCTION public\.start_briefing_work\(/);
+  assert.match(startWork, /RAISE EXCEPTION 'Only an assigned recipient may start this work'/);
+  assert.match(startWork, /IN \('ส่งตรวจ', 'เสร็จสิ้น', 'ยกเลิกงาน'\)/);
+  assert.match(startWork, /SET "Status" = 'กำลังทำ', "UpdatedAt" = v_now, "LastUpdatedBy" = p_user_id/);
+  assert.match(startWork, /GRANT EXECUTE ON FUNCTION public\.start_briefing_work\(TEXT, TEXT\) TO anon, authenticated/);
+});

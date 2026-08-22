@@ -1069,6 +1069,18 @@ export const apiService = {
     return saved;
   },
 
+  // A recipient flips the briefing to "กำลังทำ" through the server function,
+  // since the assigner's row itself stays read-only for recipients.
+  async startBriefingWork(briefingId) {
+    const { data, error } = await supabase.rpc('start_briefing_work', {
+      p_briefing_id: briefingId,
+      p_user_id: this.userId,
+    });
+    if (error) throw new Error(describeReviewError(error));
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
+    return data;
+  },
+
   async getBriefingReviewHistory(briefingId) {
     const { data, error } = await supabase
       .from('BriefingReviewHistory')
