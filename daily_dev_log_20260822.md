@@ -30,5 +30,5 @@
 - ผลลัพธ์:
   - Frontend test ผ่าน 35/35 รายการ function coverage 100% (เกณฑ์ 90) | Backend test ผ่าน 35/35 รายการ coverage 94.64%
   - ESLint ผ่านทุกไฟล์ใน Git และ production build ผ่านทุกรอบ
-  - Migration  รันบน production แล้วและตรวจว่า function ถูกสร้างครบ
-  - Push ขึ้น  และ  (commit เดียวกัน) รวม 2 commits: 2dbe0f8 → 711de54 — Vercel deploy จาก 711de54
+  - Migration `20260820_briefing_start_work.sql` รันบน production แล้วและตรวจว่า function ถูกสร้างครบ
+  - Push ขึ้น `main` และ `dev` (commit เดียวกัน) รวม 2 commits: 2dbe0f8 → 711de54 — Vercel deploy จาก 711de54

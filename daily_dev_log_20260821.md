@@ -37,4 +37,4 @@
   - Frontend test ผ่าน 33/33 รายการ function coverage 100% (เกณฑ์ 90) | Backend test ผ่าน 34/34 รายการ coverage 94.64%
   - ESLint ผ่านทุกไฟล์ใน Git และ production build ผ่านทุกรอบ
   - ตรวจข้อมูลจริงบน production ก่อนแก้: การส่งงาน 635 รายการ เป็นลิงก์ล้วน 576 รายการ มีรูป 3 รายการ มีหมายเหตุ 13 รายการ ไม่มีแถวซ้ำ
-  - Push ขึ้น  และ  (commit เดียวกัน) รวม 5 commits: 67e58bc → 64285b6
+  - Push ขึ้น `main` และ `dev` (commit เดียวกัน) รวม 5 commits: 67e58bc → 64285b6
