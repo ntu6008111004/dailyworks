@@ -15,7 +15,7 @@ import { updateGateDecision } from '../src/utils/updateGate.js';
 import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
 import { briefingSelectAt, BRIEFING_SELECT_LADDER, BRIEFING_SELECT_RETRY_MS, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
 import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
-import { compareBriefingsByDueDate, compareBriefingsForReview, isBriefingFinished, sortBriefingsByDueDate, sortBriefingsForReview } from '../src/utils/briefingOrder.js';
+import { BRIEFING_SORT_OPTIONS, compareBriefingsByDueDate, compareBriefingsByDueDateLatest, compareBriefingsForReview, getBriefingComparator, isBriefingFinished, sortBriefingsByDueDate, sortBriefingsForReview } from '../src/utils/briefingOrder.js';
 import { computeMemberScore, filterMemberLedger, isBriefingInMemberRange } from '../src/utils/briefingMemberScore.js';
 
 test('recipient cannot alter the assigning brief, including a JSON-assignee record', () => {
@@ -410,4 +410,19 @@ test('a recipient can start work with one button until it is in review, closed o
   assert.equal(canStartBriefingWork({ briefing: null, userId: 'recipient', status: 'ดำเนินการ' }), false);
   assert.equal(describeReviewError({ code: 'P0001', message: 'Only an assigned recipient may start this work' }), 'เฉพาะผู้รับงานเท่านั้นที่กดเริ่มงานนี้ได้');
   assert.equal(describeReviewError({ code: 'P0001', message: 'Work in review, completed or cancelled cannot be started' }), 'งานที่ส่งตรวจ เสร็จสิ้น หรือยกเลิกแล้ว กดเริ่มงานใหม่ไม่ได้');
+});
+
+test('the briefing page can flip to latest due date first while keeping its grouping rules', () => {
+  const items = [
+    { ID: 'done-late', Status: 'เสร็จสิ้น', DueDate: '2026-09-30', CreatedAt: '2026-08-01T00:00:00.000Z' },
+    { ID: 'soon', Status: 'ดำเนินการ', DueDate: '2026-08-22', CreatedAt: '2026-08-02T00:00:00.000Z' },
+    { ID: 'later', Status: 'ดำเนินการ', DueDate: '2026-09-10', CreatedAt: '2026-08-03T00:00:00.000Z' },
+    { ID: 'undated', Status: 'ดำเนินการ', DueDate: '', CreatedAt: '2026-08-04T00:00:00.000Z' },
+    { ID: 'same-day-new', Status: 'ดำเนินการ', DueDate: '2026-09-10', CreatedAt: '2026-08-09T00:00:00.000Z' },
+  ];
+  assert.deepEqual([...items].sort(compareBriefingsByDueDateLatest).map((item) => item.ID), ['same-day-new', 'later', 'soon', 'undated', 'done-late']);
+  assert.deepEqual([...items].sort(getBriefingComparator('dueSoonest')).map((item) => item.ID), ['soon', 'same-day-new', 'later', 'undated', 'done-late']);
+  assert.equal(getBriefingComparator('dueLatest'), compareBriefingsByDueDateLatest);
+  assert.equal(getBriefingComparator(undefined), compareBriefingsByDueDate, 'unknown or missing settings keep the default order');
+  assert.deepEqual(BRIEFING_SORT_OPTIONS.map((option) => option.value), ['dueSoonest', 'dueLatest']);
 });

@@ -14,7 +14,7 @@ import { BriefingModal } from '../components/BriefingModal';
 import { BriefingTimeline } from '../components/BriefingTimeline';
 import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermissions';
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
-import { compareBriefingsByDueDate } from '../utils/briefingOrder';
+import { BRIEFING_SORT_OPTIONS, getBriefingComparator } from '../utils/briefingOrder';
 import { getBangkokMonthRange } from '../utils/briefingPointLedger';
 
 // Daily work always opens on the month being scored.
@@ -28,11 +28,13 @@ export const Briefing = () => {
   
   // UI Settings & Persistence
   const [uiSettings, setUiSettings] = useState(() => {
-    const saved = localStorage.getItem('briefing_ui_settings');
-    return saved ? JSON.parse(saved) : {
-      defaultView: 'list',
-      itemsPerPage: 10
-    };
+    const defaults = { defaultView: 'list', itemsPerPage: 10, sortOrder: 'dueSoonest' };
+    try {
+      const saved = JSON.parse(localStorage.getItem('briefing_ui_settings') || 'null');
+      return saved && typeof saved === 'object' ? { ...defaults, ...saved } : defaults;
+    } catch {
+      return defaults;
+    }
   });
 
   useEffect(() => {
@@ -181,8 +183,8 @@ export const Briefing = () => {
       if (endDate && new Date(bDate) > new Date(endDate)) return false;
 
       return true;
-    }).sort(compareBriefingsByDueDate);
-  }, [visibleBriefings, searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate, allUsers]);
+    }).sort(getBriefingComparator(uiSettings.sortOrder));
+  }, [visibleBriefings, searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate, allUsers, uiSettings.sortOrder]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -1062,6 +1064,21 @@ const BriefingSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
                 <List size={24} className={localSettings.defaultView === 'table' ? 'text-blue-600' : 'text-slate-400'} />
                 <span className={`text-xs font-bold ${localSettings.defaultView === 'table' ? 'text-blue-700' : 'text-slate-500'}`}>Table (ตาราง)</span>
               </button>
+            </div>
+          </div>
+
+          {/* Sort Order */}
+          <div className="space-y-4">
+            <label className="text-sm font-bold text-slate-700">การเรียงลำดับงาน (ทุกสถานะ)</label>
+            <div className="grid grid-cols-2 gap-3">
+              {BRIEFING_SORT_OPTIONS.map((option) => {
+                const active = (localSettings.sortOrder || 'dueSoonest') === option.value;
+                return <button key={option.value} type="button" onClick={() => setLocalSettings(prev => ({ ...prev, sortOrder: option.value }))} className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1.5 text-center ${active ? 'border-blue-600 bg-blue-50/50 ring-4 ring-blue-500/10' : 'border-slate-100 hover:border-slate-200 bg-slate-50/30'}`}>
+                  {option.value === 'dueSoonest' ? <Clock size={22} className={active ? 'text-blue-600' : 'text-slate-400'} /> : <Calendar size={22} className={active ? 'text-blue-600' : 'text-slate-400'} />}
+                  <span className={`text-xs font-bold ${active ? 'text-blue-700' : 'text-slate-500'}`}>{option.label}</span>
+                  <span className="text-[10px] text-slate-400">{option.hint}</span>
+                </button>;
+              })}
             </div>
           </div>
 

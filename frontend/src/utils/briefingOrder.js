@@ -40,6 +40,32 @@ export function sortBriefingsByDueDate(briefings = []) {
   return [...(Array.isArray(briefings) ? briefings : [])].sort(compareBriefingsByDueDate);
 }
 
+/**
+ * The opposite direction for the briefing page: the latest due date first.
+ * Unfinished work still outranks closed work, and undated work still sinks to
+ * the bottom — only the order of real deadlines flips.
+ */
+export function compareBriefingsByDueDateLatest(a, b) {
+  const finished = Number(isBriefingFinished(a)) - Number(isBriefingFinished(b));
+  if (finished !== 0) return finished;
+  const dueA = dueTime(a);
+  const dueB = dueTime(b);
+  const undated = Number(dueA === FAR_FUTURE) - Number(dueB === FAR_FUTURE);
+  if (undated !== 0) return undated;
+  if (dueA !== dueB) return dueB - dueA;
+  return createdTime(b) - createdTime(a);
+}
+
+// The briefing page remembers one of these per device (display settings).
+export const BRIEFING_SORT_OPTIONS = [
+  { value: 'dueSoonest', label: 'กำหนดส่งใกล้สุดก่อน', hint: 'งานที่ใกล้ถึงกำหนดขึ้นบนสุด' },
+  { value: 'dueLatest', label: 'กำหนดส่งล่าสุดก่อน', hint: 'วันที่ล่าสุดขึ้นบนแล้วไล่ลงไป' },
+];
+
+export function getBriefingComparator(sortOrder) {
+  return sortOrder === 'dueLatest' ? compareBriefingsByDueDateLatest : compareBriefingsByDueDate;
+}
+
 // The review queue triages by urgency: a briefing without a priority sits with
 // the Medium ones instead of jumping to either end.
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
