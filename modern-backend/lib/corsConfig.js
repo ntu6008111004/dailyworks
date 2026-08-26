@@ -3,7 +3,6 @@ const DEFAULT_CORS_ORIGINS = [
   'http://localhost:5174',
   'http://localhost:4173',
   'https://dailyworks-nu.vercel.app',
-  'https://ntu6008111004.github.io',
 ];
 
 function normalizeOrigin(value) {
