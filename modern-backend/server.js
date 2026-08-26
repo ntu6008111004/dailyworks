@@ -35,6 +35,61 @@ function requireLegacyApiKey(req, res, next) {
   return next();
 }
 
+// Public ThaiLLM proxy for AETHRA ORACLE (fortune-telling site on GitHub Pages).
+// Rationale: ThaiLLM's Cloudflare intermittently blocks browser calls from public
+// origins, so the browser talks to this server instead. The upstream key stays here.
+const AETHRA_LIMIT = { windowMs: 60_000, max: 20, hits: new Map() };
+function aethraRateLimit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || 'unknown';
+  const entry = AETHRA_LIMIT.hits.get(key) || { count: 0, start: now };
+  if (now - entry.start > AETHRA_LIMIT.windowMs) { entry.count = 0; entry.start = now; }
+  entry.count += 1;
+  AETHRA_LIMIT.hits.set(key, entry);
+  if (AETHRA_LIMIT.hits.size > 5000) AETHRA_LIMIT.hits.clear();
+  if (entry.count > AETHRA_LIMIT.max) {
+    return res.status(429).json({ status: 'error', code: 'rate_limit', message: 'Too many requests' });
+  }
+  return next();
+}
+
+app.get('/api/thaillm/health', (req, res) => {
+  res.json({ success: true, configured: Boolean(process.env.THAILLM_API_KEY), provider: 'CatLog ThaiLLM proxy' });
+});
+
+app.post('/api/thaillm/chat/completions', aethraRateLimit, async (req, res) => {
+  const apiKey = process.env.THAILLM_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: { message: 'ThaiLLM is not configured' } });
+
+  const body = req.body || {};
+  const messages = Array.isArray(body.messages)
+    ? body.messages.slice(-16).map((m) => ({
+      role: m && m.role === 'system' ? 'system' : (m && m.role === 'assistant' ? 'assistant' : 'user'),
+      content: String((m && m.content) || '').slice(0, 12000),
+    })).filter((m) => m.content)
+    : [];
+  if (!messages.length) return res.status(400).json({ error: { message: 'messages is required' } });
+
+  try {
+    const upstream = await fetch(process.env.THAILLM_API_URL || 'https://thaillm.or.th/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'pathumma-thaillm-qwen3-8b-think-3.0.0',
+        max_tokens: Math.min(Number(body.max_tokens) || 4096, 6144),
+        temperature: Math.min(Math.max(Number(body.temperature) || 0.55, 0), 1),
+        messages,
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+    const payload = await upstream.json().catch(() => ({}));
+    return res.status(upstream.ok ? 200 : upstream.status).json(payload);
+  } catch (error) {
+    const timedOut = error && error.name === 'TimeoutError';
+    return res.status(timedOut ? 504 : 502).json({ error: { message: timedOut ? 'Upstream timeout' : 'Upstream unreachable' } });
+  }
+});
+
 // AI routes use short-lived, user-bound sessions; they must not use a browser-shared API key.
 app.use('/api/ai', createAiRouter({ supabase: supabaseAdmin, env: process.env }));
 
