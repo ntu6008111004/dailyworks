@@ -11,7 +11,13 @@ function validIsoDate(value) {
 }
 
 function extractJsonObject(value) {
-  const text = String(value || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  let text = String(value || '');
+  if (/<\/(?:think|thought)>/i.test(text)) {
+    text = text.split(/<\/(?:think|thought)>/i).pop();
+  } else {
+    text = text.replace(/<(?:think|thought)>[\s\S]*?(?:<\/(?:think|thought)>|$)/gi, '');
+  }
+  text = text.replace(/^(?:Here's a thinking process|Thinking Process|Thought Process)[\s\S]*?\n\n/i, '').trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text;
   const start = fenced.indexOf('{');
   const end = fenced.lastIndexOf('}');

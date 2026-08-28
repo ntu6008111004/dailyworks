@@ -175,11 +175,50 @@ const STAFF_ALIASES = [
   { aliases: ['มาย', 'มายด์'], name: 'ธัญญา แสงเมือง' },
 ];
 
+function matchStaffAlias(text, alias) {
+  const lower = String(text || '').toLowerCase();
+  const target = String(alias || '').toLowerCase();
+  if (!lower.includes(target)) return false;
+
+  // Specific word disambiguation for short aliases that form common Thai words
+  if (target === 'โม') {
+    // Exclude common words containing 'โม' that are not names (e.g. โมเดล, โปรโมท, โมบาย)
+    const sanitized = lower.replace(/โมเดล(?:ลิ่ง)?|โมเดิร์น|โปรโมท|โปรโมชั่น|โมบาย|โมดูล|แตงโม|โมโห|โมโน|โมเมนตัม|ไอโมบาย/gu, '');
+    if (!sanitized.includes('โม')) return false;
+    const regex = /(?:คุณ|พี่|น้อง|ของ|กับ|และ|\s|^)โม(?:\s|มี|ทำ|ได้|ส่ง|ค้าง|รับ|บรีฟ|คะแนน|งาน|$|[,\.!?])/u;
+    return regex.test(sanitized) || sanitized.trim() === 'โม';
+  }
+
+  if (target === 'มาย' || target === 'มายด์') {
+    // Exclude common words containing 'มาย' (e.g. มากมาย, เป้าหมาย, ความหมาย, หลากหลาย)
+    const sanitized = lower.replace(/มากมาย|หลากหลาย|เป้าหมาย|ความหมาย|บรรยาย|จดหมาย|เสียหาย|แพร่หลาย|กฎหมาย|เครื่องหมาย/gu, '');
+    if (!sanitized.includes(target)) return false;
+    const regex = new RegExp(`(?:คุณ|พี่|น้อง|ของ|กับ|และ|\\s|^)${target}(?:\\s|มี|ทำ|ได้|ส่ง|ค้าง|รับ|บรีฟ|คะแนน|งาน|$|[,\\.!?])`, 'u');
+    return regex.test(sanitized) || sanitized.trim() === target;
+  }
+
+  if (target === 'บัส' || target === 'บาส') {
+    const sanitized = lower.replace(/รถบัส|แอร์บัส|โรบัสต้า|บาสเกตบอล/gu, '');
+    if (!sanitized.includes(target)) return false;
+    const regex = new RegExp(`(?:คุณ|พี่|น้อง|ของ|กับ|และ|\\s|^)${target}(?:\\s|มี|ทำ|ได้|ส่ง|ค้าง|รับ|บรีฟ|คะแนน|งาน|$|[,\\.!?])`, 'u');
+    return regex.test(sanitized) || sanitized.trim() === target;
+  }
+
+  if (target === 'บอส' || target === 'บอด') {
+    const sanitized = lower.replace(/ไฮโดรคาร์บอน|บอสเนีย/gu, '');
+    if (!sanitized.includes(target)) return false;
+    const regex = new RegExp(`(?:คุณ|พี่|น้อง|ของ|กับ|และ|\\s|^)${target}(?:\\s|มี|ทำ|ได้|ส่ง|ค้าง|รับ|บรีฟ|คะแนน|งาน|$|[,\\.!?])`, 'u');
+    return regex.test(sanitized) || sanitized.trim() === target;
+  }
+
+  return true;
+}
+
 function extractStaffMentions(question) {
   const lower = String(question || '').toLowerCase();
   return [...new Set(
     STAFF_ALIASES
-      .filter(item => item.aliases.some(alias => lower.includes(alias.toLowerCase())))
+      .filter(item => item.aliases.some(alias => matchStaffAlias(lower, alias)))
       .map(item => item.name)
   )];
 }
@@ -224,7 +263,7 @@ function hasInternalWorkEvidence(question) {
     'แผนก', 'ผู้รับผิดชอบ',
   ];
   return strongTerms.some(term => lower.includes(term)) ||
-    STAFF_ALIASES.some(item => item.aliases.some(alias => lower.includes(alias))) ||
+    STAFF_ALIASES.some(item => item.aliases.some(alias => matchStaffAlias(lower, alias))) ||
     isSelfReference(question);
 }
 
@@ -388,7 +427,7 @@ function extractQueryFilters(question, referenceDate = Date.now()) {
   if (status) filters.status = status.value;
   if (lower.includes('งานค้าง') || lower.includes('ยังไม่เสร็จ')) filters.pendingOnly = true;
 
-  const staff = STAFF_ALIASES.find(item => item.aliases.some(alias => lower.includes(alias)));
+  const staff = STAFF_ALIASES.find(item => item.aliases.some(alias => matchStaffAlias(lower, alias)));
   if (staff) filters.staffName = staff.name;
 
   const quoted = text.match(/[“"]([^”"]{2,100})[”"]/);
@@ -415,7 +454,7 @@ function detectWorkIntent(question) {
   if (isHypotheticalOrCalculation(question)) return 'none';
   const related = hasInternalWorkEvidence(question) && (
     WORK_TERMS.some(term => lower.includes(term)) ||
-    STAFF_ALIASES.some(item => item.aliases.some(alias => lower.includes(alias)))
+    STAFF_ALIASES.some(item => item.aliases.some(alias => matchStaffAlias(lower, alias)))
   );
   if (!related) return 'none';
   if (DETAIL_TERMS.some(term => lower.includes(term))) return 'detail';
@@ -480,6 +519,7 @@ module.exports = {
   isWorkRelated,
   isHypotheticalOrCalculation,
   isSelfReference,
+  matchStaffAlias,
   signSession,
   validateChatMessages,
   validateCredentialInput,
