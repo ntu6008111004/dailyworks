@@ -7,7 +7,11 @@ import {
   rememberBriefingSelectIndex,
 } from '../utils/briefingSchema';
 import { describeReviewError } from '../utils/briefingReviewErrors';
+import { sanitizeReviewCommentImages } from '../utils/briefingReviewNotes';
 import { imageExtensionFor } from '../utils/compressImage';
+
+// PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
+const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -1100,6 +1104,7 @@ export const apiService = {
     targetUserIds = null,
     extraPoints = null,
     extensionDays = null,
+    commentImages = [],
   }) {
     const payload = {
       p_briefing_id: briefingId,
@@ -1112,7 +1117,17 @@ export const apiService = {
       p_extra_points: extraPoints,
       p_extension_days: extensionDays,
     };
-    const { data, error } = await supabase.rpc('review_briefing', payload);
+    const images = sanitizeReviewCommentImages(commentImages);
+    // The image-aware wrapper only exists after 20260829_review_comment_images.
+    // Until that migration runs, reviewing must still work — just without the
+    // attachments — so a missing function falls back instead of failing.
+    let { data, error } = images.length
+      ? await supabase.rpc('review_briefing_with_images', { ...payload, p_comment_images: images })
+      : await supabase.rpc('review_briefing', payload);
+    if (error && images.length && MISSING_FUNCTION_CODES.includes(error.code)) {
+      console.warn('[review_briefing_with_images] not deployed, attachments skipped');
+      ({ data, error } = await supabase.rpc('review_briefing', payload));
+    }
     // PostgREST returns every review rule as a bare English 400. Translate it so
     // the reviewer reads the actual rule instead of "Bad Request" in the console.
     if (error) {

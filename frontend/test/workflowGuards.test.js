@@ -12,7 +12,7 @@ import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, B
 import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, getOverdueDays, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
-import { describeReviewAmount, getLatestReviewInstruction, requiresReviewComment, REVIEW_ACTION_LABELS, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
+import { describeReviewAmount, getLatestReviewInstruction, MAX_REVIEW_COMMENT_IMAGES, requiresReviewComment, REVIEW_ACTION_LABELS, sanitizeReviewCommentImages, summarizeReviewNotes } from '../src/utils/briefingReviewNotes.js';
 import { briefingSelectAt, BRIEFING_SELECT_LADDER, BRIEFING_SELECT_RETRY_MS, isMissingSchemaField, nextBriefingSelectIndex, readBriefingSelectIndex, rememberBriefingSelectIndex } from '../src/utils/briefingSchema.js';
 import { describeReviewError, isOutdatedReviewFunction } from '../src/utils/briefingReviewErrors.js';
 import { BRIEFING_SORT_OPTIONS, compareBriefingsByDueDate, compareBriefingsByDueDateLatest, compareBriefingsForReview, getBriefingComparator, isBriefingFinished, sortBriefingsByDueDate, sortBriefingsForReview } from '../src/utils/briefingOrder.js';
@@ -159,6 +159,55 @@ test('a head instruction reaches the briefing page with its mandatory note', () 
   assert.equal(summarizeReviewNotes(null)[0], undefined);
   assert.equal(summarizeReviewNotes([{ ID: 9, Action: 'REJECTED', ReviewerID: 'ghost' }])[0].reviewer, 'หัวหน้าแผนก');
   assert.equal(REVIEW_ACTION_LABELS.SEVERE_ERROR, 'ความผิดพลาดร้ายแรง');
+});
+
+test('a review note carries at most six Storage images and never base64', () => {
+  assert.equal(MAX_REVIEW_COMMENT_IMAGES, 6);
+  const images = sanitizeReviewCommentImages([
+    'https://cdn.example.com/a.webp',
+    '  https://cdn.example.com/b.webp  ',
+    'https://cdn.example.com/a.webp',
+    'data:image/png;base64,AAAA',
+    'javascript:alert(1)',
+    '',
+    null,
+    42,
+    `https://cdn.example.com/${'x'.repeat(1000)}.webp`,
+  ]);
+  assert.deepEqual(images, ['https://cdn.example.com/a.webp', 'https://cdn.example.com/b.webp']);
+  assert.equal(sanitizeReviewCommentImages(null).length, 0);
+  assert.equal(sanitizeReviewCommentImages('not-an-array').length, 0);
+
+  const seven = Array.from({ length: 7 }, (_, index) => `https://cdn.example.com/${index}.webp`);
+  assert.equal(sanitizeReviewCommentImages(seven).length, MAX_REVIEW_COMMENT_IMAGES);
+});
+
+test('review instructions surface the attached pictures of the mistake', () => {
+  const users = [{ ID: 'head-1', Name: 'หัวหน้าแผนก' }];
+  const notes = summarizeReviewNotes([
+    {
+      ID: 1,
+      Action: 'NEEDS_REVISION',
+      Comment: 'แก้คำผิดบรรทัดแรก',
+      CommentImages: ['https://cdn.example.com/wrong-1.webp', 'https://cdn.example.com/wrong-2.webp'],
+      ReviewerID: 'head-1',
+      CreatedAt: '2026-08-29T02:00:00.000Z',
+    },
+    // Stored as a JSON string by older PostgREST responses.
+    {
+      ID: 2,
+      Action: 'REJECTED',
+      Comment: 'โลโก้ผิด',
+      CommentImages: '["https://cdn.example.com/logo.webp"]',
+      ReviewerID: 'head-1',
+      CreatedAt: '2026-08-29T01:00:00.000Z',
+    },
+    { ID: 3, Action: 'EXTRA_WORK', Comment: 'เพิ่มงาน', ReviewerID: 'head-1', CreatedAt: '2026-08-29T00:00:00.000Z' },
+  ], users);
+
+  assert.deepEqual(notes[0].images, ['https://cdn.example.com/wrong-1.webp', 'https://cdn.example.com/wrong-2.webp']);
+  assert.deepEqual(notes[1].images, ['https://cdn.example.com/logo.webp']);
+  assert.deepEqual(notes[2].images, []);
 });
 
 test('every corrective review action forces a note, approval stays optional', () => {

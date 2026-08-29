@@ -2,6 +2,8 @@
 // itself, not only the review queue. The mapping lives here so the same labels
 // are used by the review dialog, the briefing modal and the tests.
 
+import { parseStoredImageArray } from './briefingImages.js';
+
 export const REVIEW_ACTION_LABELS = {
   NEEDS_REVISION: 'สั่งแก้ไข',
   REJECTED: 'ความผิดพลาด',
@@ -20,6 +22,29 @@ const INSTRUCTION_ACTIONS = ['NEEDS_REVISION', 'REJECTED', 'SEVERE_ERROR', 'EXTR
 // A head may not send any of these without saying why, both in the dialog and
 // in review_briefing(). 'approved' stays optional: passing needs no reason.
 export const COMMENT_REQUIRED_ACTIONS = ['needs_revision', 'rejected', 'severe_error', 'extra_work', 'extend_deadline'];
+
+// Words alone often cannot say which part of a design is wrong, so a note may
+// carry screenshots of the mistake. Six matches sanitize_review_comment_images()
+// in the database; both sides cap it so a bypassed client cannot bloat history.
+export const MAX_REVIEW_COMMENT_IMAGES = 6;
+
+/**
+ * Keeps only the http(s) URLs that Storage handed back, capped at six. Base64
+ * and other schemes are dropped rather than trusted: a review note is a
+ * permanent record shown to the person whose score was cut.
+ */
+export function sanitizeReviewCommentImages(value) {
+  const list = Array.isArray(value) ? value : [];
+  const clean = [];
+  for (const item of list) {
+    const url = typeof item === 'string' ? item.trim() : '';
+    if (!url || url.length > 1000 || !/^https?:\/\//i.test(url)) continue;
+    if (clean.includes(url)) continue;
+    clean.push(url);
+    if (clean.length >= MAX_REVIEW_COMMENT_IMAGES) break;
+  }
+  return clean;
+}
 
 const TONES = {
   NEEDS_REVISION: 'orange',
@@ -63,6 +88,7 @@ export function summarizeReviewNotes(history = [], users = []) {
       tone: TONES[entry.Action] || 'slate',
       amount: describeReviewAmount(entry),
       comment: String(entry.Comment || '').trim(),
+      images: sanitizeReviewCommentImages(parseStoredImageArray(entry.CommentImages)),
       reviewer: reviewerName(entry.ReviewerID, users),
       createdAt: entry.CreatedAt || '',
     }))
