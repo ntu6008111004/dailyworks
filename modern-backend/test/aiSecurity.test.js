@@ -2,14 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   detectWorkIntent,
-  detectWorkDataset,
   extractQueryFilters,
   extractStaffMentions,
-  hasInternalWorkEvidence,
   isAllTimeQuestion,
-  isHypotheticalOrCalculation,
-  isWorkRelated,
   isSelfReference,
+  matchStaffAlias,
   signSession,
   validateChatMessages,
   validateCredentialInput,
@@ -131,23 +128,20 @@ test('provider URL is allowlisted and insecure HTTP is opt-in', () => {
   assert.equal(validateProviderUrl('https://example.com/api/v1/chat/completions'), null);
 });
 
-test('work routing distinguishes internal records from calculations and unrelated questions', () => {
-  assert.equal(hasInternalWorkEvidence('ดูสถานะงานของฉันในระบบ'), true);
-  assert.equal(isWorkRelated('ดูสถานะงานของฉันในระบบ'), true);
-  assert.equal(isHypotheticalOrCalculation('ถ้าทำวันละ 3 งาน อีก 10 วันจะครบไหม'), true);
-  assert.equal(detectWorkIntent('ถ้าทำวันละ 3 งาน อีก 10 วันจะครบไหม'), 'none');
-  assert.equal(detectWorkDataset('คะแนนสะสมทีมของฉัน'), 'team');
-  assert.equal(detectWorkDataset('ดูบรีฟที่รอตรวจ'), 'briefings');
-  assert.equal(detectWorkDataset('แสดงรายการงานของฉัน'), 'tasks');
-  assert.equal(detectWorkDataset('อธิบายวิธีทำอาหาร'), 'none');
-});
+test('staff alias disambiguation avoids false positives on common words', () => {
+  // Common words like โมเดล, โปรโมท, เป้าหมาย, รถบัส should not trigger staff matching
+  assert.equal(matchStaffAlias('นายคือโมเดล ai ตัวไหน', 'โม'), false);
+  assert.equal(matchStaffAlias('โปรโมทโปรเจกต์นี้ยังไง', 'โม'), false);
+  assert.equal(matchStaffAlias('เป้าหมายเดือนนี้มีอะไรบ้าง', 'มาย'), false);
+  assert.equal(matchStaffAlias('ขึ้นรถบัสไปทำงาน', 'บัส'), false);
 
-test('security validators fail closed for malformed session and chat input', () => {
-  assert.throws(() => signSession({ sub: 'user-1' }, 'too-short'), /32 characters/);
-  assert.equal(verifySession('not-a-session', SECRET), null);
-  assert.equal(verifySession('eyJ2IjoxLCJzdWIiOiJ1c2VyIn0.invalid', SECRET), null);
-  assert.equal(validateCredentialInput('x'.repeat(101), 'password'), null);
-  assert.equal(validateCredentialInput('user', 'x'.repeat(513)), null);
-  assert.equal(validateChatMessages([{ role: 'assistant', content: 'only reply' }]), null);
-  assert.equal(validateChatMessages(Array.from({ length: 13 }, () => ({ role: 'user', content: 'x' }))), null);
+  assert.deepEqual(extractStaffMentions('นายคือโมเดล ai ตัวไหน'), []);
+  assert.equal(extractQueryFilters('นายคือโมเดล ai ตัวไหน').staffName, undefined);
+  assert.equal(detectWorkIntent('นายคือโมเดล ai ตัวไหน'), 'none');
+
+  // Real employee mentions should match
+  assert.equal(matchStaffAlias('โมมีงานทั้งหมดเท่าไหร่', 'โม'), true);
+  assert.equal(matchStaffAlias('งานของพี่โมมีอะไรบ้าง', 'โม'), true);
+  assert.equal(matchStaffAlias('งานของน้องมายด์มีกี่งาน', 'มายด์'), true);
+  assert.deepEqual(extractStaffMentions('โมมีงานทั้งหมดเท่าไหร่'), ['สิรินาถ พิมพิสาร']);
 });

@@ -31,20 +31,47 @@ const SECRET = 'router-test-session-secret-with-32-characters';
 function fakeSupabase() {
   return {
     from(table) {
-      assert.equal(table, 'Users');
-      const query = {
-        select() { return query; },
-        eq() { return query; },
-        async maybeSingle() {
-          return { data: { ID: 'user-1' }, error: null };
+      if (table === 'Users') {
+        const query = {
+          select() { return query; },
+          eq() { return query; },
+          neq() { return query; },
+          or() { return query; },
+          limit() { return query; },
+          async maybeSingle() {
+            return {
+              data: { ID: 'user-1', Username: 'staff', Name: 'Staff One', Role: 'Admin', Department: 'IT' },
+              error: null,
+            };
+          },
+          then(resolve) {
+            resolve({
+              data: [{ ID: 'user-1', Username: 'staff', Name: 'Staff One', Role: 'Admin', Department: 'IT' }],
+              error: null,
+            });
+          },
+        };
+        return query;
+      }
+      const genericQuery = {
+        select() { return genericQuery; },
+        eq() { return genericQuery; },
+        gte() { return genericQuery; },
+        lte() { return genericQuery; },
+        or() { return genericQuery; },
+        order() { return genericQuery; },
+        range() { return genericQuery; },
+        limit() { return genericQuery; },
+        then(resolve) {
+          resolve({ data: [], error: null, count: 0 });
         },
       };
-      return query;
+      return genericQuery;
     },
   };
 }
 
-async function withServer(run) {
+async function withServer(run, customEnv = {}) {
   const app = express();
   app.use(express.json({ limit: '128kb' }));
   app.use('/api/ai', createAiRouter({
@@ -53,6 +80,7 @@ async function withServer(run) {
       AI_SESSION_SECRET: SECRET,
       THAILLM_API_KEY: 'test-key',
       THAILLM_API_URL: 'https://thaillm.or.th/api/v1/chat/completions',
+      ...customEnv,
     },
   }));
   const server = app.listen(0);
@@ -126,6 +154,7 @@ test('AI status endpoint identifies the deployed freshness-guard build', async (
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.build, '2026-07-23-auto-session-renew-v7');
+    assert.equal(payload.model, 'qwen3.6-35b-a3b');
     assert.equal(payload.capabilities.includes('freshness-guard'), true);
     assert.equal(payload.capabilities.includes('data-agent-planner'), true);
   });
@@ -374,4 +403,274 @@ test('news summary merges duplicate incident coverage and lists sources at the e
   assert.match(summary, /สรุปรวมจาก 2 แหล่ง/);
   assert.match(summary, /ยืนยันโดย: สำนักข่าวหนึ่ง, สำนักข่าวสอง/);
   assert.ok(summary.indexOf('**แหล่งข้อมูล**') > summary.indexOf('ยอดสูงสุดที่รายงาน'));
+});
+
+test('AI ping endpoint returns ok and timestamp without authentication', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/ai/ping`);
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.ok, true);
+    assert.equal(typeof data.ts, 'number');
+  });
+});
+
+test('AI chat endpoint calls ThaiLLM with default model qwen3.6-35b-a3b', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let capturedBody = null;
+    let capturedHeaders = null;
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        capturedBody = JSON.parse(options.body);
+        capturedHeaders = options.headers;
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: '<think>คิดคำตอบ</think>สวัสดีครับ มีอะไรให้ช่วยไหมครับ',
+              },
+            }],
+            usage: { total_tokens: 42 },
+          }),
+        };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const sessionData = await sessionRes.json();
+      const token = sessionData.data.token;
+
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'สวัสดี' }],
+        }),
+      });
+
+      assert.equal(chatRes.status, 200);
+      const chatData = await chatRes.json();
+      assert.equal(chatData.status, 'success');
+      assert.equal(chatData.data.answer, 'สวัสดีครับ มีอะไรให้ช่วยไหมครับ');
+      assert.equal(chatData.data.thinking, null);
+      assert.equal(capturedBody.model, 'qwen3.6-35b-a3b');
+      assert.equal(capturedHeaders.Authorization, 'Bearer test-key');
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('AI chat endpoint respects configured THAILLM_MODEL in env', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let capturedModel = null;
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        const body = JSON.parse(options.body);
+        capturedModel = body.model;
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: '<think>การคิด</think>ผลการวิเคราะห์',
+              },
+            }],
+          }),
+        };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const sessionData = await sessionRes.json();
+      const token = sessionData.data.token;
+
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'วิเคราะห์ระบบ' }],
+        }),
+      });
+
+      assert.equal(chatRes.status, 200);
+      const chatData = await chatRes.json();
+      assert.equal(chatData.status, 'success');
+      assert.equal(chatData.data.answer, 'ผลการวิเคราะห์');
+      assert.equal(chatData.data.thinking, 'การคิด');
+      assert.equal(capturedModel, 'Typhoon-S-ThaiLLM-8B');
+    }, {
+      THAILLM_MODEL: 'Typhoon-S-ThaiLLM-8B',
+      THAILLM_EXPOSE_THINKING: 'true',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('AI chat endpoint returns 503 when upstream provider fails and no fallback exists', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        return {
+          ok: false,
+          status: 502,
+        };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const sessionData = await sessionRes.json();
+      const token = sessionData.data.token;
+
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'สวัสดีตอนเช้า' }],
+        }),
+      });
+
+      assert.equal(chatRes.status, 503);
+      const data = await chatRes.json();
+      assert.equal(data.code, 'provider_error');
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('AI chat endpoint processes calculation mode with model', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let capturedSystemPrompt = '';
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        const body = JSON.parse(options.body);
+        capturedSystemPrompt = body.messages[0].content;
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: '5 * 10 = 50',
+              },
+            }],
+          }),
+        };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const sessionData = await sessionRes.json();
+      const token = sessionData.data.token;
+
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'ถ้ามี 5 กล่อง กล่องละ 10 ชิ้น ทั้งหมดมีกี่ชิ้น' }],
+        }),
+      });
+
+      assert.equal(chatRes.status, 200);
+      const data = await chatRes.json();
+      assert.equal(data.status, 'success');
+      assert.equal(data.data.answer, '5 * 10 = 50');
+      assert.match(capturedSystemPrompt, /assistantMode/);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('AI chat endpoint strips untagged English reasoning process and keeps only Thai answer', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: `Here's a thinking process:\n\nAnalyze User Input:\n- User asks who is Mr. Pen\n- Formulate Response in Thai\n</think>\n\nหากหมายถึงตัวผม: ผมคือ CatLog AI ผู้ช่วยภาษาไทยสำหรับระบบ WorkLogs`,
+              },
+            }],
+          }),
+        };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const sessionData = await sessionRes.json();
+      const token = sessionData.data.token;
+
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'นายเป็นใคร' }],
+        }),
+      });
+
+      assert.equal(chatRes.status, 200);
+      const data = await chatRes.json();
+      assert.equal(data.status, 'success');
+      assert.equal(data.data.answer, 'หากหมายถึงตัวผม: ผมคือ CatLog AI ผู้ช่วยภาษาไทยสำหรับระบบ WorkLogs');
+      assert.doesNotMatch(data.data.answer, /thinking process/i);
+      assert.doesNotMatch(data.data.answer, /Analyze User/i);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

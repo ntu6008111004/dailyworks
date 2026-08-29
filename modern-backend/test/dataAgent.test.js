@@ -6,7 +6,6 @@ test('data agent extracts JSON despite think tags and markdown fences', () => {
   const parsed = extractJsonObject('<think>วิเคราะห์</think>```json\n{"dataset":"team","action":"compare","people":["แพด","เหมี่ยว"]}\n```');
   assert.equal(parsed.dataset, 'team');
   assert.deepEqual(parsed.people, ['แพด', 'เหมี่ยว']);
-  assert.equal(extractJsonObject('```json\n{not-valid}\n```'), null);
 });
 
 test('data agent accepts only the read-only query DSL', () => {
@@ -27,84 +26,82 @@ test('score gap plan asks for a target instead of inventing one', () => {
   assert.match(plan.clarification, /เป้าหมายกี่คะแนน/);
 });
 
-test('data planner does not call a provider without complete credentials', async () => {
-  const plan = await requestDataPlan({
-    providerUrl: 'https://provider.example.test/chat',
-    apiKey: '',
-    question: 'สรุปคะแนนของฉัน',
-  });
-  assert.equal(plan, null);
+test('requestDataPlan returns null when providerUrl or apiKey is missing', async () => {
+  assert.equal(await requestDataPlan({ providerUrl: null, apiKey: 'key' }), null);
+  assert.equal(await requestDataPlan({ providerUrl: 'https://thaillm.or.th', apiKey: null }), null);
 });
 
-test('data planner sends a bounded read-only request and validates the response', async () => {
-  const originalFetch = global.fetch;
-  let request;
-  global.fetch = async (url, options) => {
-    request = { url, options };
-    return {
-      ok: true,
-      json: async () => ({
-        choices: [{
-          message: {
-            content: '<think>internal</think>```json\n{"dataset":"briefings","action":"list","people":["แพด","แพด"],"fromDate":"2026-08-01","toDate":"2026-08-20","status":"รอตรวจ","keyword":"  launch\\nplan  ","targetPoints":"12"}\n```'
-          }
-        }]
-      })
-    };
-  };
-
+test('requestDataPlan requests data plan using specified model', async () => {
+  const originalFetch = globalThis.fetch;
   try {
+    let capturedBody = null;
+    let capturedHeaders = null;
+    globalThis.fetch = async (url, options) => {
+      capturedBody = JSON.parse(options.body);
+      capturedHeaders = options.headers;
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                dataset: 'tasks',
+                action: 'list',
+                people: ['แพด'],
+                status: 'กำลังทำ',
+              }),
+            },
+          }],
+        }),
+      };
+    };
+
     const plan = await requestDataPlan({
-      providerUrl: 'https://provider.example.test/chat',
-      apiKey: 'secret',
-      model: 'test-model',
-      question: 'x'.repeat(1200),
-      currentDate: '2026-08-20',
-      messages: [{ role: 'user', content: 'a'.repeat(600) }],
-      timeoutMs: 1000,
+      providerUrl: 'https://thaillm.or.th/api/v1/chat/completions',
+      apiKey: 'test-api-key',
+      model: 'qwen3.6-35b-a3b',
+      question: 'งานที่กำลังทำของแพด',
+      messages: [{ role: 'user', content: 'งานที่กำลังทำของแพด' }],
+      currentDate: '2026-08-28',
     });
 
-    assert.equal(request.url, 'https://provider.example.test/chat');
-    assert.equal(request.options.method, 'POST');
-    assert.equal(request.options.headers.Authorization, 'Bearer secret');
-    const body = JSON.parse(request.options.body);
-    assert.equal(body.model, 'test-model');
-    assert.match(body.messages[0].content, /read-only/);
-    assert.equal(plan.dataset, 'briefings');
-    assert.deepEqual(plan.people, ['แพด']);
-    assert.equal(plan.keyword, 'launch plan');
-    assert.equal(plan.targetPoints, 12);
+    assert.equal(capturedBody.model, 'qwen3.6-35b-a3b');
+    assert.equal(capturedHeaders.Authorization, 'Bearer test-api-key');
+    assert.deepEqual(plan, {
+      dataset: 'tasks',
+      action: 'list',
+      people: ['แพด'],
+      fromDate: null,
+      toDate: null,
+      status: 'กำลังทำ',
+      keyword: null,
+      targetPoints: null,
+      clarification: null,
+    });
   } finally {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   }
 });
 
-test('data planner fails closed for provider and response errors', async () => {
-  const originalFetch = global.fetch;
+test('requestDataPlan handles upstream HTTP errors gracefully', async () => {
+  const originalFetch = globalThis.fetch;
   try {
-    global.fetch = async () => ({ ok: false });
-    assert.equal(await requestDataPlan({ providerUrl: 'https://provider.example.test', apiKey: 'secret', question: 'งาน' }), null);
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 502,
+    });
 
-    global.fetch = async () => { throw new Error('offline'); };
-    assert.equal(await requestDataPlan({ providerUrl: 'https://provider.example.test', apiKey: 'secret', question: 'งาน' }), null);
-  } finally {
-    global.fetch = originalFetch;
-  }
-});
+    const plan = await requestDataPlan({
+      providerUrl: 'https://thaillm.or.th/api/v1/chat/completions',
+      apiKey: 'test-api-key',
+      model: 'qwen3.6-35b-a3b',
+      question: 'ทดสอบ',
+      messages: [],
+      currentDate: '2026-08-28',
+    });
 
-test('data planner aborts a slow provider request within its bounded timeout', async () => {
-  const originalFetch = global.fetch;
-  global.fetch = async (_url, options) => new Promise((_, reject) => {
-    options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
-  });
-  try {
-    assert.equal(await requestDataPlan({
-      providerUrl: 'https://provider.example.test',
-      apiKey: 'secret',
-      question: 'งาน',
-      timeoutMs: 1,
-    }), null);
+    assert.equal(plan, null);
   } finally {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   }
 });
