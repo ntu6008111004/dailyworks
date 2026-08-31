@@ -36,11 +36,19 @@ test('creator and non-recipient head retain their intended controls', () => {
   assert.equal(canEditBriefingStatus({ briefing: null, userId: 'creator', isAdmin: false }), false);
 });
 
-test('recipient controls win even when the assignee is also the creator, admin, or head', () => {
+test('a creator who assigned the work to themselves can still send it to review', () => {
   const selfAssigned = { CreatorID: 'same-user', Assignees: ['same-user'] };
+  // They stay a recipient for the delivery half of the screen...
   assert.equal(isRecipientOnly(selfAssigned, 'same-user'), true);
   assert.equal(canEditBriefingContent({ briefing: selfAssigned, userId: 'same-user', isAdmin: true, isDepartmentHead: true }), false);
-  assert.equal(canEditBriefingStatus({ briefing: selfAssigned, userId: 'same-user', isAdmin: true }), false);
+  // ...but the status control is theirs, otherwise nobody could press ส่งตรวจ.
+  assert.equal(canEditBriefingStatus({ briefing: selfAssigned, userId: 'same-user', isAdmin: false }), true);
+  assert.equal(canEditBriefingStatus({ briefing: selfAssigned, userId: 'same-user', isAdmin: true }), true);
+
+  // An assigned admin or head is still not the creator, so somebody else's
+  // brief keeps its status locked to the person who wrote it.
+  const otherBrief = { CreatorID: 'creator', Assignees: ['assigned-admin'] };
+  assert.equal(canEditBriefingStatus({ briefing: otherBrief, userId: 'assigned-admin', isAdmin: true }), false);
 });
 
 test('realtime changes patch every open tab, while own changes suppress only notifications', () => {

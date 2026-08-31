@@ -28,7 +28,12 @@ export function isRecipientOnly(briefing, userId) {
 
 export function canEditBriefingStatus({ briefing, userId, isAdmin }) {
   if (!briefing) return false;
-  return !isRecipientOnly(briefing, userId) && (Boolean(isAdmin) || isBriefingCreator(briefing, userId));
+  // Self-assigned work has no second party to protect: the same person briefed
+  // it and delivers it, so they keep the status control that sends the work to
+  // the head's queue. Every other recipient — admins and heads included — still
+  // leaves the assigner's status alone.
+  if (isBriefingCreator(briefing, userId)) return true;
+  return !isRecipientOnly(briefing, userId) && Boolean(isAdmin);
 }
 
 // Work already in the head's queue, closed or cancelled cannot be "started"
