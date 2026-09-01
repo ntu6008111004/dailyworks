@@ -9,6 +9,7 @@ import {
 import { describeReviewError } from '../utils/briefingReviewErrors';
 import { sanitizeReviewCommentImages } from '../utils/briefingReviewNotes';
 import { imageExtensionFor } from '../utils/compressImage';
+import { canWriteBriefingRecord } from '../utils/briefingPermissions';
 
 // PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
 const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
@@ -648,10 +649,7 @@ export const apiService = {
               .maybeSingle();
             if (briefingError) throw briefingError;
             if (!currentBriefing) throw new Error('ไม่พบข้อมูลงานบรีฟ');
-            const currentAssignees = parseJson(currentBriefing.Assignees, []);
-            const isRecipient = Array.isArray(currentAssignees)
-              && currentAssignees.some((id) => String(id) === String(this.userId));
-            if (isRecipient) {
+            if (!canWriteBriefingRecord({ briefing: currentBriefing, userId: this.userId })) {
               throw new Error('ผู้รับมอบหมายแก้ไขรายละเอียดบรีฟของผู้มอบหมายไม่ได้');
             }
             // A briefing may only become completed through review_briefing().
@@ -705,10 +703,7 @@ export const apiService = {
               .maybeSingle();
             if (briefingForDeleteError) throw briefingForDeleteError;
             if (!briefingForDelete) throw new Error('ไม่พบข้อมูลงานบรีฟ');
-            const deleteAssignees = parseJson(briefingForDelete.Assignees, []);
-            const isDeleteRecipient = Array.isArray(deleteAssignees)
-              && deleteAssignees.some((id) => String(id) === String(this.userId));
-            if (isDeleteRecipient) {
+            if (!canWriteBriefingRecord({ briefing: briefingForDelete, userId: this.userId })) {
               throw new Error('ผู้รับมอบหมายลบบรีฟงานของผู้มอบหมายไม่ได้');
             }
             const { error } = await supabase

@@ -4,6 +4,7 @@ import {
   canEditBriefingContent,
   canEditBriefingStatus,
   canStartBriefingWork,
+  canWriteBriefingRecord,
   isBriefingAssignee,
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
@@ -49,6 +50,19 @@ test('a creator who assigned the work to themselves can still send it to review'
   // brief keeps its status locked to the person who wrote it.
   const otherBrief = { CreatorID: 'creator', Assignees: ['assigned-admin'] };
   assert.equal(canEditBriefingStatus({ briefing: otherBrief, userId: 'assigned-admin', isAdmin: true }), false);
+});
+
+test('the service-layer write guard follows the same self-assigned rule as the screen', () => {
+  // The screen let the self-assigned creator press ส่งตรวจ, then the write guard
+  // in api.js rejected the very same click. Both sides read one rule now.
+  const selfAssigned = { CreatorID: 'same-user', Assignees: '["same-user"]' };
+  assert.equal(canWriteBriefingRecord({ briefing: selfAssigned, userId: 'same-user' }), true);
+
+  const assignedOut = { CreatorID: 'creator', Assignees: ['recipient'] };
+  assert.equal(canWriteBriefingRecord({ briefing: assignedOut, userId: 'creator' }), true);
+  assert.equal(canWriteBriefingRecord({ briefing: assignedOut, userId: 'recipient' }), false);
+  assert.equal(canWriteBriefingRecord({ briefing: assignedOut, userId: 'head' }), true);
+  assert.equal(canWriteBriefingRecord({ briefing: null, userId: 'creator' }), false);
 });
 
 test('realtime changes patch every open tab, while own changes suppress only notifications', () => {

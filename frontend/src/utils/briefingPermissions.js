@@ -36,6 +36,15 @@ export function canEditBriefingStatus({ briefing, userId, isAdmin }) {
   return !isRecipientOnly(briefing, userId) && Boolean(isAdmin);
 }
 
+// The service layer repeats the screen's rule before it writes a briefing row.
+// It guards the assigner's record against the people they assigned it to, so a
+// creator who briefed the work to themselves is never the one being guarded
+// against — otherwise their own rule locks them out of their own briefing.
+export function canWriteBriefingRecord({ briefing, userId }) {
+  if (!briefing) return false;
+  return isBriefingCreator(briefing, userId) || !isRecipientOnly(briefing, userId);
+}
+
 // Work already in the head's queue, closed or cancelled cannot be "started"
 // again; everything else a recipient may flip to กำลังทำ with one button.
 const START_LOCKED_STATUSES = new Set(['ส่งตรวจ', 'เสร็จสิ้น', 'ยกเลิกงาน']);
