@@ -12,6 +12,7 @@ export const AdminUsers = () => {
   const { user: currentUser, updateUserState, positions } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loaderOperation, setLoaderOperation] = useState('loading');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -31,6 +32,7 @@ export const AdminUsers = () => {
   }, []);
 
   const fetchUsers = async () => {
+    setLoaderOperation('loading');
     setLoading(true);
     try {
       // Fetch without images for the table
@@ -93,6 +95,7 @@ export const AdminUsers = () => {
 
   const handleSaveUser = async (e) => {
     e.preventDefault();
+    setLoaderOperation('saving');
     setLoading(true);
     try {
       if (editingUser) {
@@ -123,6 +126,7 @@ export const AdminUsers = () => {
 
   const handleDeleteUser = async () => {
     if (!deleteConfirmId) return;
+    setLoaderOperation('syncing');
     setLoading(true);
     try {
       await apiService.deleteUser(deleteConfirmId);
@@ -312,7 +316,7 @@ export const AdminUsers = () => {
         </div>
       )}
 
-      <LoadingModal isOpen={loading} message="กำลังซิงค์ข้อมูลผู้ใช้งาน..." />
+      <LoadingModal isOpen={loading} operation={loaderOperation} message="ข้อมูลผู้ใช้งาน" />
       <ConfirmModal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} onConfirm={handleDeleteUser} title="ลบผู้ใช้งาน" message="คุณต้องการลบบัญชีผู้ใช้นี้ใช่หรือไม่?" type="danger" />
     </div>
   );

@@ -209,7 +209,7 @@ export const Dashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูล..." />
+      <LoadingModal isOpen={loading} operation="loading" message="ข้อมูลแผงควบคุม" />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">แผงควบคุม</h2>

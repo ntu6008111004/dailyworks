@@ -441,7 +441,7 @@ export const Briefing = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลบรีฟงาน..." />
+      <LoadingModal isOpen={loading} operation="loading" message="ข้อมูลบรีฟงาน" />
       
       {/* Header & Stats */}
       <div className="flex flex-col gap-6">

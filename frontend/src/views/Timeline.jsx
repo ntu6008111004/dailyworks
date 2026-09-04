@@ -152,7 +152,7 @@ export const Timeline = () => {
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto space-y-4">
-      <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลปฏิทิน..." />
+      <LoadingModal isOpen={loading} operation="loading" message="ข้อมูลปฏิทิน" />
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

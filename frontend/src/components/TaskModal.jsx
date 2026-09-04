@@ -444,7 +444,7 @@ export const TaskModal = ({ task, onClose, onSave, closeOnOutsideClick = true })
         </div>
       </div>
 
-      <LoadingModal isOpen={isUploading} message="กำลังบันทึกและอัปโหลดรูปภาพ..." />
+      <LoadingModal isOpen={isUploading} operation="saving" message="ข้อมูลงานและรูปภาพ" />
 
       <ConfirmModal
         isOpen={showSaveConfirm}

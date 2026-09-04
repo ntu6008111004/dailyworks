@@ -650,7 +650,7 @@ export const Tasks = () => {
         </div>
       </div>
 
-      <LoadingModal isOpen={loading} message="กำลังดึงข้อมูลงาน..." />
+      <LoadingModal isOpen={loading} operation="loading" message="ข้อมูลงาน" />
 
       {!loading && (
         <div className="space-y-4">

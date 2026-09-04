@@ -204,7 +204,7 @@ export const MyTeam = () => {
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <LoadingModal isOpen={loading} message="กำลังโหลดข้อมูลทีม..." />
+      <LoadingModal isOpen={loading} operation="loading" message="ข้อมูลทีม" />
       
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

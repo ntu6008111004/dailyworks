@@ -8,6 +8,7 @@ import { LoadingModal } from '../components/LoadingModal';
 export const AdminMasterData = () => {
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loaderOperation, setLoaderOperation] = useState('loading');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState(null);
   const [positionName, setPositionName] = useState('');
@@ -27,6 +28,7 @@ export const AdminMasterData = () => {
   }, []);
 
   const fetchPositions = async () => {
+    setLoaderOperation('loading');
     setLoading(true);
     try {
       const data = await apiService.getPositions();
@@ -48,6 +50,7 @@ export const AdminMasterData = () => {
     e.preventDefault();
     const name = positionName.trim();
     if (!name) return;
+    setLoaderOperation('saving');
     setLoading(true);
     try {
       if (editingPosition) {
@@ -67,6 +70,7 @@ export const AdminMasterData = () => {
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
+    setLoaderOperation('syncing');
     setLoading(true);
     try {
       await apiService.deletePosition(deleteConfirmId);
@@ -81,7 +85,7 @@ export const AdminMasterData = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <LoadingModal isOpen={loading} message="กำลังซิงค์ข้อมูลตำแหน่งงาน..." />
+      <LoadingModal isOpen={loading} operation={loaderOperation} message="ข้อมูลตำแหน่งงาน" />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

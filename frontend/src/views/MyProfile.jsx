@@ -97,7 +97,7 @@ export const MyProfile = () => {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-10">
-      <LoadingModal isOpen={loading} message="กำลังบันทึกข้อมูล..." />
+      <LoadingModal isOpen={loading} operation="saving" message="ข้อมูลส่วนตัว" />
       
       <div className="flex items-center justify-between">
         <div>
