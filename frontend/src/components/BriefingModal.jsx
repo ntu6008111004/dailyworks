@@ -19,12 +19,12 @@ import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, g
 import { summarizeReviewNotes } from '../utils/briefingReviewNotes';
 import { normalizeExternalLink } from '../utils/externalLinks';
 import { CustomSelect } from './CustomSelect';
+import { BRIEFING_STATUS_PENDING, normalizeBriefingStatus } from '../utils/briefingStatus';
 
 const MAX_IMAGES = MAX_BRIEFING_IMAGES;
-const ASSIGNER_STATUSES = ['แก้ไข', 'ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'สั่งแก้ไข', 'ยกเลิกงาน', 'ส่งตรวจ'];
+const ASSIGNER_STATUSES = [BRIEFING_STATUS_PENDING, 'แก้ไข', 'กำลังทำ', 'ส่งตรวจ', 'รอตรวจ', 'สั่งแก้ไข', 'ยกเลิกงาน'];
 const STATUS_STYLES = {
   'แก้ไข': 'bg-violet-50 text-violet-700 border-violet-200',
-  'ดำเนินการ': 'bg-slate-100 text-slate-700 border-slate-200',
   'รอดำเนินการ': 'bg-slate-100 text-slate-700 border-slate-200',
   'กำลังทำ': 'bg-blue-50 text-blue-700 border-blue-200',
   'รอตรวจ': 'bg-amber-50 text-amber-700 border-amber-200',
@@ -44,7 +44,10 @@ const PersonAvatar = ({ person, size = 'w-8 h-8' }) => person?.ProfileImage ? (
   </span>
 );
 
-const StatusPill = ({ status }) => <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${STATUS_STYLES[status] || STATUS_STYLES['ดำเนินการ']}`}>{status || 'ดำเนินการ'}</span>;
+const StatusPill = ({ status }) => {
+  const label = normalizeBriefingStatus(status);
+  return <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold ${STATUS_STYLES[label] || STATUS_STYLES[BRIEFING_STATUS_PENDING]}`}>{label}</span>;
+};
 const FieldLabel = ({ text, optional }) => <span className="mb-1.5 block text-xs font-black text-slate-700">{text}{optional && <span className="ml-1 font-medium text-slate-400">(ไม่บังคับ)</span>}</span>;
 
 const ReferenceLinkField = ({ value, editable, onChange }) => {
@@ -98,11 +101,11 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
   const [refImages, setRefImages] = useState(() => getBriefingImages(briefing, 'RefImages', 'RefImage'));
   const [formData, setFormData] = useState({
     Title: briefing?.Title || '', Detail: briefing?.Detail || '', CreatorNote: briefing?.CreatorNote || '', Priority: briefing?.Priority || 'Medium',
-    Status: briefing?.Status || 'ดำเนินการ', StartDate: briefing?.StartDate || new Date().toISOString().slice(0, 10), DueDate: briefing?.DueDate || new Date().toISOString().slice(0, 10),
+    Status: normalizeBriefingStatus(briefing?.Status), StartDate: briefing?.StartDate || new Date().toISOString().slice(0, 10), DueDate: briefing?.DueDate || new Date().toISOString().slice(0, 10),
     Assignees: briefing?.Assignees || [], RefURL: briefing?.RefURL || '', CardColor: briefing?.CardColor || '', PostStatus: briefing?.PostStatus || 'ยังไม่โพส',
     PostUrl: briefing?.PostUrl || '', PostDate: briefing?.PostDate || '', Points: briefing?.Points || 0,
   });
-  const [myResponse, setMyResponse] = useState({ ResultImages: [], URL1: '', URL2: '', Status: 'ดำเนินการ', Note: '' });
+  const [myResponse, setMyResponse] = useState({ ResultImages: [], URL1: '', URL2: '', Status: BRIEFING_STATUS_PENDING, Note: '' });
   const selectedResponse = responses.find((item) => String(item.UserID) === String(selectedAssigneeId));
   const selectedAssignee = allUsers.find((item) => String(item.ID) === String(selectedAssigneeId));
 
@@ -119,10 +122,10 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
       ]);
       setFullBriefing(loadedBriefing); setResponses(loadedResponses || []);
       setReviewNotes(summarizeReviewNotes(loadedHistory, allUsers));
-      setFormData({ Title: loadedBriefing.Title || '', Detail: loadedBriefing.Detail || '', CreatorNote: loadedBriefing.CreatorNote || '', Priority: loadedBriefing.Priority || 'Medium', Status: loadedBriefing.Status || 'ดำเนินการ', StartDate: loadedBriefing.StartDate || '', DueDate: loadedBriefing.DueDate || '', Assignees: loadedBriefing.Assignees || [], RefURL: loadedBriefing.RefURL || '', CardColor: loadedBriefing.CardColor || '', PostStatus: loadedBriefing.PostStatus || 'ยังไม่โพส', PostUrl: loadedBriefing.PostUrl || '', PostDate: loadedBriefing.PostDate || '', Points: loadedBriefing.Points || 0 });
+      setFormData({ Title: loadedBriefing.Title || '', Detail: loadedBriefing.Detail || '', CreatorNote: loadedBriefing.CreatorNote || '', Priority: loadedBriefing.Priority || 'Medium', Status: normalizeBriefingStatus(loadedBriefing.Status), StartDate: loadedBriefing.StartDate || '', DueDate: loadedBriefing.DueDate || '', Assignees: loadedBriefing.Assignees || [], RefURL: loadedBriefing.RefURL || '', CardColor: loadedBriefing.CardColor || '', PostStatus: loadedBriefing.PostStatus || 'ยังไม่โพส', PostUrl: loadedBriefing.PostUrl || '', PostDate: loadedBriefing.PostDate || '', Points: loadedBriefing.Points || 0 });
       setRefImages(getBriefingImages(loadedBriefing, 'RefImages', 'RefImage'));
       const ownResponse = (loadedResponses || []).find((item) => String(item.UserID) === String(user?.ID));
-      if (ownResponse && isAssignee) { setSelectedAssigneeId(String(user?.ID)); setMyResponse({ ResultImages: getBriefingImages(ownResponse, 'ResultImages', 'ResultImage'), URL1: ownResponse.URL1 || '', URL2: ownResponse.URL2 || '', Status: ownResponse.Status || 'ดำเนินการ', Note: ownResponse.Note || '' }); }
+      if (ownResponse && isAssignee) { setSelectedAssigneeId(String(user?.ID)); setMyResponse({ ResultImages: getBriefingImages(ownResponse, 'ResultImages', 'ResultImage'), URL1: ownResponse.URL1 || '', URL2: ownResponse.URL2 || '', Status: normalizeBriefingStatus(ownResponse.Status), Note: ownResponse.Note || '' }); }
       else if (isAssignee) setSelectedAssigneeId(String(user?.ID));
       else if (loadedBriefing.Assignees?.length) setSelectedAssigneeId(String(loadedBriefing.Assignees[0]));
     } catch (error) { toast.error(`ไม่สามารถโหลดรายละเอียดบรีฟ: ${error.message}`, { position: 'bottom-right' }); }
@@ -208,7 +211,7 @@ export const BriefingModal = ({ briefing, onClose, onSaved, allUsers = [] }) => 
 
   const assigneeOptions = useMemo(() => allUsers.filter((item) => item.Role !== 'Admin').map((item) => ({ value: String(item.ID), label: `${item.Name || item.Username} · ${item.Department || 'ไม่ระบุแผนก'}` })), [allUsers]);
   const pointsAfterDeduction = Math.max(0, Number(fullBriefing?.Points ?? formData.Points ?? 0) - Number(fullBriefing?.DeductedPoints || 0));
-  const recipientSystemStatus = fullBriefing?.Status || formData.Status || 'ดำเนินการ';
+  const recipientSystemStatus = normalizeBriefingStatus(fullBriefing?.Status || formData.Status);
 
   return <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true">
     <div className="flex h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl">

@@ -6,11 +6,16 @@ import {
 import th from 'date-fns/locale/th';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { apiService } from '../services/api';
+import { normalizeBriefingStatus } from '../utils/briefingStatus';
 
 const STATUS_COLORS = {
   'รอดำเนินการ': 'bg-slate-600 text-white shadow-sm',
+  'แก้ไข':      'bg-violet-600 text-white shadow-sm',
   'กำลังทำ':    'bg-blue-600 text-white shadow-sm',
+  'ส่งตรวจ':   'bg-fuchsia-600 text-white shadow-sm font-bold',
   'รอตรวจ':    'bg-[#f472b6] text-white shadow-sm font-bold',
+  'สั่งแก้ไข': 'bg-orange-500 text-white shadow-sm font-bold',
+  'สั่งเพิ่มงาน': 'bg-sky-500 text-white shadow-sm',
   'รอแก้ไข':   'bg-yellow-400 text-yellow-950 shadow-sm font-bold',
   'เสร็จสิ้น': 'bg-[#198754] text-white shadow-sm font-bold',
   'ยกเลิกงาน': 'bg-zinc-600 text-white shadow-sm',
@@ -84,7 +89,7 @@ export const BriefingTimeline = ({ briefings, onBriefingClick }) => {
                </div>
                <div className="space-y-1">
                   {dayBriefings.map(b => {
-                    const status = apiService.isBriefingOverdue(b) ? 'Overdue' : b.Status;
+                    const status = apiService.isBriefingOverdue(b) ? 'Overdue' : normalizeBriefingStatus(b.Status);
                     const color = STATUS_COLORS[status] || 'bg-slate-300';
                     return (
                       <button 

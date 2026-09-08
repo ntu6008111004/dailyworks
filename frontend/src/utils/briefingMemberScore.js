@@ -1,5 +1,6 @@
 import { getMemberBriefingAward, isBriefingEarnedByMember } from './briefingScore.js';
 import { getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from './briefingPointLedger.js';
+import { normalizeBriefingStatus } from './briefingStatus.js';
 
 // One rulebook for "how many points does this person have" — the team overview
 // and the personal dashboard both call computeMemberScore(), so the same
@@ -45,7 +46,7 @@ export function computeMemberScore({ briefings = [], responses = [], ledger = []
 
     const response = (Array.isArray(responses) ? responses : [])
       .find((item) => String(item?.BriefingID) === String(briefing.ID) && String(item?.UserID) === id);
-    let memberStatus = response?.Status || 'รอดำเนินการ';
+    let memberStatus = normalizeBriefingStatus(response?.Status);
     if (briefing.Status === 'เสร็จสิ้น') memberStatus = 'เสร็จสิ้น';
 
     if (isBriefingEarnedByMember(briefing, { isCreator, isAssignee, memberStatus })) {

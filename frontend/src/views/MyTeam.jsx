@@ -4,6 +4,7 @@ import { apiService } from '../services/api';
 import { formatBriefingPoints } from '../utils/briefingScore';
 import { computeMemberScore } from '../utils/briefingMemberScore';
 import { POINT_LEDGER_LABELS, getBangkokMonthRange } from '../utils/briefingPointLedger';
+import { classifyBriefingProgress } from '../utils/briefingStatus';
 
 // Daily work always opens on the month being scored.
 const CURRENT_MONTH = getBangkokMonthRange();
@@ -111,21 +112,15 @@ export const MyTeam = () => {
         const isUserCreator = isCreator && !isAssignee;
 
         if (isUserAssignee) {
-          if (b.Status === 'เสร็จสิ้น') {
-            completedCount++;
-          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
-            inProgressCount++;
-          } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
-            notStartedCount++;
-          }
+          const bucket = classifyBriefingProgress(b.Status);
+          if (bucket === 'completed') completedCount++;
+          else if (bucket === 'inProgress') inProgressCount++;
+          else if (bucket === 'notStarted') notStartedCount++;
         } else if (isUserCreator) {
-          if (b.Status === 'เสร็จสิ้น') {
-            briefedCompletedCount++;
-          } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
-            briefedInProgressCount++;
-          } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
-            briefedNotStartedCount++;
-          }
+          const bucket = classifyBriefingProgress(b.Status);
+          if (bucket === 'completed') briefedCompletedCount++;
+          else if (bucket === 'inProgress') briefedInProgressCount++;
+          else if (bucket === 'notStarted') briefedNotStartedCount++;
         }
       });
       
@@ -171,13 +166,10 @@ export const MyTeam = () => {
         if (endDate && targetDate > endDate) return;
       }
 
-      if (b.Status === 'เสร็จสิ้น') {
-        teamCompleted++;
-      } else if (['ดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'ส่งตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'รอแก้'].includes(b.Status)) {
-        teamInProgress++;
-      } else if (['รอดำเนินการ', 'แก้ไข'].includes(b.Status)) {
-        teamNotStarted++;
-      }
+      const bucket = classifyBriefingProgress(b.Status);
+      if (bucket === 'completed') teamCompleted++;
+      else if (bucket === 'inProgress') teamInProgress++;
+      else if (bucket === 'notStarted') teamNotStarted++;
     });
 
     const teamStats = {

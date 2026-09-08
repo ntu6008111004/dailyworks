@@ -1,7 +1,8 @@
 const ALLOWED_DATASETS = new Set(['tasks', 'briefings', 'team']);
 const ALLOWED_ACTIONS = new Set(['count', 'list', 'summarize', 'compare', 'score_gap']);
 const ALLOWED_STATUSES = new Set([
-  'ยังไม่เริ่ม', 'รอดำเนินการ', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'เสร็จสิ้น', 'ยกเลิกงาน',
+  'ยังไม่เริ่ม', 'รอดำเนินการ', 'กำลังทำ', 'ส่งตรวจ', 'รอตรวจ',
+  'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'แก้ไข', 'เสร็จสิ้น', 'ยกเลิกงาน',
 ]);
 
 function validIsoDate(value) {

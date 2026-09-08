@@ -154,9 +154,11 @@ function monthRange(year, month) {
 
 const STATUS_ALIASES = [
   { terms: ['ยังไม่เริ่ม', 'ยังไม่เริ่มทำ', 'not started'], value: 'ยังไม่เริ่ม' },
-  { terms: ['รอดำเนินการ', 'pending'], value: 'รอดำเนินการ' },
+  { terms: ['รอดำเนินการ', 'ดำเนินการ', 'pending'], value: 'รอดำเนินการ' },
   { terms: ['กำลังทำ', 'in progress'], value: 'กำลังทำ' },
+  { terms: ['ส่งตรวจ', 'submitted for review'], value: 'ส่งตรวจ' },
   { terms: ['รอตรวจ', 'waiting review'], value: 'รอตรวจ' },
+  { terms: ['สั่งแก้ไข', 'rework'], value: 'สั่งแก้ไข' },
   { terms: ['รอแก้ไข', 'waiting fix'], value: 'รอแก้ไข' },
   { terms: ['เสร็จสิ้น', 'เสร็จแล้ว', 'completed'], value: 'เสร็จสิ้น' },
   { terms: ['ยกเลิกงาน', 'cancelled'], value: 'ยกเลิกงาน' },

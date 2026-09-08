@@ -408,10 +408,25 @@ function teamDateMatches(briefing, filters) {
   return (!filters.fromDate || date >= filters.fromDate) && (!filters.toDate || date <= filters.toDate);
 }
 
+// 'ดำเนินการ' is the retired twin of 'รอดำเนินการ'; rows written before the
+// status merge still carry it, so every reader folds it back here.
+const BRIEFING_STATUS_ALIASES = {
+  'ดำเนินการ': 'รอดำเนินการ',
+  'ยังไม่เริ่ม': 'รอดำเนินการ',
+  'รอแก้': 'รอแก้ไข',
+};
+
+function normalizeBriefingStatus(status) {
+  const value = String(status == null ? '' : status).trim();
+  if (!value) return 'รอดำเนินการ';
+  return BRIEFING_STATUS_ALIASES[value] || value;
+}
+
 function classifyBriefingStatus(status) {
-  if (status === 'เสร็จสิ้น') return 'completed';
-  if (['กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'รอแก้'].includes(status)) return 'inProgress';
-  if (status === 'รอดำเนินการ') return 'notStarted';
+  const value = normalizeBriefingStatus(status);
+  if (value === 'เสร็จสิ้น') return 'completed';
+  if (['กำลังทำ', 'ส่งตรวจ', 'รอตรวจ', 'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข'].includes(value)) return 'inProgress';
+  if (['รอดำเนินการ', 'แก้ไข'].includes(value)) return 'notStarted';
   return null;
 }
 
@@ -493,7 +508,7 @@ async function loadTeamMetrics(supabase, user, filters) {
       if (!isAssignee && !isCreator) continue;
       const metric = metricsById.get(memberId);
       const response = responseByMemberBriefing.get(`${briefing.ID}:${memberId}`);
-      const memberStatus = briefing.Status === 'เสร็จสิ้น' ? 'เสร็จสิ้น' : (response?.Status || 'รอดำเนินการ');
+      const memberStatus = briefing.Status === 'เสร็จสิ้น' ? 'เสร็จสิ้น' : normalizeBriefingStatus(response?.Status);
       const completedForPoints = (isAssignee && memberStatus === 'เสร็จสิ้น') || (isCreator && briefing.Status === 'เสร็จสิ้น');
       if (completedForPoints) metric.totalPoints += Number(briefing.Points) || 0;
       if (!group) continue;
@@ -553,7 +568,7 @@ async function buildWorkContext(supabase, user, question, dashboardFilters, agen
   } else {
     filters = await resolveStaffIdentity(supabase, user, mergedFilters, question);
   }
-  if (dataset === 'briefings' && filters.status === 'ยังไม่เริ่ม') filters.status = 'รอดำเนินการ';
+  if (dataset === 'briefings' && filters.status) filters.status = normalizeBriefingStatus(filters.status);
   const narrativeSummary = /สรุป[\s\S]{0,80}(?:ทำอะไร|ทำไร|หัวข้อ|รายละเอียด|สิ่งที่ทำ|ดำเนินการ)/u.test(question);
   const intent = ['count', 'compare', 'score_gap'].includes(agentPlan?.action)
     ? 'summary'

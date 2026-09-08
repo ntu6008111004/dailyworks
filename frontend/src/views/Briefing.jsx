@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User, Send, Ban, PlusCircle, PencilLine } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -16,9 +16,28 @@ import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermiss
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
 import { BRIEFING_SORT_OPTIONS, getBriefingComparator } from '../utils/briefingOrder';
 import { getBangkokMonthRange } from '../utils/briefingPointLedger';
+import { BRIEFING_STATUSES, BRIEFING_STATUS_PENDING, normalizeBriefingStatus } from '../utils/briefingStatus';
 
 // Daily work always opens on the month being scored.
 const CURRENT_MONTH = getBangkokMonthRange();
+
+// Every status gets a card style.  The board shows the core stops all the time
+// and any other status that currently holds work, so a status set from the
+// dropdown always turns up in a counter.
+const STATUS_CARD_ORDER = BRIEFING_STATUSES;
+const CORE_STATUS_CARDS = [BRIEFING_STATUS_PENDING, 'กำลังทำ', 'ส่งตรวจ', 'รอตรวจ', 'รอแก้ไข', 'เสร็จสิ้น'];
+const STATUS_CARD_STYLES = {
+  'รอดำเนินการ': { color: 'bg-slate-500', icon: <Clock size={16} /> },
+  'แก้ไข': { color: 'bg-violet-600', icon: <PencilLine size={16} /> },
+  'กำลังทำ': { color: 'bg-blue-600', icon: <RefreshCw size={16} /> },
+  'ส่งตรวจ': { color: 'bg-fuchsia-600', icon: <Send size={16} /> },
+  'รอตรวจ': { color: 'bg-[#f472b6]', icon: <PieChart size={16} /> },
+  'สั่งแก้ไข': { color: 'bg-orange-500', icon: <AlertCircle size={16} /> },
+  'สั่งเพิ่มงาน': { color: 'bg-sky-500', icon: <PlusCircle size={16} /> },
+  'รอแก้ไข': { color: 'bg-yellow-400 text-yellow-950', icon: <AlertCircle size={16} /> },
+  'ยกเลิกงาน': { color: 'bg-zinc-500', icon: <Ban size={16} /> },
+  'เสร็จสิ้น': { color: 'bg-[#198754]', icon: <CheckCircle2 size={16} /> },
+};
 
 export const Briefing = () => {
   const { user } = useAuth();
@@ -150,41 +169,50 @@ export const Briefing = () => {
     });
   }, [briefings, user, isAdmin, allUsers]);
 
-  const filteredBriefings = useMemo(() => {
+  // Everything except the two status filters.  The cards count from here, so
+  // a number on a card always matches what the list shows when it is clicked.
+  const scopedBriefings = useMemo(() => {
     return visibleBriefings.filter(b => {
       // 2. Search Query
       if (searchQuery && !b.Detail?.toLowerCase().includes(searchQuery.toLowerCase()) && !b.RunningID?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
-      // 3. Status
-      if (filterStatus === 'Overdue') {
-        if (!apiService.isBriefingOverdue(b)) return false;
-      } else if (filterStatus !== 'All' && b.Status !== filterStatus) {
-        return false;
-      }
-
-      const pStatus = b.PostStatus || 'ยังไม่โพส';
-      if (filterPostStatus !== 'All' && pStatus !== filterPostStatus) return false;
-
-      // 4. Department (Based on Creator)
+      // 3. Department (Based on Creator)
       if (filterDepartment !== 'All') {
         const creator = allUsers.find(u => String(u.ID) === String(b.CreatorID));
         if (creator?.Department !== filterDepartment) return false;
       }
 
-      // 5. User (Creator or Assignee)
+      // 4. User (Creator or Assignee)
       if (filterUser !== 'All') {
         const isMatchedUser = String(b.CreatorID) === String(filterUser) || b.Assignees?.some(id => String(id) === String(filterUser));
         if (!isMatchedUser) return false;
       }
 
-      // 6. Dates (Filter by DueDate)
+      // 5. Dates (Filter by DueDate)
       const bDate = b.DueDate || b.StartDate || b.CreatedAt;
       if (startDate && new Date(bDate) < new Date(startDate)) return false;
       if (endDate && new Date(bDate) > new Date(endDate)) return false;
 
       return true;
-    }).sort(getBriefingComparator(uiSettings.sortOrder));
-  }, [visibleBriefings, searchQuery, filterStatus, filterPostStatus, filterDepartment, filterUser, startDate, endDate, allUsers, uiSettings.sortOrder]);
+    });
+  }, [visibleBriefings, searchQuery, filterDepartment, filterUser, startDate, endDate, allUsers]);
+
+  const matchesStatusFilter = React.useCallback((b) => {
+    if (filterStatus === 'All') return true;
+    if (filterStatus === 'Overdue') return apiService.isBriefingOverdue(b);
+    return normalizeBriefingStatus(b.Status) === filterStatus;
+  }, [filterStatus]);
+
+  const matchesPostFilter = React.useCallback((b) => {
+    if (filterPostStatus === 'All') return true;
+    return (b.PostStatus || 'ยังไม่โพส') === filterPostStatus;
+  }, [filterPostStatus]);
+
+  const filteredBriefings = useMemo(() => {
+    return scopedBriefings
+      .filter(b => matchesStatusFilter(b) && matchesPostFilter(b))
+      .sort(getBriefingComparator(uiSettings.sortOrder));
+  }, [scopedBriefings, matchesStatusFilter, matchesPostFilter, uiSettings.sortOrder]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -195,20 +223,33 @@ export const Briefing = () => {
   const currentBriefings = filteredBriefings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const stats = useMemo(() => {
-    const total = visibleBriefings.length;
-    const overdue = visibleBriefings.filter(b => apiService.isBriefingOverdue(b)).length;
-    const byStatus = visibleBriefings.reduce((acc, b) => {
-      acc[b.Status] = (acc[b.Status] || 0) + 1;
+    const statusScope = scopedBriefings.filter(matchesPostFilter);
+    const postScope = scopedBriefings.filter(matchesStatusFilter);
+    const total = scopedBriefings.length;
+    const overdue = statusScope.filter(b => apiService.isBriefingOverdue(b)).length;
+    const byStatus = statusScope.reduce((acc, b) => {
+      const key = normalizeBriefingStatus(b.Status);
+      acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
-    const byPostStatus = visibleBriefings.reduce((acc, b) => {
+    const byPostStatus = postScope.reduce((acc, b) => {
       const p = b.PostStatus || 'ยังไม่โพส';
       acc[p] = (acc[p] || 0) + 1;
       return acc;
     }, {});
 
     return { total, overdue, byStatus, byPostStatus };
-  }, [visibleBriefings]);
+  }, [scopedBriefings, matchesStatusFilter, matchesPostFilter]);
+
+  // Always show the workflow's main stops, plus any other status that actually
+  // holds work right now, so a status can never be set from the card and then
+  // be missing from every counter.
+  const statusCards = useMemo(() => {
+    const shown = STATUS_CARD_ORDER.filter(status => CORE_STATUS_CARDS.includes(status)
+      || (stats.byStatus[status] || 0) > 0
+      || filterStatus === status);
+    return shown.map(status => ({ status, ...STATUS_CARD_STYLES[status] }));
+  }, [stats.byStatus, filterStatus]);
 
   const handleDelete = async () => {
     if (!deleteConfirmId) return;
@@ -235,6 +276,7 @@ export const Briefing = () => {
     // Completion is no longer a selectable client-side transition.  Keep this
     // guard for a stale browser tab that still submits the old label.
     if (newStatus === 'เสร็จสิ้น') newStatus = 'ส่งตรวจ';
+    newStatus = normalizeBriefingStatus(newStatus);
     const oldStatus = briefing.Status;
     try {
       setBriefings(prev => prev.map(b => b.ID === briefing.ID ? { ...b, Status: newStatus, syncState: 'syncing' } : b));
@@ -276,6 +318,9 @@ export const Briefing = () => {
   };
 
   const StatusDropdown = ({ briefing, currentStatus, isOpen, onToggle }) => {
+    // A briefing written before the status merge still carries the retired
+    // 'ดำเนินการ' label; show and compare the canonical one.
+    const status = normalizeBriefingStatus(currentStatus);
     const dropdownRef = React.useRef(null);
     const buttonRef = React.useRef(null);
     const [dropdownStyles, setDropdownStyles] = useState({});
@@ -329,7 +374,7 @@ export const Briefing = () => {
 
     const canChangeStatus = canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
     if (!canChangeStatus) {
-      return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 border-2 shadow-sm ${statusColors[currentStatus] || statusColors['รอดำเนินการ']}`}>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : currentStatus}</span>;
+      return <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 border-2 shadow-sm ${statusColors[status] || statusColors[BRIEFING_STATUS_PENDING]}`}>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : status}</span>;
     }
 
     return (
@@ -337,26 +382,26 @@ export const Briefing = () => {
         <button
           ref={buttonRef}
           onClick={(e) => { e.stopPropagation(); onToggle(isOpen ? null : briefing.ID); }}
-          className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[currentStatus] || statusColors['รอดำเนินการ']}`}
+          className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity border-2 shadow-sm ${statusColors[status] || statusColors[BRIEFING_STATUS_PENDING]}`}
         >
-          <span>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : currentStatus}</span>
+          <span>{apiService.isBriefingOverdue(briefing) ? 'เกินกำหนด' : status}</span>
           <RefreshCw size={10} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
         </button>
         
         {isOpen && createPortal(
           <div ref={dropdownRef} style={dropdownStyles} className="bg-white/90 backdrop-blur-xl rounded-xl shadow-2xl border border-slate-200/60 p-1 py-1.5 z-[999999] animate-in fade-in zoom-in-95 duration-150">
-            {Object.entries(statusColors).filter(([s]) => s !== 'Overdue' && s !== 'เสร็จสิ้น').map(([status, color]) => (
+            {Object.entries(statusColors).filter(([s]) => s !== 'Overdue' && s !== 'เสร็จสิ้น').map(([option, color]) => (
               <button
-                key={status}
+                key={option}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggle(null);
-                  if (status !== currentStatus) handleStatusChange(briefing, status);
+                  if (option !== status) handleStatusChange(briefing, option);
                 }}
                 className="w-full text-left px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-100 transition-colors mb-0.5 last:mb-0 flex items-center gap-1.5"
               >
                 <div className={`w-2 h-2 rounded-full ${color.split(' ')[0]}`}></div>
-                {status}
+                {option}
               </button>
             ))}
           </div>,
@@ -367,12 +412,11 @@ export const Briefing = () => {
   };
 
   const statusColors = {
-    'แก้ไข': 'bg-violet-100 text-violet-700 border border-violet-200 font-bold',
-    'ดำเนินการ': 'bg-slate-100 text-slate-700 border border-slate-200 font-bold',
     'รอดำเนินการ': 'bg-slate-100 text-slate-700 border border-slate-200 font-bold',
+    'แก้ไข': 'bg-violet-100 text-violet-700 border border-violet-200 font-bold',
     'กำลังทำ': 'bg-blue-100 text-blue-700 border border-blue-200 font-bold',
-    'รอตรวจ': 'bg-pink-100 text-pink-700 border border-pink-200 font-bold',
     'ส่งตรวจ': 'bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200 font-bold',
+    'รอตรวจ': 'bg-pink-100 text-pink-700 border border-pink-200 font-bold',
     'สั่งแก้ไข': 'bg-orange-100 text-orange-700 border border-orange-200 font-bold',
     'สั่งเพิ่มงาน': 'bg-sky-100 text-sky-700 border border-sky-200 font-bold',
     'รอแก้ไข': 'bg-yellow-100 text-yellow-800 border border-yellow-200 font-bold',
@@ -519,13 +563,11 @@ export const Briefing = () => {
         {/* Stats Grid */}
         <div className="flex flex-col gap-4">
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
               <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => { setFilterStatus('All'); setFilterPostStatus('All'); }} active={filterStatus === 'All' && filterPostStatus === 'All'} />
-              <StatCard label="รอดำเนินการ" value={stats.byStatus['รอดำเนินการ'] || 0} color="bg-slate-500" icon={<Clock size={16}/>} onClick={() => setFilterStatus('รอดำเนินการ')} active={filterStatus === 'รอดำเนินการ'} />
-              <StatCard label="กำลังทำ" value={stats.byStatus['กำลังทำ'] || 0} color="bg-blue-600" icon={<RefreshCw size={16}/>} onClick={() => setFilterStatus('กำลังทำ')} active={filterStatus === 'กำลังทำ'} />
-              <StatCard label="รอตรวจ" value={stats.byStatus['รอตรวจ'] || 0} color="bg-[#f472b6]" icon={<PieChart size={16}/>} onClick={() => setFilterStatus('รอตรวจ')} active={filterStatus === 'รอตรวจ'} />
-              <StatCard label="รอแก้ไข" value={stats.byStatus['รอแก้ไข'] || 0} color="bg-yellow-400 text-yellow-950" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('รอแก้ไข')} active={filterStatus === 'รอแก้ไข'} />
-              <StatCard label="เสร็จสิ้น" value={stats.byStatus['เสร็จสิ้น'] || 0} color="bg-[#198754]" icon={<CheckCircle2 size={16}/>} onClick={() => setFilterStatus('เสร็จสิ้น')} active={filterStatus === 'เสร็จสิ้น'} />
+              {statusCards.map(({ status, color, icon }) => (
+                <StatCard key={status} label={status} value={stats.byStatus[status] || 0} color={color} icon={icon} onClick={() => setFilterStatus(status)} active={filterStatus === status} />
+              ))}
               <StatCard label="เกินกำหนด" value={stats.overdue} color="bg-rose-600" icon={<AlertCircle size={16}/>} onClick={() => setFilterStatus('Overdue')} active={filterStatus === 'Overdue'} />
             </div>
           </div>
@@ -604,7 +646,7 @@ export const Briefing = () => {
                 }}
                 onDelete={(e) => { e.stopPropagation(); setDeleteConfirmId(b.ID); }}
                 onPostStatusToggle={() => handlePostStatusToggle(b)}
-                statusColor={statusColors[apiService.isBriefingOverdue(b) ? 'Overdue' : b.Status]}
+                statusColor={statusColors[apiService.isBriefingOverdue(b) ? 'Overdue' : normalizeBriefingStatus(b.Status)]}
                 priorityColor={priorityColors[b.Priority]}
                 StatusMenu={StatusDropdown}
                 openStatusId={openStatusId}

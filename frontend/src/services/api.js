@@ -10,6 +10,7 @@ import { describeReviewError } from '../utils/briefingReviewErrors';
 import { sanitizeReviewCommentImages } from '../utils/briefingReviewNotes';
 import { imageExtensionFor } from '../utils/compressImage';
 import { canWriteBriefingRecord } from '../utils/briefingPermissions';
+import { normalizeBriefingStatus } from '../utils/briefingStatus';
 
 // PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
 const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
@@ -614,7 +615,7 @@ export const apiService = {
                 Detail: data.Detail || '',
                 CreatorNote: data.CreatorNote || '',
                 Assignees: data.Assignees || [],
-                Status: data.Status === 'เสร็จสิ้น' ? 'ส่งตรวจ' : (data.Status || 'ดำเนินการ'),
+                Status: data.Status === 'เสร็จสิ้น' ? 'ส่งตรวจ' : normalizeBriefingStatus(data.Status),
                 Priority: data.Priority || 'Medium',
                 StartDate: data.StartDate || '',
                 DueDate: data.DueDate || '',
@@ -664,6 +665,7 @@ export const apiService = {
               delete updateFields[field];
             });
             if (updateFields.Status) {
+              updateFields.Status = normalizeBriefingStatus(updateFields.Status);
               if (currentBriefing.Status === 'เสร็จสิ้น') {
                 throw new Error('งานที่เสร็จสิ้นแล้วเป็นข้อมูลเดิม จึงไม่เปลี่ยนผ่าน workflow ใหม่');
               }
