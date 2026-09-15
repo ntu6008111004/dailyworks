@@ -12,7 +12,7 @@ import { CustomSelect } from '../components/CustomSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { BriefingModal } from '../components/BriefingModal';
 import { BriefingTimeline } from '../components/BriefingTimeline';
-import { canEditBriefingStatus, isRecipientOnly } from '../utils/briefingPermissions';
+import { canDeleteBriefingRecord, canEditBriefingStatus } from '../utils/briefingPermissions';
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
 import { BRIEFING_SORT_OPTIONS, getBriefingComparator } from '../utils/briefingOrder';
 import { getBangkokMonthRange } from '../utils/briefingPointLedger';
@@ -690,8 +690,10 @@ export const Briefing = () => {
                       const pStatus = b.PostStatus || 'ยังไม่โพส';
                       const canManagePostStatus = (isAdmin || perms.canManagePostStatus)
                         && canEditBriefingStatus({ briefing: b, userId: user?.ID, isAdmin });
-                      const canDeleteBriefing = !isRecipientOnly(b, user?.ID)
-                        && (isAdmin || String(b.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department));
+                      const canDeleteBriefing = canDeleteBriefingRecord({
+                        briefing: b, userId: user?.ID, isAdmin,
+                        isDepartmentHead: user?.Role === 'Head' && creator?.Department === user?.Department,
+                      });
                       
                       const rowStyle = b.CardColor ? { borderLeft: `4px solid ${b.CardColor}` } : {};
 
@@ -881,8 +883,10 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
   const isOverdue = apiService.isBriefingOverdue(briefing);
   const isAdmin = user?.Role === 'Admin';
   const canChangeBriefing = canEditBriefingStatus({ briefing, userId: user?.ID, isAdmin });
-  const canDeleteBriefing = !isRecipientOnly(briefing, user?.ID)
-    && (isAdmin || String(briefing.CreatorID) === String(user?.ID) || (user?.Role === 'Head' && creator?.Department === user?.Department));
+  const canDeleteBriefing = canDeleteBriefingRecord({
+    briefing, userId: user?.ID, isAdmin,
+    isDepartmentHead: user?.Role === 'Head' && creator?.Department === user?.Department,
+  });
 
   const lastViewed = user ? localStorage.getItem(`lastViewedBriefing_${user.ID}_${briefing.ID}`) : null;
   const updatedAt = briefing.UpdatedAt || briefing.CreatedAt;

@@ -45,6 +45,14 @@ export function canWriteBriefingRecord({ briefing, userId }) {
   return isBriefingCreator(briefing, userId) || !isRecipientOnly(briefing, userId);
 }
 
+// Deleting follows the brief-ownership rule above: the creator — including one
+// who assigned the work to themselves — or an admin/department head who is not
+// themselves assigned to it.  api.js repeats this through canWriteBriefingRecord.
+export function canDeleteBriefingRecord({ briefing, userId, isAdmin, isDepartmentHead }) {
+  if (!briefing) return false;
+  return canEditBriefingContent({ briefing, userId, isAdmin, isDepartmentHead });
+}
+
 // Work already in the head's queue, closed or cancelled cannot be "started"
 // again; everything else a recipient may flip to กำลังทำ with one button.
 const START_LOCKED_STATUSES = new Set(['ส่งตรวจ', 'เสร็จสิ้น', 'ยกเลิกงาน']);

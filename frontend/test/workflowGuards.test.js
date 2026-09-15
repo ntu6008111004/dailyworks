@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canDeleteBriefingRecord,
   canEditBriefingContent,
   canEditBriefingStatus,
   canStartBriefingWork,
@@ -55,6 +56,18 @@ test('a creator who assigned the work to themselves can still send it to review'
   // brief keeps its status locked to the person who wrote it.
   const otherBrief = { CreatorID: 'creator', Assignees: ['assigned-admin'] };
   assert.equal(canEditBriefingStatus({ briefing: otherBrief, userId: 'assigned-admin', isAdmin: true }), false);
+});
+
+test('a creator who assigned the work to themselves can delete their own brief', () => {
+  const selfAssigned = { CreatorID: 'same-user', Assignees: ['same-user', 'helper'] };
+  assert.equal(canDeleteBriefingRecord({ briefing: selfAssigned, userId: 'same-user', isAdmin: false, isDepartmentHead: false }), true);
+  // The helper on that brief — even an admin or head — cannot delete it.
+  assert.equal(canDeleteBriefingRecord({ briefing: selfAssigned, userId: 'helper', isAdmin: true, isDepartmentHead: true }), false);
+  // Unassigned admins and department heads keep their delete control.
+  assert.equal(canDeleteBriefingRecord({ briefing: selfAssigned, userId: 'admin', isAdmin: true, isDepartmentHead: false }), true);
+  assert.equal(canDeleteBriefingRecord({ briefing: selfAssigned, userId: 'head', isAdmin: false, isDepartmentHead: true }), true);
+  assert.equal(canDeleteBriefingRecord({ briefing: selfAssigned, userId: 'stranger', isAdmin: false, isDepartmentHead: false }), false);
+  assert.equal(canDeleteBriefingRecord({ briefing: null, userId: 'same-user', isAdmin: true, isDepartmentHead: true }), false);
 });
 
 test('the service-layer write guard follows the same self-assigned rule as the screen', () => {
