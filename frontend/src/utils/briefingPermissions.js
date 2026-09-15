@@ -58,6 +58,12 @@ export function canStartBriefingWork({ briefing, userId, status }) {
 
 export function canEditBriefingContent({ briefing, userId, isAdmin, isDepartmentHead }) {
   if (!briefing) return true;
+  // Same rule as status and the write guard: a creator who briefed the work to
+  // themselves is not a second party to protect the brief from, so they keep
+  // its title, dates and points.  Without this they could never move their own
+  // deadline.  Anyone else who is assigned — admins and heads included — still
+  // edits only their delivery.
+  if (isBriefingCreator(briefing, userId)) return true;
   return !isRecipientOnly(briefing, userId)
-    && (Boolean(isAdmin) || Boolean(isDepartmentHead) || isBriefingCreator(briefing, userId));
+    && (Boolean(isAdmin) || Boolean(isDepartmentHead));
 }

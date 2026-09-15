@@ -41,7 +41,12 @@ test('a creator who assigned the work to themselves can still send it to review'
   const selfAssigned = { CreatorID: 'same-user', Assignees: ['same-user'] };
   // They stay a recipient for the delivery half of the screen...
   assert.equal(isRecipientOnly(selfAssigned, 'same-user'), true);
-  assert.equal(canEditBriefingContent({ briefing: selfAssigned, userId: 'same-user', isAdmin: true, isDepartmentHead: true }), false);
+  // ...and still own the brief itself, so they can move their own deadline.
+  assert.equal(canEditBriefingContent({ briefing: selfAssigned, userId: 'same-user', isAdmin: false, isDepartmentHead: false }), true);
+  assert.equal(canEditBriefingContent({ briefing: selfAssigned, userId: 'same-user', isAdmin: true, isDepartmentHead: true }), true);
+  // A different person assigned to that brief is still locked out of it.
+  const selfAssignedWithHelper = { CreatorID: 'same-user', Assignees: ['same-user', 'helper'] };
+  assert.equal(canEditBriefingContent({ briefing: selfAssignedWithHelper, userId: 'helper', isAdmin: true, isDepartmentHead: true }), false);
   // ...but the status control is theirs, otherwise nobody could press ส่งตรวจ.
   assert.equal(canEditBriefingStatus({ briefing: selfAssigned, userId: 'same-user', isAdmin: false }), true);
   assert.equal(canEditBriefingStatus({ briefing: selfAssigned, userId: 'same-user', isAdmin: true }), true);
