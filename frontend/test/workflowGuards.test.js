@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canClaimBriefing,
   canDeleteBriefingRecord,
   canEditBriefingContent,
   canEditBriefingStatus,
@@ -8,6 +9,7 @@ import {
   canWriteBriefingRecord,
   isBriefingAssignee,
   isRecipientOnly,
+  isUnclaimedBriefing,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
 import { findMemberScore, formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getBriefingMemberScores, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberAwardDetails, getMemberBriefingAward, getScoreAdjustmentPreview, getUnscoredAssigneeIds, isBriefingEarnedByMember, isBriefingScoreLocked } from '../src/utils/briefingScore.js';
@@ -588,4 +590,18 @@ test('the daily summary counts briefs, received work and every submit time per p
 test('per-person score errors are explained in Thai', () => {
   assert.equal(describeReviewError({ message: 'Score every assignee before approval' }), 'กรุณาให้คะแนนผู้รับงานให้ครบทุกคนก่อนอนุมัติ');
   assert.match(describeReviewError({ message: 'This briefing was closed with a single shared score' }), /คะแนนรวมแบบเดิม/);
+});
+
+test('a brief with nobody assigned can be claimed by anyone until it is closed', () => {
+  assert.equal(isUnclaimedBriefing({ Status: 'รอดำเนินการ', Assignees: [] }), true);
+  assert.equal(isUnclaimedBriefing({ Status: 'กำลังทำ', Assignees: '[]' }), true);
+  assert.equal(isUnclaimedBriefing({ Status: 'รอดำเนินการ' }), true);
+  assert.equal(isUnclaimedBriefing({ Status: 'รอดำเนินการ', Assignees: ['a'] }), false);
+  assert.equal(isUnclaimedBriefing({ Status: 'รอดำเนินการ', Assignees: '["a"]' }), false);
+  assert.equal(isUnclaimedBriefing({ Status: 'เสร็จสิ้น', Assignees: [] }), false);
+  assert.equal(isUnclaimedBriefing({ Status: 'ยกเลิกงาน', Assignees: [] }), false);
+  assert.equal(isUnclaimedBriefing(null), false);
+  assert.equal(canClaimBriefing({ briefing: { Status: 'รอดำเนินการ', Assignees: [] }, userId: 'u1' }), true);
+  assert.equal(canClaimBriefing({ briefing: { Status: 'รอดำเนินการ', Assignees: [] }, userId: '' }), false);
+  assert.equal(describeReviewError({ message: 'This briefing already has an assignee' }), 'งานนี้มีคนรับไปแล้ว กรุณารีเฟรชรายการ');
 });

@@ -1070,6 +1070,18 @@ export const apiService = {
     return saved;
   },
 
+  // Takes a brief nobody was assigned to. The server locks the row, so if two
+  // people press at once the second gets "already taken" instead of both.
+  async claimBriefing(briefingId) {
+    const { data, error } = await supabase.rpc('claim_briefing', {
+      p_briefing_id: briefingId,
+      p_user_id: this.userId,
+    });
+    if (error) throw new Error(describeReviewError(error));
+    this.clearCacheFor('getBriefings', 'getBriefingResponses');
+    return data;
+  },
+
   // A recipient flips the briefing to "กำลังทำ" through the server function,
   // since the assigner's row itself stays read-only for recipients.
   async startBriefingWork(briefingId) {

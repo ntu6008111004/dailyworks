@@ -75,3 +75,18 @@ export function canEditBriefingContent({ briefing, userId, isAdmin, isDepartment
   return !isRecipientOnly(briefing, userId)
     && (Boolean(isAdmin) || Boolean(isDepartmentHead));
 }
+
+// A brief saved without an assignee waits in "ไม่มีผู้รับผิดชอบ" on the
+// briefing page. Anyone may claim it there until someone does, or until it is
+// closed or cancelled. claim_briefing() repeats this rule under a row lock.
+const UNCLAIMABLE_STATUSES = new Set(['เสร็จสิ้น', 'ยกเลิกงาน']);
+
+export function isUnclaimedBriefing(briefing) {
+  if (!briefing) return false;
+  if (UNCLAIMABLE_STATUSES.has(String(briefing.Status ?? '').trim())) return false;
+  return toIdList(briefing.Assignees).length === 0;
+}
+
+export function canClaimBriefing({ briefing, userId }) {
+  return Boolean(userId) && isUnclaimedBriefing(briefing);
+}

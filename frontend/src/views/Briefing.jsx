@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User, Send, Ban, PlusCircle, PencilLine } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Calendar, LayoutList, PieChart, X, ChevronLeft, ChevronRight, RefreshCw, CheckCircle2, AlertCircle, Clock, NotebookTabs, FilterX, Settings, List, LayoutGrid, Users, User, Send, Ban, PlusCircle, PencilLine, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
@@ -12,7 +12,7 @@ import { CustomSelect } from '../components/CustomSelect';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { BriefingModal } from '../components/BriefingModal';
 import { BriefingTimeline } from '../components/BriefingTimeline';
-import { canDeleteBriefingRecord, canEditBriefingStatus } from '../utils/briefingPermissions';
+import { canDeleteBriefingRecord, canEditBriefingStatus, isUnclaimedBriefing } from '../utils/briefingPermissions';
 import { applyBriefingRealtimeChange } from '../utils/briefingRealtime';
 import { BRIEFING_SORT_OPTIONS, getBriefingComparator } from '../utils/briefingOrder';
 import { getBangkokMonthRange } from '../utils/briefingPointLedger';
@@ -158,7 +158,9 @@ export const Briefing = () => {
 
   const visibleBriefings = useMemo(() => {
     return briefings.filter(b => {
-      // Accessibility Logic: Admins see all, Heads see department, others see own/assigned
+      // Accessibility Logic: Admins see all, Heads see department, others see own/assigned.
+      // A brief nobody was assigned to is open to everyone so it can be claimed.
+      if (isUnclaimedBriefing(b)) return true;
       const isCreator = String(b.CreatorID) === String(user?.ID);
       const isAssignee = b.Assignees?.some(id => String(id) === String(user?.ID));
       
@@ -188,7 +190,9 @@ export const Briefing = () => {
         if (!isMatchedUser) return false;
       }
 
-      // 5. Dates (Filter by DueDate)
+      // 5. Dates (Filter by DueDate). Unclaimed work waits outside the month
+      // filter: an old brief nobody took must not vanish from the pool.
+      if (isUnclaimedBriefing(b)) return true;
       const bDate = b.DueDate || b.StartDate || b.CreatedAt;
       if (startDate && new Date(bDate) < new Date(startDate)) return false;
       if (endDate && new Date(bDate) > new Date(endDate)) return false;
@@ -200,6 +204,7 @@ export const Briefing = () => {
   const matchesStatusFilter = React.useCallback((b) => {
     if (filterStatus === 'All') return true;
     if (filterStatus === 'Overdue') return apiService.isBriefingOverdue(b);
+    if (filterStatus === 'Unclaimed') return isUnclaimedBriefing(b);
     return normalizeBriefingStatus(b.Status) === filterStatus;
   }, [filterStatus]);
 
@@ -227,6 +232,7 @@ export const Briefing = () => {
     const postScope = scopedBriefings.filter(matchesStatusFilter);
     const total = scopedBriefings.length;
     const overdue = statusScope.filter(b => apiService.isBriefingOverdue(b)).length;
+    const unclaimed = statusScope.filter(isUnclaimedBriefing).length;
     const byStatus = statusScope.reduce((acc, b) => {
       const key = normalizeBriefingStatus(b.Status);
       acc[key] = (acc[key] || 0) + 1;
@@ -238,7 +244,7 @@ export const Briefing = () => {
       return acc;
     }, {});
 
-    return { total, overdue, byStatus, byPostStatus };
+    return { total, overdue, unclaimed, byStatus, byPostStatus };
   }, [scopedBriefings, matchesStatusFilter, matchesPostFilter]);
 
   // Always show the workflow's main stops, plus any other status that actually
@@ -565,6 +571,7 @@ export const Briefing = () => {
           <div>
             <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
               <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => { setFilterStatus('All'); setFilterPostStatus('All'); }} active={filterStatus === 'All' && filterPostStatus === 'All'} />
+              <StatCard label="ไม่มีผู้รับผิดชอบ" value={stats.unclaimed} color="bg-amber-500" icon={<UserPlus size={16}/>} onClick={() => setFilterStatus('Unclaimed')} active={filterStatus === 'Unclaimed'} />
               {statusCards.map(({ status, color, icon }) => (
                 <StatCard key={status} label={status} value={stats.byStatus[status] || 0} color={color} icon={icon} onClick={() => setFilterStatus(status)} active={filterStatus === status} />
               ))}
@@ -738,6 +745,7 @@ export const Briefing = () => {
                           </td>
                           <td className="px-4 py-3">
                               <div className="flex justify-center -space-x-2 overflow-hidden">
+                                 {isUnclaimedBriefing(b) && <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 whitespace-nowrap"><UserPlus size={11} />รอคนรับ</span>}
                                  {b.Assignees?.slice(0, 3).map((assigneeId, i) => {
                                    const assignee = allUsers.find(u => String(u.ID) === String(assigneeId));
                                    if (!assignee) return null;
@@ -1021,6 +1029,7 @@ const BriefingCard = React.memo(({ briefing, allUsers, onClick, onDelete, onPost
         </div>
         
         <div className="flex -space-x-2">
+           {isUnclaimedBriefing(briefing) && <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 whitespace-nowrap"><UserPlus size={11} />รอคนรับ</span>}
            {assigneesCount > 0 && briefing.Assignees.slice(0, 3).map((assigneeId, i) => {
              const assignee = allUsers.find(u => String(u.ID) === String(assigneeId));
              if (!assignee) return null;
