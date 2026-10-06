@@ -105,9 +105,10 @@ export const Dashboard = () => {
       apiService.getBriefings(),
       apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status'),
       apiService.getBriefingPointLedger({ startDate: month.start, endDate: month.end, viewerId: userId }).catch(() => []),
-    ]).then(([briefings, responses, ledger]) => {
+      apiService.getBriefingMemberScores(),
+    ]).then(([briefings, responses, ledger, memberScores]) => {
       if (!mounted) return;
-      setMyScore(computeMemberScore({ briefings, responses, ledger, memberId: userId, startDate: month.start, endDate: month.end }));
+      setMyScore(computeMemberScore({ briefings, responses, ledger, memberScores, memberId: userId, startDate: month.start, endDate: month.end }));
     }).catch((error) => console.warn('[Dashboard] personal score failed', error));
     return () => { mounted = false; };
   }, [userId]);

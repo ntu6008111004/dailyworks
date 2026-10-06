@@ -1135,6 +1135,51 @@ export const apiService = {
     return data;
   },
 
+  // Per-person scores set by the reviewer. Before 20261006_briefing_member_scores
+  // runs the table does not exist; every briefing then reads as a legacy shared
+  // score instead of breaking the dashboard.
+  async getBriefingMemberScores(briefingId = null) {
+    let query = supabase.from('BriefingMemberScores').select('BriefingID, UserID, Points, BonusLevel, ScoredBy, ScoredAt');
+    if (briefingId) query = query.eq('BriefingID', briefingId);
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[BriefingMemberScores] unavailable', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  async saveBriefingMemberScores(briefingId, scores) {
+    const { data, error } = await supabase.rpc('save_briefing_member_scores', {
+      p_briefing_id: briefingId,
+      p_reviewer_id: this.userId,
+      p_scores: scores.map(({ userId, points, bonusLevel }) => ({ userId: String(userId), points: Number(points), bonusLevel: bonusLevel || 'standard' })),
+    });
+    if (error) {
+      console.warn('[save_briefing_member_scores] rejected', { code: error.code, message: error.message });
+      throw new Error(describeReviewError(error));
+    }
+    this.clearCacheFor('getBriefings');
+    return data || [];
+  },
+
+  // Every "ส่งตรวจ" press inside a Bangkok-date range. BriefingResponses keeps
+  // only the latest SubmittedAt and clears it on สั่งแก้ไข, so the history is
+  // the only record of each submission and its time.
+  async getBriefingSubmissions({ startDate, endDate }) {
+    const from = new Date(`${startDate}T00:00:00+07:00`).toISOString();
+    const to = new Date(new Date(`${endDate}T00:00:00+07:00`).getTime() + 86400000).toISOString();
+    const { data, error } = await supabase
+      .from('BriefingReviewHistory')
+      .select('ID, BriefingID, ReviewerID, TargetUserIDs, CreatedAt')
+      .eq('Action', 'SUBMITTED')
+      .gte('CreatedAt', from)
+      .lt('CreatedAt', to)
+      .order('CreatedAt', { ascending: true });
+    if (error) throw error;
+    return data || [];
+  },
+
   async getBriefingPointLedger({ startDate = null, endDate = null, viewerId = null } = {}) {
     // On a hard refresh a view can fetch before the auth effect has stored the
     // session here, so callers pass their own user id explicitly.

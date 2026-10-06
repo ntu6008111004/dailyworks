@@ -10,7 +10,8 @@ import {
   isRecipientOnly,
 } from '../src/utils/briefingPermissions.js';
 import { applyBriefingRealtimeChange, shouldShowBriefingNotification } from '../src/utils/briefingRealtime.js';
-import { formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberBriefingAward, getScoreAdjustmentPreview, isBriefingEarnedByMember, isBriefingScoreLocked } from '../src/utils/briefingScore.js';
+import { findMemberScore, formatBriefingPoints, getBonusLevelDetails, getBriefingAwardedPoints, getBriefingMemberScores, BRIEFING_POINT_CHOICES, getBriefingPointOptions, getBriefingPointsError, getMemberAwardDetails, getMemberBriefingAward, getScoreAdjustmentPreview, getUnscoredAssigneeIds, isBriefingEarnedByMember, isBriefingScoreLocked } from '../src/utils/briefingScore.js';
+import { formatBangkokDateTime, formatBangkokTime, getLatestSubmission, summarizeBriefingDay } from '../src/utils/briefingDailySummary.js';
 import { getBangkokMonthRange, getBriefingReviewParticipants, getLatePenaltyPoints, getNetTeamPoints, getOverdueDays, summarizePointLedger, toBangkokDateKey } from '../src/utils/briefingPointLedger.js';
 import { normalizeExternalLink } from '../src/utils/externalLinks.js';
 import { updateGateDecision } from '../src/utils/updateGate.js';
@@ -305,7 +306,7 @@ test('a review rejected by the database is explained in Thai instead of a bare 4
   );
   assert.match(
     describeReviewError({ code: 'PGRST202', message: 'Could not find the function public.review_briefing(p_target_user_ids)' }),
-    /migration 20260820_briefing_monthly_penalties\.sql/,
+    /migration .*20261006_briefing_member_scores\.sql/,
   );
   assert.equal(isOutdatedReviewFunction({ message: 'function public.review_briefing does not exist' }), true);
   assert.equal(isOutdatedReviewFunction({ code: 'P0001', message: 'Briefing not found' }), false);
@@ -514,4 +515,77 @@ test('the briefing page can flip to latest due date first while keeping its grou
   assert.equal(getBriefingComparator('dueLatest'), compareBriefingsByDueDateLatest);
   assert.equal(getBriefingComparator(undefined), compareBriefingsByDueDate, 'unknown or missing settings keep the default order');
   assert.deepEqual(BRIEFING_SORT_OPTIONS.map((option) => option.value), ['dueSoonest', 'dueLatest']);
+});
+
+test('the reviewer scores each person; a briefing without rows keeps the old shared score', () => {
+  const scores = [
+    { BriefingID: 'b1', UserID: 'a', Points: 8, BonusLevel: 'good' },
+    { BriefingID: 'b1', UserID: 'b', Points: 4, BonusLevel: 'standard' },
+  ];
+  const perPerson = { ID: 'b1', Status: 'เสร็จสิ้น', CreatorID: 'boss', Assignees: ['a', 'b'], Points: 0, DeductedPoints: 1 };
+  // 8 − 1 deduction = 7, good ×1.5 → 10.5; 4 − 1 = 3.
+  assert.equal(getMemberBriefingAward(perPerson, { isAssignee: true, userId: 'a' }, scores), 10.5);
+  assert.equal(getMemberBriefingAward(perPerson, { isAssignee: true, userId: 'b' }, scores), 3);
+  // The briefer was not scored, so earns nothing on a per-person briefing.
+  assert.equal(getMemberBriefingAward(perPerson, { isCreator: true, userId: 'boss' }, scores), 0);
+  const legacy = { ID: 'old', Status: 'เสร็จสิ้น', CreatorID: 'boss', Assignees: ['a'], Points: 5, FinalPoints: 5 };
+  assert.equal(getMemberBriefingAward(legacy, { isAssignee: true, userId: 'a' }, scores), 5);
+  assert.equal(getMemberBriefingAward(legacy, { isCreator: true, userId: 'boss' }, scores), 5);
+  assert.deepEqual(getMemberAwardDetails({ Points: 4, BonusLevel: 'viral' }, 10), {
+    basePoints: 4, remainingPoints: 0, bonusLevel: 'viral', bonusLabel: 'ไวรัล +30 คะแนน', bonusPoints: 30, totalPoints: 30,
+  });
+  assert.equal(findMemberScore(scores, 'b1', 'b').Points, 4);
+  assert.equal(findMemberScore(scores, 'b1', 'zzz'), null);
+  assert.deepEqual(getUnscoredAssigneeIds({ ID: 'b1', Assignees: '["a","c","c"]' }, scores), ['c']);
+  assert.deepEqual(getUnscoredAssigneeIds({ ID: 'b1', Assignees: 'not json' }, scores), []);
+  assert.deepEqual(getBriefingMemberScores(null, 'b1'), []);
+
+  const range = { startDate: '2026-10-01', endDate: '2026-10-31' };
+  const done = { ...perPerson, CompletedAt: '2026-10-06T05:00:00Z' };
+  assert.equal(computeMemberScore({ briefings: [done], memberScores: scores, memberId: 'a', ...range }).totalPoints, 10.5);
+  assert.equal(computeMemberScore({ briefings: [done], memberScores: scores, memberId: 'a', ...range }).specialPoints, 3.5);
+  assert.equal(computeMemberScore({ briefings: [done], memberScores: scores, memberId: 'boss', ...range }).specialPoints, 0);
+});
+
+test('the daily summary counts briefs, received work and every submit time per person', () => {
+  const briefings = [
+    { ID: 'b1', RunningID: 'BR-1', CreatorID: 'boss', Assignees: ['a', 'b'], Status: 'รอตรวจ', CreatedAt: '2026-10-06T02:00:00Z' },
+    { ID: 'b2', RunningID: 'BR-2', CreatorID: 'boss', Assignees: '["a"]', Status: 'เสร็จสิ้น', CreatedAt: '2026-10-05T18:30:00Z' },
+    { ID: 'b3', RunningID: 'BR-3', CreatorID: 'a', Assignees: ['b'], Status: 'กำลังทำ', CreatedAt: '2026-10-04T02:00:00Z' },
+  ];
+  const submissions = [
+    { BriefingID: 'b1', TargetUserIDs: ['a'], CreatedAt: '2026-10-06T09:15:00Z' },
+    { BriefingID: 'b1', TargetUserIDs: '["a"]', CreatedAt: '2026-10-06T03:00:00Z' },
+    { BriefingID: 'b3', TargetUserIDs: [], ReviewerID: 'b', CreatedAt: '2026-10-06T04:00:00Z' },
+    { BriefingID: 'b1', TargetUserIDs: ['b'], CreatedAt: '2026-10-07T04:00:00Z' },
+    { BriefingID: 'gone', TargetUserIDs: ['b'], CreatedAt: '2026-10-06T04:00:00Z' },
+  ];
+  const rows = summarizeBriefingDay({ briefings, submissions, dateKey: '2026-10-06' });
+  const byId = Object.fromEntries(rows.map((row) => [row.userId, row]));
+  // b2 was created 01:30 on the 6th in Bangkok, so it counts on the 6th.
+  assert.equal(byId.boss.created.length, 2);
+  assert.equal(byId.a.received.length, 2);
+  assert.deepEqual(byId.a.submissions.map((item) => formatBangkokTime(item.at)), ['10:00', '16:15']);
+  assert.equal(byId.a.openInHand, 1);
+  assert.equal(byId.b.submissions.length, 1);
+  assert.equal(byId.b.openInHand, 2);
+  assert.equal(rows[0].userId, 'a');
+  assert.deepEqual(summarizeBriefingDay({ briefings, submissions, dateKey: '2026-10-06', userIds: ['b'] }).map((row) => row.userId), ['b']);
+  assert.deepEqual(summarizeBriefingDay({ dateKey: '2026-10-06' }), []);
+  assert.equal(formatBangkokTime('nope'), '');
+  assert.equal(formatBangkokDateTime('nope'), '');
+  assert.match(formatBangkokDateTime('2026-10-06T09:15:00Z'), /16:15/);
+  const history = [
+    { Action: 'SUBMITTED', TargetUserIDs: ['a'], CreatedAt: '2026-10-05T01:00:00Z' },
+    { Action: 'SUBMITTED', TargetUserIDs: ['a'], CreatedAt: '2026-10-06T01:00:00Z' },
+    { Action: 'APPROVED', TargetUserIDs: ['a'], CreatedAt: '2026-10-07T01:00:00Z' },
+  ];
+  assert.equal(getLatestSubmission(history, 'a').CreatedAt, '2026-10-06T01:00:00Z');
+  assert.equal(getLatestSubmission(history, 'b'), null);
+  assert.equal(getLatestSubmission(null, 'a'), null);
+});
+
+test('per-person score errors are explained in Thai', () => {
+  assert.equal(describeReviewError({ message: 'Score every assignee before approval' }), 'กรุณาให้คะแนนผู้รับงานให้ครบทุกคนก่อนอนุมัติ');
+  assert.match(describeReviewError({ message: 'This briefing was closed with a single shared score' }), /คะแนนรวมแบบเดิม/);
 });

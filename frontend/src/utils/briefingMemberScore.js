@@ -1,4 +1,4 @@
-import { getMemberBriefingAward, isBriefingEarnedByMember } from './briefingScore.js';
+import { findMemberScore, getBriefingMemberScores, getMemberAwardDetails, getMemberBriefingAward, isBriefingEarnedByMember } from './briefingScore.js';
 import { getNetTeamPoints, summarizePointLedger, toBangkokDateKey } from './briefingPointLedger.js';
 import { normalizeBriefingStatus } from './briefingStatus.js';
 
@@ -33,7 +33,7 @@ export function filterMemberLedger(ledger, memberId, startDate, endDate) {
   });
 }
 
-export function computeMemberScore({ briefings = [], responses = [], ledger = [], memberId, startDate = '', endDate = '' }) {
+export function computeMemberScore({ briefings = [], responses = [], ledger = [], memberScores = [], memberId, startDate = '', endDate = '' }) {
   const id = String(memberId || '');
   let totalPoints = 0;
   let specialPoints = 0;
@@ -49,9 +49,17 @@ export function computeMemberScore({ briefings = [], responses = [], ledger = []
     let memberStatus = normalizeBriefingStatus(response?.Status);
     if (briefing.Status === 'เสร็จสิ้น') memberStatus = 'เสร็จสิ้น';
 
-    if (isBriefingEarnedByMember(briefing, { isCreator, isAssignee, memberStatus })) {
-      totalPoints += getMemberBriefingAward(briefing, { isCreator, isAssignee, memberStatus });
-      specialPoints += Math.max(0, Number(briefing.BonusPoints) || 0);
+    const roles = { isCreator, isAssignee, memberStatus, userId: id };
+    if (isBriefingEarnedByMember(briefing, roles)) {
+      totalPoints += getMemberBriefingAward(briefing, roles, memberScores);
+      // A per-person briefing pays each person their own level bonus; a legacy
+      // one pays everyone the shared briefing bonus.
+      if (getBriefingMemberScores(memberScores, briefing.ID).length) {
+        const own = findMemberScore(memberScores, briefing.ID, id);
+        specialPoints += own ? getMemberAwardDetails(own, briefing.DeductedPoints).bonusPoints : 0;
+      } else {
+        specialPoints += Math.max(0, Number(briefing.BonusPoints) || 0);
+      }
     }
   });
 

@@ -101,8 +101,53 @@ export function isBriefingEarnedByMember(briefing, { isCreator = false, isAssign
  * who briefed it 5 and every recipient 5. Someone who is both is still paid
  * once, and any Task deduction lowers everyone's share by the same amount.
  */
-export function getMemberBriefingAward(briefing, roles) {
-  return isBriefingEarnedByMember(briefing, roles) ? getBriefingAwardedPoints(briefing) : 0;
+export function getMemberBriefingAward(briefing, roles, memberScores = null) {
+  if (!isBriefingEarnedByMember(briefing, roles)) return 0;
+  const rows = getBriefingMemberScores(memberScores, briefing?.ID);
+  if (!rows.length) return getBriefingAwardedPoints(briefing);
+  const own = rows.find((score) => String(score.UserID) === String(roles?.userId));
+  return own ? getMemberAwardDetails(own, briefing?.DeductedPoints).totalPoints : 0;
+}
+
+// ── Per-person scores ──────────────────────────────────────────────────────
+// The reviewer scores each participant separately (BriefingMemberScores). A
+// briefing with at least one row is scored per person; a briefing with none
+// was closed under the old single shared score and keeps using it.
+
+export function getBriefingMemberScores(memberScores, briefingId) {
+  const id = String(briefingId ?? '');
+  return (Array.isArray(memberScores) ? memberScores : [])
+    .filter((score) => String(score?.BriefingID) === id);
+}
+
+export function findMemberScore(memberScores, briefingId, userId) {
+  return getBriefingMemberScores(memberScores, briefingId)
+    .find((score) => String(score?.UserID) === String(userId)) || null;
+}
+
+/** Same arithmetic as briefing_member_award() in the database. */
+export function getMemberAwardDetails(score, deductedPoints = 0) {
+  const basePoints = Math.max(0, scoreNumber(score?.Points));
+  const remaining = Math.max(0, scoreNumber(basePoints - Math.max(0, scoreNumber(deductedPoints))));
+  const bonus = getBonusLevelDetails(score?.BonusLevel, remaining);
+  return {
+    basePoints,
+    remainingPoints: remaining,
+    bonusLevel: bonus.value,
+    bonusLabel: bonus.label,
+    bonusPoints: bonus.bonusPoints,
+    totalPoints: bonus.totalPoints,
+  };
+}
+
+/** Assignees the reviewer still has to score before approving. */
+export function getUnscoredAssigneeIds(briefing, memberScores) {
+  let assignees = briefing?.Assignees || [];
+  if (!Array.isArray(assignees)) {
+    try { assignees = JSON.parse(assignees || '[]'); } catch { assignees = []; }
+  }
+  const scored = new Set(getBriefingMemberScores(memberScores, briefing?.ID).map((score) => String(score.UserID)));
+  return assignees.map(String).filter((id, index, list) => list.indexOf(id) === index && !scored.has(id));
 }
 
 export function getScoreAdjustmentPreview(briefing, targetPoints) {

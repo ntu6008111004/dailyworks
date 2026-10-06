@@ -18,6 +18,7 @@ export const MyTeam = () => {
   const [allBriefings, setAllBriefings] = useState([]);
   const [allResponses, setAllResponses] = useState([]);
   const [pointLedger, setPointLedger] = useState([]);
+  const [memberScores, setMemberScores] = useState([]);
   const [selectedLedgerMember, setSelectedLedgerMember] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filterDepartment, setFilterDepartment] = useState('All');
@@ -38,17 +39,19 @@ export const MyTeam = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [usersData, briefingsData, responsesData, ledgerData] = await Promise.all([
+      const [usersData, briefingsData, responsesData, ledgerData, memberScoreData] = await Promise.all([
         apiService.getUsers({ includeImage: true }),
         apiService.getBriefings(),
         apiService.getBriefingResponses(undefined, 'ID, BriefingID, UserID, Status, SubmittedAt, UpdatedAt'),
         apiService.getBriefingPointLedger({ viewerId: user?.ID || user?.id }).catch((error) => { console.warn('[MyTeam] point ledger unavailable', error); return []; }),
+        apiService.getBriefingMemberScores(),
       ]);
       
       setAllUsers(usersData || []);
       setAllBriefings(briefingsData || []);
       setAllResponses(responsesData || []);
       setPointLedger(ledgerData || []);
+      setMemberScores(memberScoreData || []);
       
       // Default filter for non-admins to their own department
       if (!isAdmin) {
@@ -88,7 +91,7 @@ export const MyTeam = () => {
       let briefedNotStartedCount = 0;
 
       // Points and deductions share one rulebook with the personal dashboard.
-      const score = computeMemberScore({ briefings: allBriefings, responses: allResponses, ledger: pointLedger, memberId: member.ID, startDate, endDate });
+      const score = computeMemberScore({ briefings: allBriefings, responses: allResponses, ledger: pointLedger, memberScores, memberId: member.ID, startDate, endDate });
 
       allBriefings.forEach(b => {
         const isCreator = String(b.CreatorID) === String(member.ID);
@@ -184,7 +187,7 @@ export const MyTeam = () => {
     };
 
     return { teamMembers: members, stats: teamStats };
-  }, [allUsers, allBriefings, allResponses, pointLedger, filterDepartment, isAdmin, userDept, startDate, endDate]);
+  }, [allUsers, allBriefings, allResponses, pointLedger, memberScores, filterDepartment, isAdmin, userDept, startDate, endDate]);
 
   const handleResetFilters = () => {
     setStartDate(CURRENT_MONTH.start);

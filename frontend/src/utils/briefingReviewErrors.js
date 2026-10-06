@@ -4,6 +4,12 @@
 
 const RULE_MESSAGES = [
   [/only the department head or an admin may review/i, 'เฉพาะหัวหน้าแผนกของผู้บรีฟหรือแอดมินเท่านั้นที่ตรวจงานนี้ได้'],
+  [/only the department head or an admin may score this briefing/i, 'เฉพาะหัวหน้าแผนกของผู้บรีฟหรือแอดมินเท่านั้นที่ให้คะแนนงานนี้ได้'],
+  [/score every assignee before approval/i, 'กรุณาให้คะแนนผู้รับงานให้ครบทุกคนก่อนอนุมัติ'],
+  [/closed with a single shared score/i, 'งานนี้ปิดด้วยคะแนนรวมแบบเดิม ให้ใช้ช่องปรับคะแนนหลังปิดงานแทน'],
+  [/no member scores to save/i, 'ยังไม่ได้เลือกคะแนนของใครเลย'],
+  [/member points must be zero or greater/i, 'คะแนนรายคนต้องไม่ติดลบ'],
+  [/cancelled work cannot be scored/i, 'งานที่ยกเลิกแล้วให้คะแนนไม่ได้'],
   [/only the department head or an admin may change review deductions/i, 'เฉพาะหัวหน้าแผนกหรือแอดมินเท่านั้นที่แก้ค่าการหักคะแนนได้'],
   [/not (assigned to|a participant in) this briefing/i, 'มีผู้ที่เลือกไว้ไม่ได้เกี่ยวข้องกับงานนี้ กรุณาเลือกเฉพาะผู้บรีฟงานหรือผู้รับงาน'],
   [/select at least one responsible (recipient|participant)/i, 'กรุณาเลือกผู้เกี่ยวข้องที่ต้องหักคะแนนอย่างน้อย 1 คน'],
@@ -11,6 +17,7 @@ const RULE_MESSAGES = [
   [/a reason is required when extending a deadline/i, 'กรุณาระบุเหตุผลก่อนขยายกำหนดส่ง'],
   [/additional work details are required/i, 'กรุณาระบุรายละเอียดงานที่สั่งเพิ่ม'],
   [/additional work points must be at least 1/i, 'คะแนนงานที่เพิ่มต้องมีอย่างน้อย 1 คะแนน'],
+  [/additional work points cannot be negative/i, 'คะแนนงานที่เพิ่มต้องไม่ติดลบ'],
   [/extension days must be at least 1/i, 'จำนวนวันที่ขยายต้องมีอย่างน้อย 1 วัน'],
   [/a due date is required before it can be extended/i, 'งานนี้ยังไม่มีวันกำหนดส่ง จึงขยายเวลาไม่ได้'],
   [/the current due date is invalid/i, 'วันกำหนดส่งเดิมของงานนี้ไม่ถูกต้อง กรุณาแก้วันกำหนดส่งก่อน'],
@@ -28,7 +35,7 @@ const RULE_MESSAGES = [
   [/deductions cannot be negative/i, 'ค่าการหักคะแนนต้องไม่ติดลบ'],
 ];
 
-const OUTDATED_DATABASE = 'ฐานข้อมูลยังไม่ได้อัปเดตเป็นเวอร์ชันล่าสุด กรุณาให้ผู้ดูแลระบบรัน migration 20260820_briefing_monthly_penalties.sql ก่อนใช้งานหน้าตรวจงาน';
+const OUTDATED_DATABASE = 'ฐานข้อมูลยังไม่ได้อัปเดตเป็นเวอร์ชันล่าสุด กรุณาให้ผู้ดูแลระบบรัน migration ล่าสุด (20261006_briefing_member_scores.sql) ก่อนใช้งานหน้าตรวจงาน';
 
 /**
  * True when PostgREST cannot find review_briefing() with the parameters this
