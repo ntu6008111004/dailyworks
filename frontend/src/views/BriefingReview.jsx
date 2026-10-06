@@ -107,7 +107,9 @@ export const BriefingReview = () => {
   const [todayKey] = useState(() => toBangkokDateKey(Date.now()));
   const [summaryDate, setSummaryDate] = useState(todayKey);
   const [submissions, setSubmissions] = useState([]);
+  const [claims, setClaims] = useState([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const departments = useMemo(
     () => ['All', ...new Set(users.map((item) => item.Department).filter(Boolean))]
@@ -139,13 +141,32 @@ export const BriefingReview = () => {
   const loadSubmissions = useCallback(async () => {
     if ((!isAdmin && !isHead) || !summaryDate) return;
     try {
-      setSubmissions(await apiService.getBriefingSubmissions({ startDate: summaryDate, endDate: summaryDate }));
+      // A claim always happens on or after the day the brief was created, so
+      // claims since the selected day are all the summary can ever need.
+      const [submissionRows, claimRows] = await Promise.all([
+        apiService.getBriefingSubmissions({ startDate: summaryDate, endDate: summaryDate }),
+        apiService.getBriefingClaims({ since: summaryDate }),
+      ]);
+      setSubmissions(submissionRows); setClaims(claimRows || []);
     } catch (error) {
       console.warn('[BriefingReview] submissions unavailable', error);
       setSubmissions([]);
     }
   }, [isAdmin, isHead, summaryDate]);
   useEffect(() => { loadSubmissions(); }, [loadSubmissions]);
+
+  // Live queue: any briefing change (a submission, a claim, a score, another
+  // head's decision) reaches every open tab through the Briefings realtime
+  // channel. Bursts are folded into one quiet reload.
+  useEffect(() => {
+    let timer;
+    const onRemoteUpdate = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { load(true); loadSubmissions(); }, 400);
+    };
+    window.addEventListener('remote-briefing-update', onRemoteUpdate);
+    return () => { clearTimeout(timer); window.removeEventListener('remote-briefing-update', onRemoteUpdate); };
+  }, [load, loadSubmissions]);
 
   const settingDepartment = department === 'All' ? '' : department;
   useEffect(() => {
@@ -176,9 +197,10 @@ export const BriefingReview = () => {
   const daySummary = useMemo(() => summarizeBriefingDay({
     briefings: scopedBriefings,
     submissions,
+    claims,
     dateKey: summaryDate,
     userIds: filterUser === 'All' ? null : [filterUser],
-  }), [scopedBriefings, submissions, summaryDate, filterUser]);
+  }), [scopedBriefings, submissions, claims, summaryDate, filterUser]);
 
   const visibleBriefings = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -233,7 +255,7 @@ export const BriefingReview = () => {
           <h1 className="text-2xl font-black text-slate-900 sm:text-3xl">ตรวจและอนุมัติบรีฟงาน</h1>
           <p className="mt-1 text-sm text-slate-500">ตรวจหลักฐาน หักคะแนนรายงานหรือรายเดือน ขยายเวลา และสั่งเพิ่มงานได้ในที่เดียว</p>
         </div>
-        <button onClick={() => load()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} />รีเฟรชคิว</button>
+        <div className="flex gap-2"><button onClick={() => setShowSettings((value) => !value)} className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold shadow-sm ${showSettings ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}><Settings2 size={16} />ตั้งค่าการหักคะแนน</button><button onClick={() => load()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} />รีเฟรชคิว</button></div>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -262,7 +284,7 @@ export const BriefingReview = () => {
 
       <DailySummary rows={daySummary} users={users} today={todayKey} date={summaryDate} onDateChange={setSummaryDate} onSelect={setSelected} />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      {showSettings && <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-3 flex items-center gap-2"><Settings2 size={18} className="text-slate-500" /><div><h2 className="font-black text-slate-800">มาตรฐานการหักคะแนน</h2><p className="text-xs text-slate-500">หัวหน้าแก้ได้ตลอดสำหรับแผนก {settingDepartment || 'ที่เลือก'}</p></div></div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto]">
           <SettingInput label="สั่งแก้ไข / ครั้ง (หัก Task)" value={settings.CorrectionDeduction ?? 1} onChange={(CorrectionDeduction) => setSettings((current) => ({ ...current, CorrectionDeduction }))} />
@@ -270,7 +292,7 @@ export const BriefingReview = () => {
           <SettingInput label="ร้ายแรง (หักรายเดือน)" value={settings.SevereDeduction ?? 50} onChange={(SevereDeduction) => setSettings((current) => ({ ...current, SevereDeduction }))} />
           <button onClick={saveSettings} disabled={savingSettings || !settingDepartment} className="mt-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-black text-white hover:bg-slate-900 disabled:opacity-50"><Save size={16} />{savingSettings ? 'กำลังบันทึก…' : 'บันทึกค่า'}</button>
         </div>
-      </section>
+      </section>}
 
       {loading ? <div className="flex min-h-64 items-center justify-center text-slate-500"><Loader2 className="mr-2 animate-spin" />กำลังโหลดคิวตรวจงาน…</div> : visibleBriefings.length ? (viewMode === 'table' ? <ReviewTable briefings={visibleBriefings} users={users} memberScores={memberScores} onSelect={setSelected} /> : <div className="grid gap-4 xl:grid-cols-2">{visibleBriefings.map((item) => <ReviewCard key={item.ID} briefing={item} users={users} memberScores={memberScores} onClick={() => setSelected(item)} />)}</div>) : <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white text-center text-slate-400"><ClipboardCheck size={34} className="mb-3" /><h2 className="font-black text-slate-600">ไม่มีงานในคิวที่เลือก</h2><p className="mt-1 text-sm">เมื่องานถูกส่งตรวจ จะปรากฏในหน้านี้ทันที</p></div>}
       {selected && <ReviewDialog briefing={selected} users={users} onClose={() => setSelected(null)} onScoresSaved={(briefingId, rows) => setMemberScores((current) => [...current.filter((item) => String(item.BriefingID) !== String(briefingId)), ...rows])} onChanged={async () => { setSelected(null); await load(true); await loadSubmissions(); }} />}
@@ -314,7 +336,9 @@ const ReviewCard = ({ briefing, users, memberScores = [], onClick }) => {
 const buildScoreDrafts = (briefing, rows, participants) => Object.fromEntries(participants.map(({ id }) => {
   const row = rows.find((item) => String(item.UserID) === id);
   if (row) return [id, { points: String(Number(row.Points)), bonusLevel: row.BonusLevel || 'standard' }];
-  const legacy = Number(briefing?.Points) > 0 && id !== String(briefing?.CreatorID) ? String(Number(briefing.Points)) : '';
+  // The old system paid the briefer the shared score too, so an in-flight
+  // legacy brief pre-fills every participant, creator included.
+  const legacy = Number(briefing?.Points) > 0 ? String(Number(briefing.Points)) : '';
   return [id, { points: legacy, bonusLevel: briefing?.BonusLevel || 'standard' }];
 }));
 
@@ -357,6 +381,20 @@ const ReviewDialog = ({ briefing, users, onClose, onChanged, onScoresSaved }) =>
   }, [briefing.ID, users]);
 
   useEffect(() => { load(); }, [load]);
+  // While the dialog is open, a resubmission or another reviewer's action on
+  // this brief refreshes its evidence and history in place. Score drafts the
+  // reviewer is still typing are left alone.
+  useEffect(() => {
+    const onRemoteUpdate = async (event) => {
+      if (String(event.detail?.briefing?.ID) !== String(briefing.ID) || event.detail?.eventType === 'DELETE') return;
+      try {
+        const [briefingData, responseData, historyData] = await Promise.all([apiService.getBriefingById(briefing.ID), apiService.getBriefingResponses(briefing.ID), apiService.getBriefingReviewHistory(briefing.ID)]);
+        setDetail(briefingData); setResponses(responseData || []); setHistory(historyData || []);
+      } catch (error) { console.warn('[ReviewDialog] live refresh failed', error); }
+    };
+    window.addEventListener('remote-briefing-update', onRemoteUpdate);
+    return () => window.removeEventListener('remote-briefing-update', onRemoteUpdate);
+  }, [briefing.ID]);
   const current = detail || briefing;
   const creator = users.find((item) => String(item.ID) === String(current.CreatorID));
   const assignees = (current.Assignees || []).map((id) => ({ id: String(id), person: users.find((item) => String(item.ID) === String(id)) }));
@@ -418,6 +456,7 @@ const ReviewDialog = ({ briefing, users, onClose, onChanged, onScoresSaved }) =>
     if (requiresReviewComment(type) && !comment.trim()) { toast.error('กรุณาระบุหมายเหตุหรือเหตุผลก่อน คำสั่งนี้บังคับกรอก'); return; }
     if (['rejected', 'severe_error'].includes(type) && targetUserIds.length === 0) { toast.error('กรุณาเลือกผู้เกี่ยวข้องที่ต้องหักคะแนน'); return; }
     if (uploadingComment) { toast.error('รูปแนบยังอัปโหลดไม่เสร็จ กรุณารอสักครู่'); return; }
+    if (type === 'approved' && assignees.length === 0) { toast.error('งานนี้ยังไม่มีผู้รับผิดชอบ ให้มีคนรับงานก่อนจึงอนุมัติได้'); return; }
     if (type === 'approved') {
       const missing = assignees.filter(({ id }) => !drafts[id] || drafts[id].points === '');
       if (missing.length) { toast.error(`กรุณาให้คะแนนผู้รับงานให้ครบก่อนอนุมัติ (ยังขาด ${missing.map(({ id, person }) => person?.Name || person?.Username || id).join(', ')})`); return; }
@@ -469,12 +508,12 @@ const ActionButton = ({ color, icon, label, detail, disabled, onClick }) => {
   return <button disabled={disabled} onClick={onClick} className={`flex h-full min-h-[64px] w-full flex-col items-start justify-center gap-1 rounded-xl px-3 py-2.5 text-left text-white disabled:opacity-50 ${styles[color]}`}><span className="inline-flex items-center gap-1.5 text-xs font-black">{icon}{label}</span><span className="text-[10px] font-semibold opacity-80">{detail}</span></button>;
 };
 
-const historyLabel = (action) => ({ SUBMITTED: 'ส่งเข้าตรวจ', NEEDS_REVISION: 'สั่งแก้ไข', REJECTED: 'ความผิดพลาด', SEVERE_ERROR: 'ความผิดพลาดร้ายแรง', APPROVED: 'อนุมัติผ่าน', BONUS_UPDATED: 'ปรับคะแนนพิเศษ', SCORE_ADJUSTED: 'ปรับคะแนนหลังปิดงาน', DEADLINE_EXTENDED: 'ขยายเวลา', EXTRA_WORK: 'สั่งเพิ่มงาน', MEMBER_SCORED: 'ให้คะแนนรายคน' }[action] || action);
+const historyLabel = (action) => ({ SUBMITTED: 'ส่งเข้าตรวจ', NEEDS_REVISION: 'สั่งแก้ไข', REJECTED: 'ความผิดพลาด', SEVERE_ERROR: 'ความผิดพลาดร้ายแรง', APPROVED: 'อนุมัติผ่าน', BONUS_UPDATED: 'ปรับคะแนนพิเศษ', SCORE_ADJUSTED: 'ปรับคะแนนหลังปิดงาน', DEADLINE_EXTENDED: 'ขยายเวลา', EXTRA_WORK: 'สั่งเพิ่มงาน', MEMBER_SCORED: 'ให้คะแนนรายคน', CLAIMED: 'รับงานเอง (งานไม่มีผู้รับผิดชอบ)' }[action] || action);
 
 const personName = (users, id) => { const person = (users || []).find((item) => String(item.ID) === String(id)); return person?.Name || person?.Username || id; };
 const historyTargets = (event) => { const value = event?.TargetUserIDs; if (Array.isArray(value)) return value; try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; } catch { return []; } };
 
-const HistoryList = ({ history, users = [], onPreview }) => <article className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-3 font-black text-slate-800">ประวัติการตรวจ</h3>{history.length ? <ol className="space-y-3">{history.map((event) => <li key={event.ID} className="border-l-2 border-slate-200 pl-3"><p className="text-xs font-black text-slate-700">{historyLabel(event.Action)} {event.PointsDeducted > 0 && <span className="text-rose-600">−{event.PointsDeducted}</span>}{event.Action === 'BONUS_UPDATED' && <span className="text-indigo-600"> {event.BonusLevel ? getBonusLevelDetails(event.BonusLevel, 0).label : 'คะแนนพิเศษเดิม'} · +{formatBriefingPoints(event.BonusPoints)}</span>}{event.Action === 'SCORE_ADJUSTED' && <span className="text-sky-600"> {event.PointsDelta > 0 ? '+' : ''}{event.PointsDelta}</span>}{event.Action === 'EXTRA_WORK' && Number(event.ExtraPoints) > 0 && <span className="text-sky-600"> +{event.ExtraPoints} คะแนน</span>}{['SUBMITTED', 'MEMBER_SCORED'].includes(event.Action) && historyTargets(event).length > 0 && <span className="text-slate-500"> · {historyTargets(event).map((id) => personName(users, id)).join(', ')}</span>}{event.Action === 'MEMBER_SCORED' && <span className="text-indigo-600"> {event.PreviousAwardedPoints === null || event.PreviousAwardedPoints === undefined ? '' : `${formatBriefingPoints(event.PreviousAwardedPoints)} → `}{formatBriefingPoints(event.NewAwardedPoints)} คะแนน</span>}{event.Action === 'DEADLINE_EXTENDED' && <span className="text-violet-600"> +{event.ExtensionDays} วัน ({event.NewDueDate})</span>}</p>{event.Comment && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500">{event.Comment}</p>}{(() => { const images = parseStoredImageArray(event.CommentImages); return images.length > 0 && <div className="mt-1.5 grid grid-cols-4 gap-1.5 sm:grid-cols-6">{images.map((image, index) => <img key={`${image}-${index}`} src={image} alt={`รูปประกอบที่ ${index + 1}`} onClick={() => onPreview?.(image)} className="aspect-square w-full cursor-zoom-in rounded-md border border-slate-200 object-cover" />)}</div>; })()}<p className="mt-1 text-[10px] text-slate-400">{new Date(event.CreatedAt).toLocaleString('th-TH')}</p></li>)}</ol> : <p className="text-sm text-slate-400">ยังไม่มีประวัติ</p>}</article>;
+const HistoryList = ({ history, users = [], onPreview }) => <article className="rounded-2xl border border-slate-200 p-4"><h3 className="mb-3 font-black text-slate-800">ประวัติการตรวจ</h3>{history.length ? <ol className="space-y-3">{history.map((event) => <li key={event.ID} className="border-l-2 border-slate-200 pl-3"><p className="text-xs font-black text-slate-700">{historyLabel(event.Action)} {event.PointsDeducted > 0 && <span className="text-rose-600">−{event.PointsDeducted}</span>}{event.Action === 'BONUS_UPDATED' && <span className="text-indigo-600"> {event.BonusLevel ? getBonusLevelDetails(event.BonusLevel, 0).label : 'คะแนนพิเศษเดิม'} · +{formatBriefingPoints(event.BonusPoints)}</span>}{event.Action === 'SCORE_ADJUSTED' && <span className="text-sky-600"> {event.PointsDelta > 0 ? '+' : ''}{event.PointsDelta}</span>}{event.Action === 'EXTRA_WORK' && Number(event.ExtraPoints) > 0 && <span className="text-sky-600"> +{event.ExtraPoints} คะแนน</span>}{['SUBMITTED', 'MEMBER_SCORED', 'CLAIMED'].includes(event.Action) && historyTargets(event).length > 0 && <span className="text-slate-500"> · {historyTargets(event).map((id) => personName(users, id)).join(', ')}</span>}{event.Action === 'MEMBER_SCORED' && <span className="text-indigo-600"> {event.PreviousAwardedPoints === null || event.PreviousAwardedPoints === undefined ? '' : `${formatBriefingPoints(event.PreviousAwardedPoints)} → `}{formatBriefingPoints(event.NewAwardedPoints)} คะแนน</span>}{event.Action === 'DEADLINE_EXTENDED' && <span className="text-violet-600"> +{event.ExtensionDays} วัน ({event.NewDueDate})</span>}</p>{event.Comment && <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500">{event.Comment}</p>}{(() => { const images = parseStoredImageArray(event.CommentImages); return images.length > 0 && <div className="mt-1.5 grid grid-cols-4 gap-1.5 sm:grid-cols-6">{images.map((image, index) => <img key={`${image}-${index}`} src={image} alt={`รูปประกอบที่ ${index + 1}`} onClick={() => onPreview?.(image)} className="aspect-square w-full cursor-zoom-in rounded-md border border-slate-200 object-cover" />)}</div>; })()}<p className="mt-1 text-[10px] text-slate-400">{new Date(event.CreatedAt).toLocaleString('th-TH')}</p></li>)}</ol> : <p className="text-sm text-slate-400">ยังไม่มีประวัติ</p>}</article>;
 
 const POINT_ZERO_OPTION = { value: '0', label: '0 คะแนน' };
 
@@ -510,6 +549,6 @@ const DailySummary = ({ rows, users, today, date, onDateChange, onSelect }) => {
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
     <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><Users size={18} className="text-slate-500" /><div><h2 className="font-black text-slate-800">สรุปงานรายวันรายคน</h2><p className="text-xs text-slate-500">บรีฟที่สร้าง งานที่รับ และเวลาที่กดส่งตรวจ ตามแผนกและรายชื่อที่เลือกด้านบน</p></div></div><div className="flex items-center gap-2"><input type="date" value={date} max={today} onChange={(event) => onDateChange(event.target.value || today)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs" />{date !== today && <button type="button" onClick={() => onDateChange(today)} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">วันนี้</button>}</div></div>
     <div className="mb-3 grid grid-cols-3 gap-2"><Metric label="บรีฟที่สร้าง" value={`${totals.created} งาน`} /><Metric label="งานที่รับ" value={`${totals.received} งาน`} /><Metric label="ส่งตรวจ" value={`${totals.submitted} ครั้ง`} /></div>
-    {rows.length ? <div className="overflow-x-auto rounded-xl border border-slate-100"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="bg-slate-50 text-[11px] font-black text-slate-500"><th className="px-3 py-2.5">คน</th><th className="px-3 py-2.5 text-center">บรีฟที่สร้าง</th><th className="px-3 py-2.5 text-center">รับงาน</th><th className="px-3 py-2.5 text-center">ส่งตรวจ</th><th className="px-3 py-2.5">เวลาที่กดส่งตรวจ</th><th className="px-3 py-2.5 text-center">งานค้างในมือ</th></tr></thead><tbody>{rows.map((row) => { const person = users.find((item) => String(item.ID) === row.userId); return <tr key={row.userId} className="border-t border-slate-50 align-top"><td className="px-3 py-2.5"><div className="flex items-center gap-2"><Avatar person={person} className="h-7 w-7" /><div className="min-w-0"><p className="max-w-36 truncate text-xs font-black text-slate-800">{person?.Name || person?.Username || row.userId}</p><p className="text-[10px] text-slate-400">{person?.Department || ''}</p></div></div></td><td className="px-3 py-2.5 text-center font-black text-slate-700">{row.created.length}</td><td className="px-3 py-2.5 text-center font-black text-slate-700">{row.received.length}</td><td className="px-3 py-2.5 text-center font-black text-fuchsia-700">{row.submissions.length}</td><td className="px-3 py-2.5"><div className="flex flex-wrap gap-1">{row.submissions.length ? row.submissions.map(({ briefing, at }, index) => <button key={`${briefing.ID}-${at}-${index}`} type="button" onClick={() => onSelect(briefing)} title={briefing.Title || briefing.Detail} className="rounded-lg border border-fuchsia-100 bg-fuchsia-50 px-2 py-1 text-[10px] font-bold text-fuchsia-700 hover:bg-fuchsia-100">{formatBangkokTime(at)} · {briefing.RunningID}</button>) : <span className="text-[11px] text-slate-400">-</span>}</div></td><td className="px-3 py-2.5 text-center font-bold text-slate-500">{row.openInHand}</td></tr>; })}</tbody></table></div> : <p className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400">ไม่มีการบรีฟ รับงาน หรือส่งตรวจในวันที่เลือก</p>}
+    {rows.length ? <div className="overflow-x-auto rounded-xl border border-slate-100"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="bg-slate-50 text-[11px] font-black text-slate-500"><th className="px-3 py-2.5">คน</th><th className="px-3 py-2.5 text-center">บรีฟที่สร้าง</th><th className="px-3 py-2.5 text-center">รับงาน</th><th className="px-3 py-2.5 text-center">ส่งตรวจ</th><th className="px-3 py-2.5">เวลาที่กดส่งตรวจ</th><th className="px-3 py-2.5 text-center">งานค้างในมือ</th></tr></thead><tbody>{rows.map((row) => { const person = users.find((item) => String(item.ID) === row.userId); return <tr key={row.userId} className="border-t border-slate-50 align-top"><td className="px-3 py-2.5"><div className="flex items-center gap-2"><Avatar person={person} className="h-7 w-7" /><div className="min-w-0"><p className="max-w-36 truncate text-xs font-black text-slate-800">{person?.Name || person?.Username || row.userId}</p><p className="text-[10px] text-slate-400">{person?.Department || ''}</p></div></div></td><td className="px-3 py-2.5 text-center font-black text-slate-700">{row.created.length}</td><td className="px-3 py-2.5 text-center font-black text-slate-700">{row.received.length}{row.claimed > 0 && <span className="block text-[10px] font-bold text-amber-600">รับเอง {row.claimed}</span>}</td><td className="px-3 py-2.5 text-center font-black text-fuchsia-700">{row.submissions.length}</td><td className="px-3 py-2.5"><div className="flex flex-wrap gap-1">{row.submissions.length ? row.submissions.map(({ briefing, at }, index) => <button key={`${briefing.ID}-${at}-${index}`} type="button" onClick={() => onSelect(briefing)} title={briefing.Title || briefing.Detail} className="rounded-lg border border-fuchsia-100 bg-fuchsia-50 px-2 py-1 text-[10px] font-bold text-fuchsia-700 hover:bg-fuchsia-100">{formatBangkokTime(at)} · {briefing.RunningID}</button>) : <span className="text-[11px] text-slate-400">-</span>}</div></td><td className="px-3 py-2.5 text-center font-bold text-slate-500">{row.openInHand}</td></tr>; })}</tbody></table></div> : <p className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400">ไม่มีการบรีฟ รับงาน หรือส่งตรวจในวันที่เลือก</p>}
   </section>;
 };

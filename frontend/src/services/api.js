@@ -1192,6 +1192,22 @@ export const apiService = {
     return data || [];
   },
 
+  // Every self-claim of an unassigned brief. The daily summary counts a claimed
+  // brief as received on the day it was claimed, not the day it was briefed.
+  async getBriefingClaims({ since } = {}) {
+    let query = supabase
+      .from('BriefingReviewHistory')
+      .select('ID, BriefingID, TargetUserIDs, CreatedAt')
+      .eq('Action', 'CLAIMED');
+    if (since) query = query.gte('CreatedAt', new Date(`${since}T00:00:00+07:00`).toISOString());
+    const { data, error } = await query;
+    if (error) {
+      console.warn('[BriefingReviewHistory] claims unavailable', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
   async getBriefingPointLedger({ startDate = null, endDate = null, viewerId = null } = {}) {
     // On a hard refresh a view can fetch before the auth effect has stored the
     // session here, so callers pass their own user id explicitly.

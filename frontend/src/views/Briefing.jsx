@@ -569,7 +569,7 @@ export const Briefing = () => {
         {/* Stats Grid */}
         <div className="flex flex-col gap-4">
           <div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-3">
               <StatCard label="ทั้งหมด" value={stats.total} color="bg-slate-800" icon={<NotebookTabs size={16}/>} onClick={() => { setFilterStatus('All'); setFilterPostStatus('All'); }} active={filterStatus === 'All' && filterPostStatus === 'All'} />
               <StatCard label="ไม่มีผู้รับผิดชอบ" value={stats.unclaimed} color="bg-amber-500" icon={<UserPlus size={16}/>} onClick={() => setFilterStatus('Unclaimed')} active={filterStatus === 'Unclaimed'} />
               {statusCards.map(({ status, color, icon }) => (

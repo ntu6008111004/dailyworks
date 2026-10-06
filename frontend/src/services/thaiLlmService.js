@@ -531,7 +531,7 @@ function compactThaiInput(value) {
 // check; answering here only saves a round trip.
 export const SCORE_REDIRECT_ANSWER = 'CatLog AI ไม่ตอบเรื่องคะแนนครับ ดูคะแนนของคุณได้ที่หน้า “ภาพรวม” หัวหน้าดูคะแนนของทีมได้ที่หน้า “บุคคลในทีม” ถามเรื่องงานได้ตามปกติเลย';
 const SCORE_WORDS = /(?:คะแนน|แต้ม|\bscores?\b|\bpoints?\b)/iu;
-const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|ฉัน|ผม|ตัวเอง|ทีม|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|แพท|แพด|เหมี่ยว|กีต้า|พอร์มเตอร์|โม|ฟลุ๊ค|ฟลุค|บัส|บอส|เติ้ล|มาย|\bmy\b)/iu;
+const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|คะแนนฉัน|คะแนนผม|ตัวเอง|ทีมของฉัน|ทีมของผม|ทีมเรา|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|แพท|แพด|เหมี่ยว|กีต้า|พอร์มเตอร์|โม|ฟลุ๊ค|ฟลุค|บัส|บอส|เติ้ล|มาย|\bmy\b)/iu;
 
 export function isWorkScoreQuestion(question) {
   const text = compactThaiInput(question);

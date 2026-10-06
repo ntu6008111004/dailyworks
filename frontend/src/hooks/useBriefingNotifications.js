@@ -36,7 +36,7 @@ export const useBriefingNotifications = () => {
   }, [refreshUsers, user?.Department, user?.ID, user?.Role]);
 
   const announce = useCallback(async (briefing, previousUpdatedAt) => {
-    if (!briefing || !await isRelevant(briefing)) return;
+    if (!briefing) return;
     const updatedAt = new Date(briefing.UpdatedAt || briefing.CreatedAt || Date.now()).getTime();
     const id = String(briefing.ID);
     if (previousUpdatedAt === undefined) {
@@ -45,18 +45,27 @@ export const useBriefingNotifications = () => {
     }
     if (updatedAt <= (knownUpdates.current[id] || 0)) return;
     knownUpdates.current[id] = updatedAt;
+    // Every open page gets every change and applies its own visibility rule.
+    // Filtering here hid two cases: a new brief with nobody assigned (it must
+    // appear in everyone's "ไม่มีผู้รับผิดชอบ" pool) and a brief someone else
+    // just claimed (it must leave everyone else's pool without a refresh).
     window.dispatchEvent(new CustomEvent('remote-briefing-update', {
       detail: { eventType: 'UPDATE', briefing },
     }));
     // A second tab with the same account must still update its UI immediately.
     // Suppress only the toast/OS notification for the user's own change.
     if (!shouldShowBriefingNotification({ lastUpdatedBy: briefing.LastUpdatedBy, userId: user?.ID })) return;
+    const unclaimed = toAssigneeList(briefing.Assignees).length === 0
+      && !['เสร็จสิ้น', 'ยกเลิกงาน'].includes(String(briefing.Status || ''));
+    if (!unclaimed && !await isRelevant(briefing)) return;
 
     const isReview = briefing.Status === 'ส่งตรวจ';
-    const title = isReview ? 'มีงานรอตรวจ' : 'บรีฟงานมีการอัปเดต';
-    const body = isReview
-      ? `บรีฟ #${briefing.RunningID || ''} ถูกส่งเข้าตรวจแล้ว`
-      : `บรีฟ #${briefing.RunningID || ''} เปลี่ยนสถานะเป็น ${briefing.Status || 'อัปเดตใหม่'}`;
+    const title = unclaimed ? 'มีงานรอคนรับ' : isReview ? 'มีงานรอตรวจ' : 'บรีฟงานมีการอัปเดต';
+    const body = unclaimed
+      ? `บรีฟ #${briefing.RunningID || ''} ยังไม่มีผู้รับผิดชอบ กดรับได้ที่หน้าบรีฟ`
+      : isReview
+        ? `บรีฟ #${briefing.RunningID || ''} ถูกส่งเข้าตรวจแล้ว`
+        : `บรีฟ #${briefing.RunningID || ''} เปลี่ยนสถานะเป็น ${briefing.Status || 'อัปเดตใหม่'}`;
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body, icon: '/favicon.ico', tag: `briefing-${id}` });
     }

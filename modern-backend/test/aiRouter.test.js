@@ -341,7 +341,7 @@ test('work score questions are recognised; general score questions are not', () 
   for (const question of ['คะแนน', 'คะแนนของฉันเท่าไหร่', 'แพทมีคะแนนสะสมเดือนนี้เท่าไหร่', 'สรุปคะแนนทีมของฉัน', 'ผมขาดอีกกี่แต้ม', 'my score this month']) {
     assert.equal(isWorkScoreQuestion(question), true, question);
   }
-  for (const question of ['คะแนนสอบ TOEIC 600 ถือว่าดีไหม', 'งานค้างของฉัน', 'สรุปงานทั้งหมดของฉัน', '', null]) {
+  for (const question of ['คะแนนสอบ TOEIC 600 ถือว่าดีไหม', 'ผมได้ 900 คะแนน TOEIC ถือว่าดีไหม', 'ทีมฟุตบอลไทยได้กี่แต้มเมื่อคืน', 'งานค้างของฉัน', 'สรุปงานทั้งหมดของฉัน', '', null]) {
     assert.equal(isWorkScoreQuestion(question), false, String(question));
   }
 });

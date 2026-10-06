@@ -498,7 +498,7 @@ function isSelfReference(question) {
 // alone, or with a person, self, team or briefing reference, is a work-score
 // question. "คะแนนสอบ TOEIC เท่าไหร่ดี" stays a general question.
 const SCORE_WORDS = /(?:คะแนน|แต้ม|\bscores?\b|\bpoints?\b)/iu;
-const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|ฉัน|ผม|ตัวเอง|ทีม|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|\bmy\b)/iu;
+const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|คะแนนฉัน|คะแนนผม|ตัวเอง|ทีมของฉัน|ทีมของผม|ทีมเรา|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|\bmy\b)/iu;
 
 function isWorkScoreQuestion(question) {
   const text = String(question || '').trim();

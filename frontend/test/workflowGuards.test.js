@@ -605,3 +605,41 @@ test('a brief with nobody assigned can be claimed by anyone until it is closed',
   assert.equal(canClaimBriefing({ briefing: { Status: 'รอดำเนินการ', Assignees: [] }, userId: '' }), false);
   assert.equal(describeReviewError({ message: 'This briefing already has an assignee' }), 'งานนี้มีคนรับไปแล้ว กรุณารีเฟรชรายการ');
 });
+
+test('a claimed brief counts as received on its claim day, never twice', () => {
+  const briefings = [
+    { ID: 'p1', CreatorID: 'boss', Assignees: ['a'], Status: 'รอดำเนินการ', CreatedAt: '2026-10-05T02:00:00Z' },
+    { ID: 'p2', CreatorID: 'boss', Assignees: ['b'], Status: 'กำลังทำ', CreatedAt: '2026-10-06T02:00:00Z' },
+  ];
+  const claims = [
+    { BriefingID: 'p1', TargetUserIDs: ['a'], CreatedAt: '2026-10-06T03:00:00Z' },
+    { BriefingID: 'p2', TargetUserIDs: '["b"]', CreatedAt: '2026-10-06T04:00:00Z' },
+    { BriefingID: 'gone', TargetUserIDs: ['a'], CreatedAt: '2026-10-06T04:00:00Z' },
+  ];
+  const today = Object.fromEntries(summarizeBriefingDay({ briefings, claims, dateKey: '2026-10-06' }).map((row) => [row.userId, row]));
+  assert.equal(today.a.received.length, 1);
+  assert.equal(today.a.claimed, 1);
+  // Created and claimed the same day: one received, not two.
+  assert.equal(today.b.received.length, 1);
+  assert.equal(today.b.claimed, 1);
+  // The brief created the day before is not "received" on its creation day.
+  const yesterday = summarizeBriefingDay({ briefings, claims, dateKey: '2026-10-05' });
+  assert.deepEqual(yesterday.map((row) => [row.userId, row.received.length]), [['boss', 0]]);
+  assert.deepEqual(summarizeBriefingDay({ briefings, claims: null, dateKey: '2026-10-06' }).find((row) => row.userId === 'b').received.length, 1);
+});
+
+test('the person who briefed the work may claim their own unassigned brief', () => {
+  const brief = { CreatorID: 'boss', Assignees: [], Status: 'รอดำเนินการ' };
+  assert.equal(canClaimBriefing({ briefing: brief, userId: 'boss' }), true);
+  // Once claimed they are creator and assignee: the self-assigned rules apply,
+  // so they keep the brief's content and can send their own work to review.
+  const claimed = { ...brief, Assignees: ['boss'] };
+  assert.equal(canClaimBriefing({ briefing: claimed, userId: 'boss' }), false);
+  assert.equal(canEditBriefingContent({ briefing: claimed, userId: 'boss', isAdmin: false, isDepartmentHead: false }), true);
+  assert.equal(canEditBriefingStatus({ briefing: claimed, userId: 'boss', isAdmin: false }), true);
+  assert.equal(canStartBriefingWork({ briefing: claimed, userId: 'boss' }), true);
+  // A claimer who did not brief it edits only their delivery.
+  const taken = { ...brief, Assignees: ['worker'] };
+  assert.equal(canEditBriefingContent({ briefing: taken, userId: 'worker', isAdmin: false, isDepartmentHead: false }), false);
+  assert.equal(canEditBriefingContent({ briefing: taken, userId: 'boss', isAdmin: false, isDepartmentHead: false }), true);
+});
