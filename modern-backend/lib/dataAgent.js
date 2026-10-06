@@ -1,5 +1,5 @@
 const ALLOWED_DATASETS = new Set(['tasks', 'briefings', 'team']);
-const ALLOWED_ACTIONS = new Set(['count', 'list', 'summarize', 'compare', 'score_gap']);
+const ALLOWED_ACTIONS = new Set(['count', 'list', 'summarize', 'compare']);
 const ALLOWED_STATUSES = new Set([
   'ยังไม่เริ่ม', 'รอดำเนินการ', 'กำลังทำ', 'ส่งตรวจ', 'รอตรวจ',
   'สั่งแก้ไข', 'สั่งเพิ่มงาน', 'รอแก้ไข', 'แก้ไข', 'เสร็จสิ้น', 'ยกเลิกงาน',
@@ -48,16 +48,9 @@ function validateDataPlan(raw) {
   const fromDate = validIsoDate(raw.fromDate) ? raw.fromDate : null;
   const toDate = validIsoDate(raw.toDate) ? raw.toDate : null;
   const status = ALLOWED_STATUSES.has(raw.status) ? raw.status : null;
-  const hasTargetPoints = raw.targetPoints !== null && raw.targetPoints !== undefined && raw.targetPoints !== '';
-  const targetPoints = hasTargetPoints && Number.isFinite(Number(raw.targetPoints)) && Number(raw.targetPoints) >= 0
-    ? Math.min(Number(raw.targetPoints), 1000000)
-    : null;
   const clarification = cleanText(raw.clarification, 240) || null;
 
   if ((fromDate && !toDate) || (!fromDate && toDate) || (fromDate && fromDate > toDate)) return null;
-  if (action === 'score_gap' && targetPoints === null && !clarification) {
-    return { dataset, action, people, fromDate, toDate, status, keyword: null, targetPoints, clarification: 'ต้องการให้เทียบกับเป้าหมายกี่คะแนน?' };
-  }
   return {
     dataset,
     action,
@@ -66,7 +59,6 @@ function validateDataPlan(raw) {
     toDate,
     status,
     keyword: cleanText(raw.keyword, 100) || null,
-    targetPoints,
     clarification,
   };
 }
@@ -82,13 +74,12 @@ async function requestDataPlan({ providerUrl, apiKey, model, question, messages,
     `วันที่ประเทศไทยปัจจุบัน: ${currentDate}`,
     'โครงสร้างที่อนุญาต:',
     '- tasks: Tasks(ID, Detail, Status, Priority, StartDate, DueDate, UserID, StaffName, Department, CompletedAt)',
-    '- briefings: Briefings(ID, Title, Detail, CreatorID, Assignees, Status, StartDate, DueDate, CompletedAt, Points) และ BriefingResponses',
-    '- team: คะแนนและจำนวนบรีฟ โดยใช้สูตรเดียวกับหน้า My Team',
-    'คืนฟิลด์: dataset(tasks|briefings|team), action(count|list|summarize|compare|score_gap), people(string[]), fromDate, toDate, status, keyword, targetPoints, clarification',
+    '- briefings: Briefings(ID, Title, Detail, CreatorID, Assignees, Status, StartDate, DueDate, CompletedAt) และ BriefingResponses',
+    '- team: จำนวนบรีฟรายคน (รับมอบ/มอบหมาย แยกสถานะ) เหมือนหน้า My Team',
+    'คืนฟิลด์: dataset(tasks|briefings|team), action(count|list|summarize|compare), people(string[]), fromDate, toDate, status, keyword, clarification',
     'กติกา: แปลงวันนี้/ย้อนหลัง/ล่วงหน้า/เดือนก่อน/ช่วงวันเป็น YYYY-MM-DD โดยอิงวันที่ปัจจุบัน',
     'คำว่า ฉัน/ผม/ตัวเอง ให้ people=["__SELF__"] ชื่อหลายคนให้ใส่ครบทุกคน รวมชื่อเล่นตามข้อความเดิม',
-    'คะแนนใช้ dataset=team; งานทั่วไปใช้ tasks; คำว่าบรีฟใช้ briefings',
-    'ถ้าถามขาดอีกกี่คะแนนแต่ไม่มีเป้าหมาย ให้ action=score_gap, targetPoints=null และ clarification ถามเป้าหมาย',
+    'จำนวนบรีฟรายคนของทีมใช้ dataset=team; งานทั่วไปใช้ tasks; คำว่าบรีฟใช้ briefings; ระบบไม่ตอบเรื่องคะแนน',
     'ห้ามสร้าง SQL ห้ามเลือกตารางหรือคอลัมน์อื่น ห้ามวางแผน INSERT/UPDATE/DELETE',
     `คำถามล่าสุด: ${cleanText(question, 1000)}`,
     `บทสนทนาล่าสุด: ${JSON.stringify(recentConversation)}`,

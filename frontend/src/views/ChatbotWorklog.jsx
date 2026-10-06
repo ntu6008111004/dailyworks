@@ -42,12 +42,12 @@ function createNewRoom(name) {
 
 // ─── Suggestion Chips ────────────────────────────────────────────────────────
 const SUGGESTIONS = [
-  { text: '🏆 คะแนนของฉัน', query: 'คะแนนสะสมของฉันเท่าไหร่' },
+  { text: '📅 งานของฉันวันนี้', query: 'สรุปหัวข้องานของฉันที่ตรงกับวันนี้ แยกตามสถานะ' },
   { text: '📊 สรุปงานทั้งหมดในระบบ', query: 'สรุปงานทั้งหมดที่บันทึกในระบบ แยกตามสถานะ' },
   { text: '📊 สรุปงานทั้งหมดวันนี้', query: 'สรุปงานทั้งหมดวันนี้' },
   { text: '⏳ มีงานค้างกี่งาน?', query: 'มีงานค้างกี่งานตอนนี้' },
   { text: '👥 สรุปงานรายบุคคล', query: 'สรุปงานรายบุคคลในทีม' },
-  { text: '📝 สรุปบรีฟงานสัปดาห์นี้', query: 'สรุปบรีฟงานสัปดาห์นี้ทั้งหมด พร้อมคะแนนรวม' },
+  { text: '📝 สรุปบรีฟงานสัปดาห์นี้', query: 'สรุปบรีฟงานสัปดาห์นี้ทั้งหมด แยกตามสถานะ' },
   { text: '🔍 ค้นหาข้อมูลทั่วไป', query: 'React hooks คืออะไร อธิบายให้เข้าใจง่าย' },
   { text: '📝 สรุปข้อความที่วาง', query: 'สรุปข้อความต่อไปนี้เป็นประเด็นสำคัญ สิ่งที่ต้องทำต่อ และกำหนดเวลา:\n\n[วางข้อความที่นี่]' },
   { text: '🐱 ทักทาย AI', query: 'สวัสดีครับ แนะนำตัวหน่อย' },
@@ -264,7 +264,7 @@ export const ChatbotWorklog = () => {
             <span className="knowledge-copy">
               <strong>ถามข้อมูลในระบบ</strong>
               <small>ระบุคน ช่วงเวลา สถานะ หรือชื่อโปรเจกต์ ตัวเลขจะมาจากฐานข้อมูลตามสิทธิ์</small>
-              <button className="knowledge-example" onClick={() => { setInput('คะแนนสะสมของฉันเดือน 07/2026 เท่าไหร่'); textareaRef.current?.focus(); }}>ลอง: คะแนนของฉันรายเดือน</button>
+              <button className="knowledge-example" onClick={() => { setInput('สรุปบรีฟของฉันเดือน 07/2026 แยกตามสถานะ'); textareaRef.current?.focus(); }}>ลอง: บรีฟของฉันรายเดือน</button>
             </span>
           </div>
           <div className="knowledge-card web-guide">
@@ -294,7 +294,7 @@ export const ChatbotWorklog = () => {
             <span className="kc-icon">💬</span>
             <span className="knowledge-copy">
               <strong>พิมพ์สั้นหรือเลือกปุ่มได้</strong>
-              <small>พิมพ์ “งาน”, “คะแนน” หรือ “บรีฟ” ได้ หากยังไม่ชัด CatLog AI จะถามกลับพร้อมตัวเลือก ไม่เดาตัวเลขเอง</small>
+              <small>พิมพ์ “งาน”, “งานค้าง” หรือ “บรีฟ” ได้ หากยังไม่ชัด CatLog AI จะถามกลับพร้อมตัวเลือก ไม่เดาตัวเลขเอง</small>
             </span>
           </div>
           <div className="knowledge-note">หากข้อมูลไม่พอ ระบบจะถามกลับ · แชทเก็บในเครื่อง · จำกัด 60 ครั้ง/นาที</div>
@@ -484,7 +484,7 @@ export const ChatbotWorklog = () => {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="พิมพ์สั้น ๆ ได้ เช่น งานผม, คะแนน, งานค้าง หรือเลือกปุ่มด้านบน…"
+                  placeholder="พิมพ์สั้น ๆ ได้ เช่น งานผม, บรีฟ, งานค้าง หรือเลือกปุ่มด้านบน…"
                   rows={1}
                   disabled={isLoading}
                   onInput={(e) => {

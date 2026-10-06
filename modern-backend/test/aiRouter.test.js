@@ -24,7 +24,7 @@ const {
   shouldSearchExternal,
   taskMetrics,
 } = require('../aiRouter');
-const { detectWorkDataset, detectWorkIntent, isHypotheticalOrCalculation, verifySession } = require('../lib/aiSecurity');
+const { detectWorkDataset, detectWorkIntent, isHypotheticalOrCalculation, isWorkScoreQuestion, SCORE_REDIRECT_ANSWER, verifySession } = require('../lib/aiSecurity');
 
 const SECRET = 'router-test-session-secret-with-32-characters';
 
@@ -211,19 +211,19 @@ test('dashboard filters only narrow a chatbot query and can be explicitly bypass
   );
 });
 
-test('team score summary uses the MyTeam values rather than an LLM estimate', () => {
+test('team summary lists per-person briefing counts and never a score', () => {
   const summary = formatTeamSummary({
     teamFilters: {},
     teamMetrics: {
       members: [{
         name: 'แพท (ณัฐนันท์ ปาแก้ว)',
-        totalPoints: 183,
         received: { completed: 1, inProgress: 0, notStarted: 0 },
         assigned: { completed: 43, inProgress: 2, notStarted: 7 },
       }],
     },
   });
-  assert.match(summary, /คะแนนสะสม 183 คะแนน/);
+  assert.doesNotMatch(summary, /คะแนน/);
+  assert.match(summary, /👤 แพท \(ณัฐนันท์ ปาแก้ว\)/);
   assert.match(summary, /รับมอบ 1 \| มอบหมาย 43/);
   assert.match(summary, /บรีฟดำเนินการ: รับมอบ 0 \| มอบหมาย 2/);
   assert.match(summary, /บรีฟยังไม่เริ่ม: รับมอบ 0 \| มอบหมาย 7/);
@@ -244,13 +244,14 @@ test('RBAC denial explains that Staff can query only their own account data', ()
   }, { Role: 'Staff', Name: 'ผู้ทดสอบ', Department: 'Marketing' });
   assert.match(summary, /ไม่มีสิทธิ์เข้าถึงข้อมูลพนักงาน/);
   assert.match(summary, /Staff ดูได้เฉพาะข้อมูลของตนเอง/);
-  assert.match(summary, /คะแนนของฉันเท่าไหร่/);
+  assert.match(summary, /งานค้างของฉัน/);
+  assert.doesNotMatch(summary, /คะแนน/);
 });
 
-test('CatLog AI routes dashboard, briefing, and score questions to different trusted datasets', () => {
+test('CatLog AI routes dashboard, briefing, and team questions to different trusted datasets', () => {
   assert.equal(detectWorkDataset('แพทมีงานทั้งหมดเท่าไหร่'), 'tasks');
   assert.equal(detectWorkDataset('งานในหน้าบรีฟทั้งหมดมีกี่งาน'), 'briefings');
-  assert.equal(detectWorkDataset('แพทมีคะแนนสะสมเท่าไหร่'), 'team');
+  assert.equal(detectWorkDataset('สรุปบรีฟทีมของฉัน'), 'team');
   assert.equal(detectWorkDataset('แพทรับมอบบรีฟเสร็จกี่งาน'), 'team');
   assert.equal(detectWorkIntent('หน้าบรีฟมีเท่าไหร่'), 'summary');
 });
@@ -320,21 +321,64 @@ test('task date ranges use Daily Summary overlap semantics', () => {
   ]);
 });
 
-test('data agent compares multiple employees and calculates score gaps from an explicit target', () => {
+test('data agent compares multiple employees by briefing counts only', () => {
   const summary = formatTeamSummary({
-    agentPlan: { action: 'score_gap', targetPoints: 500 },
+    agentPlan: { action: 'compare' },
     teamFilters: { fromDate: '2026-07-01', toDate: '2026-07-31', staffNames: ['แพท', 'เหมี่ยว'] },
     teamMetrics: {
       members: [
-        { name: 'แพท', totalPoints: 183, received: { completed: 1, inProgress: 0, notStarted: 0 }, assigned: { completed: 4, inProgress: 2, notStarted: 1 } },
-        { name: 'เหมี่ยว', totalPoints: 210, received: { completed: 2, inProgress: 0, notStarted: 0 }, assigned: { completed: 5, inProgress: 1, notStarted: 0 } },
+        { name: 'แพท', received: { completed: 1, inProgress: 0, notStarted: 0 }, assigned: { completed: 4, inProgress: 2, notStarted: 1 } },
+        { name: 'เหมี่ยว', received: { completed: 2, inProgress: 0, notStarted: 0 }, assigned: { completed: 5, inProgress: 1, notStarted: 0 } },
       ],
     },
   });
   assert.match(summary, /พนักงาน แพท, เหมี่ยว/);
-  assert.match(summary, /แพท: คะแนนสะสม 183 คะแนน/);
-  assert.match(summary, /ขาดอีก 317 คะแนน เพื่อถึงเป้า 500 คะแนน/);
-  assert.match(summary, /ขาดอีก 290 คะแนน เพื่อถึงเป้า 500 คะแนน/);
+  assert.match(summary, /👤 เหมี่ยว\n- บรีฟเสร็จสิ้น: รับมอบ 2 \| มอบหมาย 5/);
+  assert.doesNotMatch(summary, /คะแนน|ขาดอีก/);
+});
+
+test('work score questions are recognised; general score questions are not', () => {
+  for (const question of ['คะแนน', 'คะแนนของฉันเท่าไหร่', 'แพทมีคะแนนสะสมเดือนนี้เท่าไหร่', 'สรุปคะแนนทีมของฉัน', 'ผมขาดอีกกี่แต้ม', 'my score this month']) {
+    assert.equal(isWorkScoreQuestion(question), true, question);
+  }
+  for (const question of ['คะแนนสอบ TOEIC 600 ถือว่าดีไหม', 'งานค้างของฉัน', 'สรุปงานทั้งหมดของฉัน', '', null]) {
+    assert.equal(isWorkScoreQuestion(question), false, String(question));
+  }
+});
+
+test('AI chat endpoint answers a score question with a fixed redirect and never calls the model', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    let modelCalls = 0;
+    globalThis.fetch = async (url, options) => {
+      if (typeof url === 'string' && url.includes('thaillm.or.th')) {
+        modelCalls += 1;
+        return { ok: true, json: async () => ({ choices: [{ message: { content: 'คุณมี 120 คะแนน' } }] }) };
+      }
+      return originalFetch(url, options);
+    };
+
+    await withServer(async (baseUrl) => {
+      const sessionRes = await fetch(`${baseUrl}/api/ai/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: 'user-1' }),
+      });
+      const { data: { token } } = await sessionRes.json();
+      const chatRes = await fetch(`${baseUrl}/api/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'คะแนนสะสมของฉันเดือนนี้เท่าไหร่' }] }),
+      });
+      assert.equal(chatRes.status, 200);
+      const chatData = await chatRes.json();
+      assert.equal(chatData.data.answer, SCORE_REDIRECT_ANSWER);
+      assert.equal(chatData.data.deterministic, true);
+      assert.equal(modelCalls, 0);
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('short follow-up questions retain the previous current-year web topic', () => {

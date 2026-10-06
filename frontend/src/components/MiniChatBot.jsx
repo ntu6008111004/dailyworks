@@ -357,7 +357,7 @@ export const MiniChatBot = () => {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="พิมพ์สั้น ๆ เช่น งานผม, คะแนน…"
+              placeholder="พิมพ์สั้น ๆ เช่น งานผม, งานค้าง…"
               rows={1}
               disabled={isLoading}
             />

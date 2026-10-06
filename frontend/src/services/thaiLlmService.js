@@ -499,7 +499,6 @@ const QUICK_ACTIONS = [
   { id: 'my-all-work', label: '📊 งานทั้งหมดของฉัน', query: 'สรุปงานทั้งหมดของฉันทุกช่วงเวลาตั้งแต่เริ่มบันทึก แยกตามสถานะ' },
   { id: 'my-today-work', label: '📅 งานของฉันวันนี้', query: 'สรุปหัวข้องานของฉันที่ตรงกับวันนี้ แยกตามสถานะ' },
   { id: 'my-pending-work', label: '⏳ งานค้างของฉัน', query: 'สรุปเฉพาะหัวข้องานของฉันที่ยังไม่เสร็จทุกช่วงเวลา แยกตามสถานะ' },
-  { id: 'my-score', label: '🏆 คะแนนของฉัน', query: 'สรุปคะแนนสะสมของฉันทุกช่วงเวลาตั้งแต่เริ่มบันทึก พร้อมจำนวนบรีฟแต่ละสถานะ' },
   { id: 'my-briefs', label: '📝 บรีฟของฉัน', query: 'สรุปบรีฟทั้งหมดของฉันทุกช่วงเวลาตั้งแต่เริ่มบันทึก แยกตามสถานะ' },
   { id: 'latest-news', label: '🌐 ข่าวล่าสุด', query: 'สรุปข่าวสำคัญล่าสุดวันนี้จากหลายแหล่ง ระบุวันที่เกิดเหตุและแหล่งข้อมูลท้ายคำตอบ' },
   { id: 'summarize-text', label: '✍️ สรุปข้อความ', query: 'สรุปข้อความต่อไปนี้เป็นหัวข้อสำคัญ สิ่งที่ต้องทำ ผู้รับผิดชอบ และกำหนดส่ง:\n\n[วางข้อความที่นี่]' },
@@ -508,10 +507,6 @@ const QUICK_ACTIONS = [
 
 const CLARIFICATION_CHOICES = {
   work: QUICK_ACTIONS.filter(action => ['my-all-work', 'my-today-work', 'my-pending-work'].includes(action.id)),
-  score: [
-    QUICK_ACTIONS.find(action => action.id === 'my-score'),
-    { id: 'my-score-month', label: '🏆 คะแนนเดือนนี้', query: 'สรุปคะแนนสะสมของฉันเฉพาะเดือนปัจจุบัน พร้อมจำนวนบรีฟแต่ละสถานะ' },
-  ],
   briefing: [
     QUICK_ACTIONS.find(action => action.id === 'my-briefs'),
     { id: 'my-briefs-week', label: '📝 บรีฟสัปดาห์นี้', query: 'สรุปบรีฟของฉันสัปดาห์นี้ แยกตามสถานะ' },
@@ -531,15 +526,27 @@ function compactThaiInput(value) {
     .trim();
 }
 
+// Same rule as isWorkScoreQuestion() in modern-backend/lib/aiSecurity.js:
+// CatLog AI never answers staff or briefing scores. The server repeats this
+// check; answering here only saves a round trip.
+export const SCORE_REDIRECT_ANSWER = 'CatLog AI ไม่ตอบเรื่องคะแนนครับ ดูคะแนนของคุณได้ที่หน้า “ภาพรวม” หัวหน้าดูคะแนนของทีมได้ที่หน้า “บุคคลในทีม” ถามเรื่องงานได้ตามปกติเลย';
+const SCORE_WORDS = /(?:คะแนน|แต้ม|\bscores?\b|\bpoints?\b)/iu;
+const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|ฉัน|ผม|ตัวเอง|ทีม|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|แพท|แพด|เหมี่ยว|กีต้า|พอร์มเตอร์|โม|ฟลุ๊ค|ฟลุค|บัส|บอส|เติ้ล|มาย|\bmy\b)/iu;
+
+export function isWorkScoreQuestion(question) {
+  const text = compactThaiInput(question);
+  if (!SCORE_WORDS.test(text)) return false;
+  return text.length <= 16 || SCORE_CONTEXT.test(text);
+}
+
 function clarificationFor(question) {
   const text = compactThaiInput(question).toLowerCase();
+  if (isWorkScoreQuestion(text)) return { answer: SCORE_REDIRECT_ANSWER, suggestions: CLARIFICATION_CHOICES.work };
   const exactWork = /^(?:งาน|งานผม|งานฉัน|งานของผม|งานของฉัน|ของผม|ของฉัน|มีกี่งาน)$/u.test(text);
-  const exactScore = /^(?:คะแนน|แต้ม|คะแนนผม|คะแนนฉัน|คะแนนของผม|คะแนนของฉัน)$/u.test(text);
   const exactBriefing = /^(?:บรีฟ|บรีฟผม|บรีฟฉัน|บรีฟของผม|บรีฟของฉัน)$/u.test(text);
   const exactSummary = /^(?:สรุป|ช่วยสรุป|สรุปให้หน่อย)$/u.test(text);
   const personOnly = text.match(/^(แพท|แพด|เหมี่ยว|กีต้า|พอร์มเตอร์|โม|ฟลุ๊ค|ฟลุค|บัส|บอส|เติ้ล|มาย)$/u);
   if (exactWork) return { answer: 'ต้องการดูงานแบบไหนครับ? เลือกได้เลย เพื่อให้ CatLog AI ใช้ช่วงเวลาและสถานะได้ถูกต้อง', suggestions: CLARIFICATION_CHOICES.work };
-  if (exactScore) return { answer: 'ต้องการดูคะแนนช่วงไหนครับ? ถ้าไม่เลือกเดือน ระบบจะสรุปคะแนนสะสมทั้งหมดของบัญชีคุณ', suggestions: CLARIFICATION_CHOICES.score };
   if (exactBriefing) return { answer: 'ต้องการดูบรีฟทั้งหมดหรือเฉพาะสัปดาห์นี้ครับ?', suggestions: CLARIFICATION_CHOICES.briefing };
   if (exactSummary) return { answer: 'ต้องการให้สรุปอะไรครับ? เลือกรูปแบบด้านล่าง หรือพิมพ์รายละเอียดต่อได้เลย', suggestions: CLARIFICATION_CHOICES.summary };
   if (personOnly) {
@@ -548,7 +555,6 @@ function clarificationFor(question) {
       answer: `ต้องการดูข้อมูลอะไรของ “${name}” ครับ? ระบบจะตรวจสิทธิ์ก่อนค้นทุกครั้ง`,
       suggestions: [
         { id: `${name}-work`, label: '📊 งานทั้งหมด', query: `สรุปงานทั้งหมดทุกช่วงเวลาของ ${name} แยกตามสถานะ` },
-        { id: `${name}-score`, label: '🏆 คะแนน', query: `สรุปคะแนนสะสมทั้งหมดของ ${name} พร้อมจำนวนบรีฟแต่ละสถานะ` },
         { id: `${name}-brief`, label: '📝 บรีฟ', query: `สรุปบรีฟทั้งหมดของ ${name} แยกตามสถานะ` },
       ],
     };
@@ -569,7 +575,6 @@ function inferUserIntent(messages) {
   const hasStatusScope = /(?:ค้าง|ยังไม่|ไม่เสร็จ|เสร็จ|รอตรวจ|กำลังทำ|ยังไม่เริ่ม|ยกเลิก|เกินกำหนด)/u.test(text);
   const selfReference = /(?:ฉัน|ผม|ตัวเอง|ของเรา|บัญชีนี้|ของกู)/u.test(text);
   const workReference = /(?:งาน|worklog|เวิร์กล็อก)/u.test(text);
-  const scoreReference = /(?:คะแนน|แต้ม|score)/u.test(text);
   const briefingReference = /(?:บรีฟ|brief)/u.test(text);
   const latestMessageIsFollowUp = latest.length <= 100 && /^(?:แล้ว|งั้น|ถ้า|ไม่ใช่|หมายถึง|ของผม|ของฉัน|ตัวเอง|เอา|ดู|ขอ)/u.test(latest);
   const hints = [];
@@ -582,9 +587,6 @@ function inferUserIntent(messages) {
   }
   if (workReference && /(?:ค้าง|เหลือ|ยังไม่เสร็จ|ยังไม่ได้ทำ|ต้องทำ)/u.test(text)) {
     hints.push('ตีความเป็นงานที่ยังไม่เสร็จ และแยกสถานะให้เห็นชัด');
-  }
-  if (scoreReference && selfReference) {
-    hints.push('ใช้รหัสพนักงานจาก session ของบัญชีที่เข้าสู่ระบบ ห้ามค้นด้วยการเดาชื่อ');
   }
   if (briefingReference && selfReference) {
     hints.push('ใช้รหัสพนักงานจาก session และค้นข้อมูลบรีฟตามสิทธิ์ของบัญชี');
@@ -642,13 +644,12 @@ async function _fetchClientWorkSummaryContext() {
     );
 
     const completedBriefs = myBriefs.filter(b => b.Status === 'เสร็จสิ้น');
-    const totalScore = completedBriefs.reduce((sum, b) => sum + (Number(b.Points) || 0), 0);
 
     return [
       `[ข้อมูลสรุปจากฐานข้อมูล WorkLogs สำหรับผู้ใช้: ${userName} (ID ${userId}) ณ วันที่ ${bkkDate}]`,
       `- จำนวนงานทั้งหมดของคุณ: ${myTasks.length} งาน (เสร็จสิ้น: ${completedTasks.length}, งานค้าง/กำลังทำ: ${pendingTasks.length})`,
       `- งานของคุณในวันนี้ (${bkkDate}): ${todayTasks.length} งาน`,
-      `- คะแนนสะสมรวมทั้งหมดจากงานบรีฟ: ${totalScore} คะแนน (จากบรีฟที่เสร็จสิ้น ${completedBriefs.length}/${myBriefs.length} รายการ)`,
+      `- บรีฟของคุณ: ${myBriefs.length} รายการ (เสร็จสิ้น ${completedBriefs.length})`,
       todayTasks.length > 0 ? `- รายการงานวันนี้:\n${todayTasks.slice(0, 10).map(t => `  • [${t.Status || 'รอดำเนินการ'}] ${t.Detail || t.Title}`).join('\n')}` : '- วันนี้ไม่มีรายการงานใหม่',
       pendingTasks.length > 0 ? `- รายการงานค้างอยู่:\n${pendingTasks.slice(0, 10).map(t => `  • [${t.Status || 'ค้าง'}] ${t.Detail || t.Title}`).join('\n')}` : '- ไม่มีงานค้าง',
     ].join('\n');
@@ -676,8 +677,8 @@ function applyAllTimeScope(messages) {
   if (!hasAllTimeIntent(messages)) return { messages, dashboardFilters: undefined };
   const contextualQuestion = clientRoutingText(messages);
   const lower = contextualQuestion.toLowerCase();
-  const scopeLabel = /(?:คะแนน|แต้ม|บรีฟ|brief|score)/u.test(lower)
-    ? 'ข้อมูลบรีฟและคะแนนทุกช่วงเวลาตั้งแต่เริ่มบันทึก'
+  const scopeLabel = /(?:บรีฟ|brief)/u.test(lower)
+    ? 'ข้อมูลบรีฟทุกช่วงเวลาตั้งแต่เริ่มบันทึก'
     : 'งานทุกช่วงเวลาตั้งแต่เริ่มบันทึก';
   const scoped = messages.map((message, index) => index === messages.length - 1
     ? {
@@ -696,7 +697,7 @@ function needsTrustedWorkData(messages) {
     .some(term => question.includes(term)) && question.length >= 350;
   if (isPastedSummary) return false;
   return [
-    'งาน', 'worklog', 'dashboard', 'แดชบอร์ด', 'บรีฟ', 'briefing', 'คะแนน',
+    'งาน', 'worklog', 'dashboard', 'แดชบอร์ด', 'บรีฟ', 'briefing',
     'พนักงาน', 'ทีม', 'แพท', 'เหมี่ยว', 'กีต้า', 'พอร์มเตอร์', 'โม', 'ฟลุ๊ค',
     'บัส', 'บอส', 'เติ้ล', 'มาย',
   ].some(term => question.includes(term));

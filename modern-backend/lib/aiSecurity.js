@@ -230,7 +230,7 @@ const WORK_TERMS = [
   'แดชบอร์ด', 'dashboard', 'ในระบบ', 'ที่บันทึก', 'รายการงาน', 'จำนวนงาน',
   'งานทั้งหมด', 'งานของฉัน', 'งานของผม', 'งานของทีม', 'งานของเรา', 'งานค้าง',
   'กำลังทำ', 'เสร็จ', 'รอตรวจ', 'รอแก้ไข', 'deadline', 'กำหนดส่ง', 'มอบหมาย',
-  'โปรเจค', 'โปรเจกต์', 'โปรเจ็กต์', 'project', 'แผนก', 'department', 'คะแนน', 'point', 'ผู้รับผิดชอบ',
+  'โปรเจค', 'โปรเจกต์', 'โปรเจ็กต์', 'project', 'แผนก', 'department', 'ผู้รับผิดชอบ',
 ];
 
 const SUMMARY_TERMS = [
@@ -260,7 +260,7 @@ function hasInternalWorkEvidence(question) {
     'worklog', 'แดชบอร์ด', 'dashboard', 'ในระบบ', 'ที่บันทึก', 'รายการงาน',
     'งานทั้งหมด', 'งานวันนี้', 'งานของฉัน', 'งานของผม', 'งานฉัน', 'งานผม',
     'งานของทีม', 'งานของเรา', 'งานค้าง', 'กี่งาน', 'จำนวนงาน', 'สรุปงาน',
-    'บรีฟ', 'briefing', 'คะแนนสะสม', 'คะแนนของฉัน', 'คะแนนของผม',
+    'บรีฟ', 'briefing',
     'สถานะงาน', 'กำลังทำ', 'รอตรวจ', 'รอแก้ไข', 'กำหนดส่ง', 'มอบหมาย',
     'แผนก', 'ผู้รับผิดชอบ',
   ];
@@ -465,11 +465,11 @@ function detectWorkIntent(question) {
 
 // Route internal questions to the same data product the user is referring to.
 // Keeping this deterministic prevents the model from confusing Tasks on the
-// Dashboard with Briefings or the score calculation on My Team.
+// Dashboard with Briefings or the per-person briefing counts on My Team.
 function detectWorkDataset(question) {
   const lower = String(question || '').toLowerCase();
   const teamTerms = [
-    'คะแนน', 'คะแนนสะสม', 'point', 'score', 'ทีมของฉัน', 'my team',
+    'ทีมของฉัน', 'my team',
     'รับมอบ', 'ผู้รับมอบ', 'ผู้มอบหมาย', 'มอบหมายกี่', 'ผลงานของทีม',
   ];
   if (teamTerms.some(term => lower.includes(term))) return 'team';
@@ -482,15 +482,38 @@ function detectWorkDataset(question) {
 
 function isSelfReference(question) {
   const lower = String(question || '').toLowerCase();
-  const strongSelfTerms = ['ตัวฉัน', 'ตัวผม', 'ตัวเอง', 'ของตัวเอง', 'คะแนนฉัน', 'คะแนนผม', 'ฉันมี', 'ผมมี', 'แล้วฉันล่ะ', 'แล้วผมล่ะ'];
+  const strongSelfTerms = ['ตัวฉัน', 'ตัวผม', 'ตัวเอง', 'ของตัวเอง', 'ฉันมี', 'ผมมี', 'แล้วฉันล่ะ', 'แล้วผมล่ะ'];
   const teamReference = ['ทีมของฉัน', 'ทีมของผม', 'ทีมผม', 'my team'].some(term => lower.includes(term));
   if (teamReference && !strongSelfTerms.some(term => lower.includes(term))) return false;
   return [
     'ของฉัน', 'ของผม', 'ตัวฉัน', 'ตัวผม', 'ตัวเอง', 'ของตัวเอง',
-    'คะแนนฉัน', 'คะแนนผม', 'งานฉัน', 'งานผม', 'บรีฟฉัน', 'บรีฟผม',
-    'ฉันมี', 'ผมมี', 'แล้วฉันล่ะ', 'แล้วผมล่ะ', 'my score', 'my task', 'my work',
+    'งานฉัน', 'งานผม', 'บรีฟฉัน', 'บรีฟผม',
+    'ฉันมี', 'ผมมี', 'แล้วฉันล่ะ', 'แล้วผมล่ะ', 'my task', 'my work',
   ].some(term => lower.includes(term));
 }
+
+// CatLog AI does not answer questions about staff or briefing scores. Scores
+// live only on the Dashboard and My Team pages, where the reviewer's numbers
+// are shown as they are; a chatbot restating them can only drift. A score word
+// alone, or with a person, self, team or briefing reference, is a work-score
+// question. "คะแนนสอบ TOEIC เท่าไหร่ดี" stays a general question.
+const SCORE_WORDS = /(?:คะแนน|แต้ม|\bscores?\b|\bpoints?\b)/iu;
+const SCORE_CONTEXT = /(?:สะสม|ของฉัน|ของผม|ฉัน|ผม|ตัวเอง|ทีม|บรีฟ|brief|พนักงาน|ลูกน้อง|ขาดอีก|เป้า|ผู้รับ|ผู้บรีฟ|\bmy\b)/iu;
+
+function isWorkScoreQuestion(question) {
+  const text = String(question || '').trim();
+  if (!SCORE_WORDS.test(text)) return false;
+  if (text.length <= 16) return true;
+  const lower = text.toLowerCase();
+  return SCORE_CONTEXT.test(text)
+    || STAFF_ALIASES.some(item => item.aliases.some(alias => matchStaffAlias(lower, alias)));
+}
+
+const SCORE_REDIRECT_ANSWER = [
+  '🔒 CatLog AI ไม่ตอบเรื่องคะแนนครับ',
+  'ดูคะแนนของคุณได้ที่หน้า “ภาพรวม” หัวหน้าดูคะแนนของทีมได้ที่หน้า “บุคคลในทีม”',
+  'ถามเรื่องงานได้ตามปกติ เช่น “งานค้างของฉัน”, “งานวันนี้” หรือ “สรุปบรีฟสัปดาห์นี้”',
+].join('\n');
 
 function isWorkRelated(question) {
   return detectWorkIntent(question) !== 'none';
@@ -521,7 +544,9 @@ module.exports = {
   isWorkRelated,
   isHypotheticalOrCalculation,
   isSelfReference,
+  isWorkScoreQuestion,
   matchStaffAlias,
+  SCORE_REDIRECT_ANSWER,
   signSession,
   validateChatMessages,
   validateCredentialInput,

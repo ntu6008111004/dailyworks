@@ -15,15 +15,14 @@ test('data agent accepts only the read-only query DSL', () => {
   }), {
     dataset: 'team', action: 'compare', people: ['แพด', 'เหมี่ยว'],
     fromDate: '2026-07-01', toDate: '2026-07-31', status: null,
-    keyword: null, targetPoints: null, clarification: null,
+    keyword: null, clarification: null,
   });
   assert.equal(validateDataPlan({ dataset: 'users', action: 'delete', people: [] }), null);
 });
 
-test('score gap plan asks for a target instead of inventing one', () => {
-  const plan = validateDataPlan({ dataset: 'team', action: 'score_gap', people: ['แพด', 'เหมี่ยว'], targetPoints: null });
-  assert.equal(plan.targetPoints, null);
-  assert.match(plan.clarification, /เป้าหมายกี่คะแนน/);
+test('score plans are no longer part of the query DSL', () => {
+  assert.equal(validateDataPlan({ dataset: 'team', action: 'score_gap', people: ['แพด'], targetPoints: 500 }), null);
+  assert.equal('targetPoints' in validateDataPlan({ dataset: 'team', action: 'count', people: [], targetPoints: 500 }), false);
 });
 
 test('requestDataPlan returns null when providerUrl or apiKey is missing', async () => {
@@ -75,7 +74,6 @@ test('requestDataPlan requests data plan using specified model', async () => {
       toDate: null,
       status: 'กำลังทำ',
       keyword: null,
-      targetPoints: null,
       clarification: null,
     });
   } finally {
