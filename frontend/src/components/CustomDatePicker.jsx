@@ -34,7 +34,10 @@ const CustomInput = React.forwardRef(({ value, onClick, onClear, className, plac
   </div>
 ));
 
-export const CustomDatePicker = ({ selectedDate, value, onChange, label, required, className, placeholder, borderDashed = false }) => {
+// portalId renders the calendar outside its container, for pickers inside a
+// scrolling modal where the popup would otherwise be clipped. popperPlacement
+// ('bottom-start' / 'bottom-end') keeps it on screen under a half-width field.
+export const CustomDatePicker = ({ selectedDate, value, onChange, label, required, className, placeholder, borderDashed = false, portalId, popperPlacement }) => {
   // Use 'value' if 'selectedDate' is not provided (for compatibility)
   const activeDate = selectedDate || value;
 
@@ -91,6 +94,8 @@ export const CustomDatePicker = ({ selectedDate, value, onChange, label, require
             onClear={handleClear}
           />
         }
+        portalId={portalId}
+        {...(popperPlacement ? { popperPlacement } : {})}
         showMonthDropdown
         showYearDropdown
         dropdownMode="select"

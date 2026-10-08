@@ -340,3 +340,42 @@ p, span, td, li {
   background: rgb(248 250 252);
   color: rgb(100 116 139);
 }
+
+/* Work report popups (WorkReportModal.jsx) */
+/* iOS Safari zooms into any focused field under 16px and never zooms back,
+   which pushed the report form off-screen and hid its save button. */
+@media (max-width: 639px) {
+  .report-modal input,
+  .report-modal textarea,
+  .report-modal select {
+    font-size: 16px;
+  }
+
+  /* Two dates share a row on phones; leave just enough room for the icons. */
+  .report-modal .react-datepicker-wrapper input {
+    padding-left: 0.625rem;
+    padding-right: 3.375rem;
+  }
+}
+
+/* dvh where supported: on phones 100vh includes the strip under the browser
+   toolbar, which can hide the footer buttons. */
+.report-modal-panel {
+  max-height: 94vh;
+  max-height: 94dvh;
+}
+
+.report-modal .react-datepicker-wrapper {
+  display: block;
+  width: 100%;
+}
+
+/* The report form's calendars render here, above the z-[90] report sheet. */
+#report-date-portal .react-datepicker-popper {
+  z-index: 120;
+}
+
+body.report-modal-open .cat-bubble-btn,
+body.report-modal-open .cat-discovery-hint {
+  display: none;
+}

@@ -58,17 +58,29 @@ async function downloadAttachment(attachment) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-const ModalShell = ({ children, onClose, wide = false, busy = false }) => createPortal(
-  <div
-    className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-    onMouseDown={(event) => { if (!busy && event.target === event.currentTarget) onClose(); }}
-  >
-    <div className={`flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-4xl' : 'sm:max-w-3xl'}`}>
-      {children}
-    </div>
-  </div>,
-  document.body,
-);
+// While a report popup is open the floating CatLog AI button is hidden: it
+// sits above every modal (z-index 9998) and covered the "แก้ไข" button on phones.
+function useModalOpenClass() {
+  useEffect(() => {
+    document.body.classList.add('report-modal-open');
+    return () => document.body.classList.remove('report-modal-open');
+  }, []);
+}
+
+const ModalShell = ({ children, onClose, wide = false, busy = false }) => {
+  useModalOpenClass();
+  return createPortal(
+    <div
+      className="report-modal fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => { if (!busy && event.target === event.currentTarget) onClose(); }}
+    >
+      <div className={`report-modal-panel flex w-full min-w-0 flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl ${wide ? 'sm:max-w-4xl' : 'sm:max-w-3xl'}`}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+};
 
 const Lightbox = ({ images, index, onClose, onMove }) => {
   useEffect(() => {
@@ -171,7 +183,7 @@ export const WorkReportDetailModal = ({ report, creator, canEdit, onClose, onEdi
         <button type="button" aria-label="ปิด" onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={20} /></button>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+      <div className="min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-5 py-5 sm:px-6">
         <div className="flex items-center gap-3">
           <PersonAvatar person={creator} />
           <div className="min-w-0 text-sm">
@@ -243,7 +255,7 @@ export const WorkReportDetailModal = ({ report, creator, canEdit, onClose, onEdi
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         {canEdit && (
           <button type="button" onClick={onDelete} className="mr-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50"><Trash2 size={16} />ลบ</button>
         )}
@@ -395,24 +407,24 @@ export const WorkReportFormModal = ({ report, onClose, onSaved }) => {
           <button type="button" aria-label="ปิด" disabled={saving} onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-5 py-5 sm:px-6">
           <label className="block">
             <span className="mb-1.5 block text-xs font-black text-slate-700">หัวข้อ <span className="text-rose-500">*</span></span>
             <input className="field" maxLength={200} value={form.Title} onChange={(event) => setField('Title', event.target.value)} placeholder="เช่น สรุปยอดผู้ใช้งาน สัปดาห์ที่ 2 ต.ค." autoFocus />
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="col-span-2 sm:col-span-1">
               <span className="mb-1.5 block text-xs font-black text-slate-700">ประเภท</span>
               <CustomSelect value={form.PeriodType} onChange={changePeriodType} options={REPORT_PERIOD_TYPES} />
             </div>
             <div>
               <span className="mb-1.5 block text-xs font-black text-slate-700">ตั้งแต่</span>
-              <CustomDatePicker value={form.PeriodStart} onChange={(value) => setField('PeriodStart', value)} placeholder="วันที่เริ่ม" />
+              <CustomDatePicker value={form.PeriodStart} onChange={(value) => setField('PeriodStart', value)} placeholder="วันที่เริ่ม" portalId="report-date-portal" popperPlacement="bottom-start" />
             </div>
             <div>
               <span className="mb-1.5 block text-xs font-black text-slate-700">ถึง</span>
-              <CustomDatePicker value={form.PeriodEnd} onChange={(value) => setField('PeriodEnd', value)} placeholder="วันที่สิ้นสุด" />
+              <CustomDatePicker value={form.PeriodEnd} onChange={(value) => setField('PeriodEnd', value)} placeholder="วันที่สิ้นสุด" portalId="report-date-portal" popperPlacement="bottom-end" />
             </div>
           </div>
 
@@ -443,7 +455,8 @@ export const WorkReportFormModal = ({ report, onClose, onSaved }) => {
                 className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-6 text-center transition ${dragging ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-slate-50/60 hover:border-blue-300 hover:bg-blue-50/40'} ${saving ? 'pointer-events-none opacity-60' : ''}`}
               >
                 <UploadCloud size={26} className="mb-1.5 text-blue-500" />
-                <p className="text-sm font-bold text-slate-700">กดเพื่อเลือกไฟล์ ลากมาวาง หรือวาง (Ctrl+V) รูปที่คัดลอกไว้</p>
+                <p className="text-sm font-bold text-slate-700 sm:hidden">แตะเพื่อเลือกรูปหรือไฟล์</p>
+                <p className="hidden text-sm font-bold text-slate-700 sm:block">กดเพื่อเลือกไฟล์ ลากมาวาง หรือวาง (Ctrl+V) รูปที่คัดลอกไว้</p>
                 <p className="text-xs text-slate-400">เลือกหลายไฟล์พร้อมกันได้</p>
                 <input type="file" multiple accept={REPORT_FILE_ACCEPT} className="hidden" disabled={saving} onChange={(event) => addFiles(snapshotSelectedFiles(event.target))} />
               </label>
@@ -493,7 +506,7 @@ export const WorkReportFormModal = ({ report, onClose, onSaved }) => {
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:px-6">
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
           {progress && progress.total > 0 && <span className="mr-auto text-xs font-semibold text-slate-500">อัปโหลด {progress.done}/{progress.total}</span>}
           <button type="button" disabled={saving} onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100">ยกเลิก</button>
           <button type="submit" disabled={saving || processing} className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-blue-200 hover:bg-blue-700 disabled:opacity-60">

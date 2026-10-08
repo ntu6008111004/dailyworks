@@ -259,7 +259,9 @@ export const WorkReports = () => {
     }
   };
 
-  const detailModal = sharedReport && formReport === undefined && (
+  // The detail sheet steps aside while confirming a delete; otherwise it covered
+  // the confirmation and people had to close it before they could confirm.
+  const detailModal = sharedReport && formReport === undefined && !deleteTarget && (
     <WorkReportDetailModal
       report={sharedReport}
       creator={usersById.get(String(sharedReport.CreatorID))}
