@@ -22,6 +22,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+const REPORT_FILE_BUCKET = 'worklog-files';
 // Read the stored level fresh on every list request: it carries its own expiry,
 // so a level narrowed before a migration landed recovers by itself.
 function currentBriefingSelectIndex() {
@@ -1221,6 +1222,81 @@ export const apiService = {
     if (error && /get_briefing_point_ledger|schema cache|PGRST202/i.test(error.message || '')) return [];
     if (error) throw error;
     return data || [];
+  },
+
+  // ── Work reports (ส่งสรุปงาน) ──────────────────────────────────────────
+  async getWorkReports() {
+    const rows = await fetchAllRows(() => supabase
+      .from('WorkReports')
+      .select('*')
+      .order('CreatedAt', { ascending: false }));
+    return rows.map((row) => ({ ...row, Attachments: parseJson(row.Attachments, []) }));
+  },
+
+  async getWorkReportById(id) {
+    const { data, error } = await supabase.from('WorkReports').select('*').eq('ID', id).maybeSingle();
+    if (error) throw error;
+    return data ? { ...data, Attachments: parseJson(data.Attachments, []) } : null;
+  },
+
+  // `prepared` comes from prepareReportFile(): a compressed image, a gzipped
+  // text/legacy-Office file, or the original document.
+  async uploadReportFile(prepared) {
+    const owner = String(this.userId || 'anonymous').replace(/[^a-zA-Z0-9_-]/g, '-');
+    const ext = prepared.encoding === 'gzip'
+      ? `${(prepared.name.split('.').pop() || 'bin').toLowerCase()}.gz`
+      : prepared.kind === 'image'
+        ? imageExtensionFor(prepared.uploadType)
+        : (prepared.name.split('.').pop() || 'bin').toLowerCase();
+    const safeExt = ext.replace(/[^a-z0-9.]/g, '') || 'bin';
+    const objectPath = `reports/${owner}/${Date.now()}-${crypto.randomUUID()}.${safeExt}`;
+    const { data, error } = await supabase.storage
+      .from(REPORT_FILE_BUCKET)
+      .upload(objectPath, prepared.blob, {
+        cacheControl: '31536000',
+        contentType: prepared.uploadType,
+        upsert: false,
+      });
+    if (error) throw error;
+    const { data: publicUrl } = supabase.storage.from(REPORT_FILE_BUCKET).getPublicUrl(data.path);
+    return {
+      url: publicUrl.publicUrl,
+      path: data.path,
+      name: prepared.name,
+      kind: prepared.kind,
+      mimeType: prepared.mimeType,
+      size: prepared.size,
+      originalSize: prepared.originalSize,
+      encoding: prepared.encoding || '',
+    };
+  },
+
+  async saveWorkReport(report) {
+    const { data, error } = await supabase.rpc('save_work_report', {
+      p_user_id: this.userId,
+      p_report_id: report.ID || null,
+      p_title: report.Title,
+      p_detail: report.Detail || '',
+      p_period_type: report.PeriodType || 'weekly',
+      p_period_start: report.PeriodStart || null,
+      p_period_end: report.PeriodEnd || null,
+      p_ref_url: report.RefURL || '',
+      p_attachments: report.Attachments || [],
+    });
+    if (error) {
+      if (MISSING_FUNCTION_CODES.includes(error.code)) {
+        throw new Error('ฐานข้อมูลยังไม่ได้ติดตั้งระบบส่งสรุปงาน (20261008_work_reports.sql)');
+      }
+      throw new Error(error.message);
+    }
+    await this.logActivity(this.executorId, report.ID ? 'UPDATE_WORK_REPORT' : 'ADD_WORK_REPORT', `Work report: ${data?.ID || report.ID}`);
+    return data;
+  },
+
+  async deleteWorkReport(id) {
+    const { error } = await supabase.rpc('delete_work_report', { p_user_id: this.userId, p_report_id: id });
+    if (error) throw new Error(error.message);
+    await this.logActivity(this.executorId, 'DELETE_WORK_REPORT', `Work report deleted: ${id}`);
   },
 
   updateUserPermissions(userId, permissions) {

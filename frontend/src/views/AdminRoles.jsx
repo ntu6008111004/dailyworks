@@ -11,6 +11,8 @@ const DEFAULT_PERMISSIONS = {
   canCreateBriefing: false,
   canViewBriefingPage: false,
   canManagePostStatus: false,
+  canViewReportsPage: true,
+  canSubmitReport: true,
 };
 
 const PERMISSION_LABELS = [
@@ -49,6 +51,18 @@ const PERMISSION_LABELS = [
     label: 'จัดการสถานะโพสต์',
     desc: 'สามารถเปลี่ยนสถานะ "ยังไม่โพส"/"โพสแล้ว" ในบรีฟงาน',
     color: 'emerald',
+  },
+  {
+    key: 'canViewReportsPage',
+    label: 'เข้าถึงหน้าส่งสรุปงาน',
+    desc: 'เปิดดูสรุปงานประจำสัปดาห์/เดือนของแผนกตัวเองได้',
+    color: 'indigo',
+  },
+  {
+    key: 'canSubmitReport',
+    label: 'ส่งสรุปงานได้',
+    desc: 'สร้างสรุปงานและแนบไฟล์ได้ (ต้องเข้าถึงหน้าได้ด้วย)',
+    color: 'orange',
   },
 ];
 

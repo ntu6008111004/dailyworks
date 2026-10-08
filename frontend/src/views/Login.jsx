@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { getSafeRedirectPath } from '../utils/loginRedirect';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -10,13 +11,14 @@ export const Login = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       await login(username, btoa(password), rememberMe);
       toast.success('เข้าสู่ระบบสำเร็จ');
-      navigate('/');
+      navigate(getSafeRedirectPath(location.state?.from), { replace: true });
     } catch (error) {
       toast.error(error.message || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs, ClipboardCheck, Bot } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs, ClipboardCheck, Bot, FolderOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBriefingNotifications } from '../hooks/useBriefingNotifications';
 import { NotificationPermissionModal } from './NotificationPermissionModal';
 import { MiniChatBot } from './MiniChatBot';
+import { canAccessReportsPage } from '../utils/workReports';
 
 export const Layout = () => {
   useBriefingNotifications();
@@ -26,6 +27,10 @@ export const Layout = () => {
 
   if (user?.Role === 'Admin' || user?.Role === 'Head') {
     navItems.splice(3, 0, { name: 'ตรวจงานบรีฟ', path: '/briefing/review', icon: <ClipboardCheck size={20} /> });
+  }
+
+  if (canAccessReportsPage(user)) {
+    navItems.splice(navItems.length - 1, 0, { name: 'ส่งสรุปงาน', path: '/reports', icon: <FolderOpen size={20} /> });
   }
 
   if (user?.Role === 'Admin' || user?.Role === 'Head') {
@@ -73,7 +78,7 @@ export const Layout = () => {
                 to={item.path}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium ${
-                  location.pathname === item.path
+                  location.pathname === item.path || (item.path === '/reports' && location.pathname.startsWith('/reports/'))
                     ? 'bg-blue-50 text-blue-600 shadow-sm'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}

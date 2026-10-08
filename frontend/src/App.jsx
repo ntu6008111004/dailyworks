@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './views/Dashboard';
@@ -13,6 +13,7 @@ import { MyTeam } from './views/MyTeam';
 import { Briefing } from './views/Briefing';
 import { BriefingReview } from './views/BriefingReview';
 import { ChatbotWorklog } from './views/ChatbotWorklog';
+import { WorkReports } from './views/WorkReports';
 import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
@@ -24,8 +25,11 @@ const ProtectedRoute = ({ children }) => {
   // its provider tree. Do not crash the whole application in that transition.
   const auth = useAuth();
   const user = auth?.user;
+  const location = useLocation();
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Remember the page so a shared link (e.g. a report sent over LINE) opens
+    // right after signing in instead of dropping the reader on the dashboard.
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
   return children;
 };
@@ -44,6 +48,8 @@ function App() {
             <Route path="timeline" element={<Timeline />} />
             <Route path="briefing" element={<Briefing />} />
             <Route path="briefing/review" element={<BriefingReview />} />
+            <Route path="reports" element={<WorkReports />} />
+            <Route path="reports/:reportId" element={<WorkReports />} />
             <Route path="chatbot" element={<ChatbotWorklog />} />
             <Route path="profile" element={<MyProfile />} />
             <Route path="team" element={<MyTeam />} />
