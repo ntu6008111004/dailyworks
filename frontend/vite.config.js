@@ -44,6 +44,20 @@ export default defineConfig(({ mode }) => {
     tailwindcss(),
     generateVersionPlugin()
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Libraries change far less often than our own code. Keeping them in
+        // their own files lets browsers reuse the cached copy after a deploy.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@supabase')) return 'vendor-supabase';
+          if (/node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+          return undefined;
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       // The browser only talks to our backend. ThaiLLM credentials stay there.

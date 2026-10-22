@@ -806,8 +806,13 @@ export const apiService = {
 
           case 'init': {
             const positions = await this.getPositions();
-            const users = await this.getUsers({ includeImage: false });
-            const departments = [...new Set(users.map(u => u.Department).filter(Boolean))].sort();
+            // Only the department names are needed here. Selecting the whole
+            // user row pulled every profile picture just to throw it away.
+            const { data: userDepartments, error: departmentsError } = await supabase
+              .from('Users')
+              .select('Department');
+            if (departmentsError) throw departmentsError;
+            const departments = [...new Set((userDepartments || []).map(u => u.Department).filter(Boolean))].sort();
             
             let currentUser = null;
             if (data.userId) {

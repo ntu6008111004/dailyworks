@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CheckSquare, CalendarDays, LogOut, Menu, X, Users, Database, ShieldCheck, NotebookTabs, ClipboardCheck, Bot, FolderOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -139,7 +139,10 @@ export const Layout = () => {
 
         {/* Page Content */}
         <main className={`flex-1 min-h-0 ${isChatbotPage ? 'overflow-hidden p-0 md:p-8' : 'overflow-y-auto p-4 md:p-8'}`}>
-          <Outlet />
+          {/* Keep the sidebar on screen while the next page's chunk loads. */}
+          <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       
