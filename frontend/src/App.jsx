@@ -5,13 +5,17 @@ import { Login } from './views/Login';
 import { Unauthorized } from './views/Unauthorized';
 import { Toaster } from 'react-hot-toast';
 import { UpdateNotifier } from './components/UpdateNotifier';
+import { withTimeout } from './utils/fetchTimeout';
 
 // Each page is its own chunk so the login screen does not download the
 // dashboard, charts and admin screens before it can render.
 // A tab left open across a deploy still points at the old chunk names, which
 // no longer exist; reload once to pick up the new build instead of crashing.
+// A chunk request stuck on a dead connection (phone back from the background)
+// is treated the same way after 20 s, instead of leaving the spinner up.
 const RELOAD_FLAG = 'dw_chunk_reload';
-const lazyPage = (load, name) => lazy(() => load()
+const CHUNK_TIMEOUT_MS = 20 * 1000;
+const lazyPage = (load, name) => lazy(() => withTimeout(load(), CHUNK_TIMEOUT_MS)
   .then(m => {
     sessionStorage.removeItem(RELOAD_FLAG);
     return { default: m[name] };

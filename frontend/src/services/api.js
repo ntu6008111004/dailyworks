@@ -11,6 +11,7 @@ import { sanitizeReviewCommentImages } from '../utils/briefingReviewNotes';
 import { imageExtensionFor } from '../utils/compressImage';
 import { canWriteBriefingRecord } from '../utils/briefingPermissions';
 import { normalizeBriefingStatus } from '../utils/briefingStatus';
+import { createTimeoutFetch } from '../utils/fetchTimeout';
 
 // PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
 const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
@@ -18,7 +19,11 @@ const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Requests get a time limit so a connection that died while the phone was in
+// the background fails fast (and reads retry) instead of spinning for minutes.
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: { fetch: createTimeoutFetch((...args) => fetch(...args)) },
+});
 
 const IMAGE_STORAGE_BUCKET = 'worklog-images';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
