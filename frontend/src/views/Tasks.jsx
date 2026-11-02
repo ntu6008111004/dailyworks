@@ -253,9 +253,9 @@ export const Tasks = () => {
       apiService.getUsers().then(data => { if (isMounted) setAllUsers(data); }).catch(() => { });
     }
 
-    // Fetch summary task list (lightweight) once for modals
+    // The daily/monthly summary modals only show the user's own tasks
     const fetchSummary = () => {
-      apiService.getTasksSummary().then(data => {
+      apiService.getTasksForUser(user?.ID || user?.id).then(data => {
         if (isMounted) setAllTasksForSummary(data || []);
       }).catch(() => { });
     };

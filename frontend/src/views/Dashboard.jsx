@@ -118,7 +118,9 @@ export const Dashboard = () => {
     
     const fetchData = async () => {
       try {
-        const data = await apiService.getTasksSummary();
+        // Only the people this role may see, and only the columns the
+        // counters need; the status list loads details per page.
+        const data = await apiService.getDashboardTasks({ role: userRole, department: userDept, name: userName, canSeeAll });
         if (isMounted) setTasks(data);
         
         if (canSeeAll || userRole === 'Head') {
@@ -136,7 +138,7 @@ export const Dashboard = () => {
 
     const handleSync = async () => {
       try {
-        const data = await apiService.getTasksSummary();
+        const data = await apiService.getDashboardTasks({ role: userRole, department: userDept, name: userName, canSeeAll });
         if (isMounted) setTasks(data);
       } catch (err) {
         console.error('Sync error:', err);
@@ -151,7 +153,7 @@ export const Dashboard = () => {
       window.removeEventListener('tasks-optimistic-update', handleSync);
       window.removeEventListener('cache-cleared', handleSync);
     };
-  }, [user, canSeeAll, userRole]);
+  }, [user, canSeeAll, userRole, userDept, userName]);
 
   const uniqueDepartments = useMemo(() => {
     return [...new Set(allUsers.map(u => u.Department))].filter(Boolean);

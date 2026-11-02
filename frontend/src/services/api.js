@@ -13,6 +13,10 @@ import { canWriteBriefingRecord } from '../utils/briefingPermissions';
 import { normalizeBriefingStatus } from '../utils/briefingStatus';
 import { createTimeoutFetch } from '../utils/fetchTimeout';
 import { fetchAllPages } from '../utils/fetchAllPages';
+import {
+  TASK_DASHBOARD_COLUMNS, TASK_SUMMARY_COLUMNS,
+  applyTaskSteps, dashboardScopeSteps, lastPageFor, pageWindow, taskListSteps,
+} from '../utils/taskQuery';
 
 // PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
 const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
@@ -50,6 +54,10 @@ let lastMutationAt = 0;  // Tracks when the last data mutation happened
 const CACHE_TTL = {
   getTasksSummary: 30 * 1000,   // 30s — tasks change often
   getTasksPaged:   30 * 1000,   // 30s
+  getTasksForUser: 30 * 1000,
+  getTasksByStaffName: 30 * 1000,
+  getDashboardTasks: 30 * 1000,
+  getTaskSummariesByIds: 30 * 1000,
   getTasks:        30 * 1000,   // 30s
   getUsers:        120 * 1000,  // 2min — users rarely change
   init:            120 * 1000,  // 2min — init data is stable
@@ -83,7 +91,16 @@ function getTTL(action) {
 // spinner. Saves still invalidate it at once through lastMutationAt.
 const STALE_WINDOW = {
   getTasksSummary: 10 * 60 * 1000,
+  getTasksForUser: 10 * 60 * 1000,
+  getTasksByStaffName: 10 * 60 * 1000,
+  getDashboardTasks: 10 * 60 * 1000,
 };
+
+// Every cached list that contains tasks; cleared together after a save.
+const TASK_CACHE_ACTIONS = [
+  'getTasksSummary', 'getTasksPaged', 'getTasks',
+  'getTasksForUser', 'getTasksByStaffName', 'getDashboardTasks', 'getTaskSummariesByIds',
+];
 
 function getStaleWindow(action, ttl) {
   return STALE_WINDOW[action] || ttl * 3;
@@ -295,101 +312,92 @@ export const apiService = {
           }
 
           case 'getTasksPaged': {
-            // Get all tasks (using cached summary or fetching summary)
-            const allTasks = await this.getTasksSummary();
-            
-            // Build CustomFields lookup from full cache if available
-            const cfMap = {};
-            const fullCacheKey = JSON.stringify({ action: 'getTasks', data: {} });
-            if (cache.has(fullCacheKey)) {
-              const cachedFull = cache.get(fullCacheKey).data;
-              if (Array.isArray(cachedFull)) {
-                cachedFull.forEach(t => {
-                  cfMap[t.ID] = t.CustomFields;
-                });
-              }
+            // Only the requested page, filtered by the database (it used to
+            // download all ~6,600 tasks and filter them here). Page membership
+            // is still by newest CreatedAt; the page sorts its own rows.
+            const steps = taskListSteps(data);
+            // Bulk-imported tasks share a CreatedAt, so ID breaks ties; without
+            // it a task could show on two pages or on none.
+            const fetchWindow = (from, to) => applyTaskSteps(
+              supabase.from('TasksSummary').select(TASK_SUMMARY_COLUMNS, { count: 'exact' }),
+              steps,
+            ).order('CreatedAt', { ascending: false }).order('ID', { ascending: false }).range(from, to);
+
+            const wanted = pageWindow(data.page, data.pageSize);
+            let { data: rows, count, error } = await fetchWindow(wanted.from, wanted.to);
+            let currentPage = wanted.page;
+            if (error && error.code === 'PGRST103') {
+              // A filter left fewer pages than the one on screen (the database
+              // refuses a range past the end): count the rows, show the last page.
+              const counted = await applyTaskSteps(
+                supabase.from('TasksSummary').select('ID', { count: 'exact', head: true }),
+                steps,
+              );
+              if (counted.error) throw counted.error;
+              count = counted.count;
+              currentPage = lastPageFor(count, wanted.size);
+              const last = pageWindow(currentPage, wanted.size);
+              ({ data: rows, error } = await fetchWindow(last.from, last.to));
             }
+            if (error) throw error;
+            const totalCount = count || 0;
+            const totalPages = lastPageFor(totalCount, wanted.size);
 
-            const mergedTasks = allTasks.map(t => ({
-              ...t,
-              CustomFields: cfMap[t.ID] !== undefined ? cfMap[t.ID] : t.CustomFields
-            }));
-
-            // Apply filters
-            const keyword = (data.keyword || '').toLowerCase().trim();
-            const status = data.status || 'All';
-            const department = data.department || 'All';
-            const filterUser = data.user || 'All';
-            const startDate = data.startDate || '';
-            const endDate = data.endDate || '';
-
-            const userRole = (data.userRole || 'Staff').toString().trim();
-            // Tasks are personal: every role except Admin reads only its own rows.
-            const canSeeAll = userRole === 'Admin';
-            const currentUserId = String(data.userId || '');
-
-            let filtered = mergedTasks.filter(t => {
-              // RBAC
-              const tUserId = String(t.UserID || '');
-              const tDept = (t.Department || '').toString().trim().toLowerCase();
-
-              if (!canSeeAll) {
-                if (tUserId !== currentUserId) return false;
-              } else {
-                if (department !== 'All' && tDept !== department.toLowerCase()) return false;
-                if (filterUser !== 'All' && tUserId !== String(filterUser)) return false;
-              }
-
-              // Status
-              if (status !== 'All' && t.Status !== status) return false;
-
-              // Keyword
-              if (keyword) {
-                const detailMatch = (t.Detail || '').toLowerCase().includes(keyword);
-                let projectVal = '';
-                if (t.CustomFields && typeof t.CustomFields === 'object') {
-                  projectVal = (t.CustomFields.Project || '').toLowerCase();
-                }
-                const projectMatch = projectVal.includes(keyword);
-                if (!detailMatch && !projectMatch) return false;
-              }
-
-              // Date range — compare against task's StartDate (วันเริ่มต้นงาน)
-              // so the filter finds tasks that *started* within the given range
-              if (startDate || endDate) {
-                const taskStartDate = (t.StartDate || t.DueDate || '').slice(0, 10);
-                if (!taskStartDate) return false;
-                if (startDate && taskStartDate < startDate) return false;
-                if (endDate && taskStartDate > endDate) return false;
-              }
-
-              return true;
-            });
-
-            // Sort newest first
-            filtered.sort((a, b) => {
-              const da = a.CreatedAt ? new Date(a.CreatedAt) : new Date(0);
-              const db = b.CreatedAt ? new Date(b.CreatedAt) : new Date(0);
-              return db - da;
-            });
-
-            const page = parseInt(data.page || 1, 10);
-            const pageSize = parseInt(data.pageSize || 10, 10);
-            const totalCount = filtered.length;
-            const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-            const safePage = Math.min(Math.max(page, 1), totalPages);
-            const start = (safePage - 1) * pageSize;
-            const pageTasks = filtered.slice(start, start + pageSize);
-
-            resultData = {
-              tasks: pageTasks,
-              totalCount,
-              totalPages,
-              currentPage: safePage
-            };
+            resultData = { tasks: rows || [], totalCount, totalPages, currentPage };
             break;
           }
 
+          case 'getTasksForUser': {
+            // One person's tasks (daily/monthly summary, CatLog AI).
+            resultData = await fetchAllRows(
+              () => supabase
+                .from('TasksSummary')
+                .select(TASK_SUMMARY_COLUMNS)
+                .eq('UserID', String(data.userId || ''))
+                .order('CreatedAt', { ascending: false })
+            );
+            break;
+          }
+
+          case 'getTasksByStaffName': {
+            // Timeline: the tasks under the user's own name, as it always matched.
+            resultData = await fetchAllRows(
+              () => supabase
+                .from('TasksSummary')
+                .select(TASK_SUMMARY_COLUMNS)
+                .eq('StaffName', data.staffName || '')
+                .order('CreatedAt', { ascending: false })
+            );
+            break;
+          }
+
+          case 'getDashboardTasks': {
+            // Dashboard counters only need a few small columns, and only for
+            // the people this role may see.
+            const steps = dashboardScopeSteps(data);
+            resultData = await fetchAllRows(
+              () => applyTaskSteps(
+                supabase.from('TasksSummary').select(TASK_DASHBOARD_COLUMNS),
+                steps,
+              ).order('CreatedAt', { ascending: false })
+            );
+            break;
+          }
+
+          case 'getTaskSummariesByIds': {
+            const ids = [...new Set((data.ids || []).map(String))];
+            if (ids.length === 0) {
+              resultData = [];
+              break;
+            }
+            const { data: rows, error } = await supabase
+              .from('TasksSummary')
+              .select(TASK_SUMMARY_COLUMNS)
+              .in('ID', ids);
+            if (error) throw error;
+            resultData = rows || [];
+            break;
+          }
           case 'getTaskById': {
             const { data: task, error } = await supabase
               .from('Tasks')
@@ -878,6 +886,23 @@ export const apiService = {
     return this.request('getTasksPaged', { page, pageSize, ...filters }, { useCache: true });
   },
 
+  getTasksForUser(userId) {
+    return this.request('getTasksForUser', { userId: String(userId || '') }, { useCache: true });
+  },
+
+  getTasksByStaffName(staffName) {
+    return this.request('getTasksByStaffName', { staffName: staffName || '' }, { useCache: true });
+  },
+
+  getDashboardTasks(scope = {}) {
+    return this.request('getDashboardTasks', scope, { useCache: true });
+  },
+
+  // Detail and CustomFields for the 10 rows a list page is showing.
+  getTaskSummariesByIds(ids = []) {
+    return this.request('getTaskSummariesByIds', { ids: [...new Set(ids.map(String))].sort() }, { useCache: true });
+  },
+
   getInitData(userId) {
     return this.request('init', { userId }, { useCache: false });
   },
@@ -894,7 +919,7 @@ export const apiService = {
       if (u) data.StaffName = u.Name;
     }
     return this.request('addTask', data).then(res => {
-      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
+      this.clearCacheFor(...TASK_CACHE_ACTIONS);
       return res;
     });
   },
@@ -903,7 +928,7 @@ export const apiService = {
     const data = { ...task };
     if (!data.UserID && this.userId) data.UserID = this.userId;
     return this.request('updateTask', data).then(res => {
-      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
+      this.clearCacheFor(...TASK_CACHE_ACTIONS);
       return res;
     });
   },
@@ -917,14 +942,14 @@ export const apiService = {
     return this.request('updateTask', data).then(res => {
       // After successful API write, also invalidate caches so next fetchPage
       // gets truly fresh data from server instead of stale cache
-      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
+      this.clearCacheFor(...TASK_CACHE_ACTIONS);
       return res;
     });
   },
 
   deleteTask(id) {
     return this.request('deleteTask', { id }).then(res => {
-      this.clearCacheFor('getTasksSummary', 'getTasksPaged', 'getTasks');
+      this.clearCacheFor(...TASK_CACHE_ACTIONS);
       return res;
     });
   },

@@ -51,7 +51,7 @@ export const Timeline = () => {
     let isMounted = true;
     const fetchTimeline = async () => {
       try {
-        const data = await apiService.getTasksSummary();
+        const data = await apiService.getTasksByStaffName(user?.Name || user?.name);
         if (isMounted) setTasks(data);
       } catch (error) {
         console.error(error);
@@ -64,7 +64,7 @@ export const Timeline = () => {
 
     const handleSync = async () => {
       try {
-        const data = await apiService.getTasksSummary();
+        const data = await apiService.getTasksByStaffName(user?.Name || user?.name);
         if (isMounted) setTasks(data);
       } catch (err) {
         console.error('Timeline sync error:', err);
@@ -79,7 +79,7 @@ export const Timeline = () => {
       window.removeEventListener('tasks-optimistic-update', handleSync);
       window.removeEventListener('cache-cleared', handleSync);
     };
-  }, []);
+  }, [user?.Name, user?.name]);
 
   // Filter tasks for current user only
   const userTasks = useMemo(() => {

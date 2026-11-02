@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import th from 'date-fns/locale/th';
+import { apiService } from '../services/api';
 
 export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -15,17 +16,41 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
     return tasks.slice(start, start + itemsPerPage);
   }, [tasks, currentPage]);
 
+  // The dashboard only loads the small columns it counts with; the detail
+  // text of the 10 rows on this page is fetched when the page is shown.
+  const [details, setDetails] = useState({});
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const missing = paginatedTasks
+      .filter(t => t.Detail === undefined && !details[t.ID])
+      .map(t => t.ID);
+    if (missing.length === 0) return undefined;
+    let alive = true;
+    apiService.getTaskSummariesByIds(missing)
+      .then(rows => {
+        if (!alive) return;
+        setDetails(prev => ({ ...prev, ...Object.fromEntries((rows || []).map(r => [r.ID, r])) }));
+      })
+      .catch(error => console.warn('[StatusTasksModal] details failed', error));
+    return () => { alive = false; };
+  }, [isOpen, paginatedTasks, details]);
+
+  const shownTasks = useMemo(
+    () => paginatedTasks.map(t => (details[t.ID] ? { ...t, ...details[t.ID] } : t)),
+    [paginatedTasks, details],
+  );
+
   const groupedTasks = useMemo(() => {
-    if (!paginatedTasks || paginatedTasks.length === 0) return {};
+    if (!shownTasks || shownTasks.length === 0) return {};
 
     // For Staff, or if viewing a single user filter, don't group, just use 'งานของคุณ'
     if (userRole === 'Staff') {
-      return { 'งานของคุณ': paginatedTasks };
+      return { 'งานของคุณ': shownTasks };
     }
 
     // For Head / Admin / HR seeing multiple people, group by StaffName
     const groups = {};
-    paginatedTasks.forEach(t => {
+    shownTasks.forEach(t => {
       const name = t.StaffName || 'ไม่ระบุชื่อ';
       if (!groups[name]) groups[name] = [];
       groups[name].push(t);
@@ -36,7 +61,7 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
       acc[key] = groups[key];
       return acc;
     }, {});
-  }, [paginatedTasks, userRole]);
+  }, [shownTasks, userRole]);
 
   if (!isOpen) return null;
 
@@ -99,7 +124,7 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[14px] font-bold text-indigo-700 bg-white/60 px-3 py-1 rounded-xl border border-white shadow-sm leading-tight">
-                              {task.CustomFields?.Project || 'ทั่วไป'}
+                              {task.Detail === undefined ? '…' : (task.CustomFields?.Project || 'ทั่วไป')}
                             </span>
                             <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider shadow-sm border border-white/20 ${headerColor}`}>
                               {task.Status}
@@ -107,7 +132,7 @@ export const StatusTasksModal = ({ isOpen, onClose, status, tasks, userRole }) =
                           </div>
                           
                           <p className="text-sm text-slate-700 line-clamp-2 leading-relaxed font-medium" title={task.Detail}>
-                            {task.Detail}
+                            {task.Detail === undefined ? <span className="text-slate-400">กำลังโหลด…</span> : task.Detail}
                           </p>
                           
                           <div className="flex items-center gap-3 opacity-60">

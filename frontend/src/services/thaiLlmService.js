@@ -626,7 +626,7 @@ async function _fetchClientWorkSummaryContext() {
     if (!userId) return null;
 
     const [tasks, briefings] = await Promise.all([
-      apiService.getTasksSummary().catch(() => []),
+      apiService.getTasksForUser(userId).catch(() => []),
       apiService.getBriefings().catch(() => []),
     ]);
 
