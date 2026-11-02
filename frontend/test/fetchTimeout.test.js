@@ -113,3 +113,56 @@ test('withTimeout gives up on a promise that never settles, and passes results t
   await assert.rejects(withTimeout(Promise.reject(new Error('404')), 1000), { message: '404' });
   assert.equal(createTimeoutError().message, TIMEOUT_MESSAGE);
 });
+
+// Headers arrive, then the body stops halfway: the case that used to leave the
+// task list spinning until the page was refreshed.
+const stallingBodyFetch = (calls, { stallFirst = Infinity } = {}) => (input, init) => {
+  calls.push(input);
+  const stall = calls.length <= stallFirst;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('[{"ID":1}'));
+      if (!stall) {
+        controller.enqueue(new TextEncoder().encode(',{"ID":2}]'));
+        controller.close();
+        return;
+      }
+      init.signal.addEventListener('abort', () => controller.error(new Error('aborted')), { once: true });
+    },
+  });
+  return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Range': '0-1/2' } }));
+};
+
+test('a read whose body stops arriving is cut off and retried', async () => {
+  const calls = [];
+  const timeoutFetch = createTimeoutFetch(stallingBodyFetch(calls, { stallFirst: 1 }), { timeoutFor: shortLimits });
+  const response = await timeoutFetch(`${API}/rest/v1/TasksSummary`);
+  assert.deepEqual(await response.json(), [{ ID: 1 }, { ID: 2 }]);
+  assert.equal(response.headers.get('content-range'), '0-1/2');
+  assert.equal(calls.length, 2);
+});
+
+test('a body that never finishes ends in a timeout instead of hanging forever', async () => {
+  const calls = [];
+  const timeoutFetch = createTimeoutFetch(stallingBodyFetch(calls), { timeoutFor: shortLimits });
+  await assert.rejects(timeoutFetch(`${API}/rest/v1/TasksSummary`), { name: 'TimeoutError' });
+  assert.equal(calls.length, 2);
+});
+
+test('a slow body that keeps moving is not cut off', async () => {
+  const slow = () => {
+    let sent = 0;
+    const body = new ReadableStream({
+      async pull(controller) {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        sent += 1;
+        if (sent > 4) controller.close();
+        else controller.enqueue(new TextEncoder().encode('x'));
+      },
+    });
+    return Promise.resolve(new Response(body));
+  };
+  // Each chunk takes 15 ms, the whole body 75 ms: longer than the 20 ms limit.
+  const response = await createTimeoutFetch(slow, { timeoutFor: shortLimits })(`${API}/rest/v1/Tasks`);
+  assert.equal(await response.text(), 'xxxx');
+});

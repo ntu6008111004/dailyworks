@@ -12,6 +12,7 @@ import { imageExtensionFor } from '../utils/compressImage';
 import { canWriteBriefingRecord } from '../utils/briefingPermissions';
 import { normalizeBriefingStatus } from '../utils/briefingStatus';
 import { createTimeoutFetch } from '../utils/fetchTimeout';
+import { fetchAllPages } from '../utils/fetchAllPages';
 
 // PostgREST reports an undeployed RPC as PGRST202; older gateways use 42883.
 const MISSING_FUNCTION_CODES = ['PGRST202', '42883'];
@@ -76,6 +77,18 @@ function getTTL(action) {
   return CACHE_TTL[action] || CACHE_TTL._default;
 }
 
+// How long a cached answer may still be shown while a fresh one loads in the
+// background. The full task list is ~8 MB of JSON for 6,600 tasks, so after the
+// default 3 x TTL (90 s) every page switch waited for a full reload behind a
+// spinner. Saves still invalidate it at once through lastMutationAt.
+const STALE_WINDOW = {
+  getTasksSummary: 10 * 60 * 1000,
+};
+
+function getStaleWindow(action, ttl) {
+  return STALE_WINDOW[action] || ttl * 3;
+}
+
 // Helper to parse JSON values safely
 function parseJson(val, defaultVal = {}) {
   if (!val) return defaultVal;
@@ -94,18 +107,11 @@ function parseJson(val, defaultVal = {}) {
 // Helper: Fetch ALL rows from a Supabase query, bypassing the default 1000-row limit
 // Accepts a factory function that returns a fresh query builder for each page
 async function fetchAllRows(queryFactory) {
-  const PAGE_SIZE = 1000;
-  let allRows = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await queryFactory().range(from, from + PAGE_SIZE - 1);
+  return fetchAllPages(async (from, to) => {
+    const { data, error } = await queryFactory().range(from, to);
     if (error) throw error;
-    if (!data || data.length === 0) break;
-    allRows = allRows.concat(data);
-    if (data.length < PAGE_SIZE) break; // last page
-    from += PAGE_SIZE;
-  }
-  return allRows;
+    return data || [];
+  });
 }
 
 export const apiService = {
@@ -207,7 +213,7 @@ export const apiService = {
         // Stale-while-revalidate: return stale data immediately,
         // then refresh in background for next request
         // BUT: skip this if there was a recent mutation (force fresh fetch)
-        if (age < ttl * 3 && !createdBeforeMutation) {
+        if (age < getStaleWindow(action, ttl) && !createdBeforeMutation) {
           if (!pendingRequests.has(cacheKey)) {
             this._fetchAndCache(action, data, cacheKey);
           }

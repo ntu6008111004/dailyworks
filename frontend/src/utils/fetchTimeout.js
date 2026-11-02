@@ -35,6 +35,10 @@ export function createTimeoutError() {
 }
 
 // Only reads are retried: repeating an insert or an RPC could save twice.
+// Reads are also downloaded here in full: a big list (1,000 tasks is ~1.6 MB)
+// can stall halfway through the body, after the headers arrived, and nothing
+// would ever time out. The limit restarts with every chunk received, so a slow
+// but moving download is never cut off; only one that stops moving is.
 export function createTimeoutFetch(baseFetch, { retries = 1, timeoutFor = requestTimeoutFor } = {}) {
   return async function timeoutFetch(input, init = {}) {
     const method = requestMethod(input, init);
@@ -42,22 +46,35 @@ export function createTimeoutFetch(baseFetch, { retries = 1, timeoutFor = reques
     if (!limit) return baseFetch(input, init);
 
     const callerSignal = init.signal;
-    const maxAttempts = READ_METHODS.has(method) ? retries + 1 : 1;
+    const isRead = READ_METHODS.has(method);
+    const maxAttempts = isRead ? retries + 1 : 1;
 
     for (let attempt = 1; ; attempt += 1) {
       if (callerSignal?.aborted) throw callerSignal.reason ?? createTimeoutError();
 
       const controller = new AbortController();
       let timedOut = false;
+      let timer;
+      const restartTimer = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          timedOut = true;
+          controller.abort(createTimeoutError());
+        }, limit);
+      };
       const forwardAbort = () => controller.abort(callerSignal.reason);
       callerSignal?.addEventListener('abort', forwardAbort, { once: true });
-      const timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort(createTimeoutError());
-      }, limit);
+      restartTimer();
 
       try {
-        return await baseFetch(input, { ...init, signal: controller.signal });
+        const response = await baseFetch(input, { ...init, signal: controller.signal });
+        if (!isRead || !response.body) return response;
+        const body = await readBody(response.body, restartTimer);
+        return new Response(body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
       } catch (error) {
         if (!timedOut) throw error;
         if (attempt < maxAttempts) continue;
@@ -68,6 +85,18 @@ export function createTimeoutFetch(baseFetch, { retries = 1, timeoutFor = reques
       }
     }
   };
+}
+
+async function readBody(stream, onProgress) {
+  const reader = stream.getReader();
+  const chunks = [];
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    onProgress();
+  }
+  return new Blob(chunks);
 }
 
 // Same idea for page code loaded on demand: a stalled import() would leave the
